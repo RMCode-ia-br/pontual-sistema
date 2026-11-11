@@ -10,6 +10,8 @@ Sistema de gestão (CRM, obras, financeiro e estoque) da **Pontual Soluções em
 
 > **Aviso:** o ambiente hospedado na Vercel (plano Hobby) é só de laboratório e demonstração. **Nenhum dado real** da Pontual deve entrar nele. Veja `docs/OPERACAO.md`.
 
+**Infraestrutura:** banco e arquivos no Supabase em **São Paulo (`sa-east-1`)**; funções da Vercel na região `gru1` (a mesma). Deploy já feito pela RM Code, com as variáveis cadastradas.
+
 ## Stack
 
 Next.js (App Router) · TypeScript estrito · Tailwind · shadcn/ui · PostgreSQL (Supabase) com Prisma · Auth.js v5 · Zod · Vitest · Playwright.
@@ -30,6 +32,10 @@ npm run dev                         # http://localhost:3000
 O seed cria o usuário `admin` com senha inicial `admin`; a troca é obrigatória no primeiro acesso.
 
 > A senha do banco, se tiver `@`, `#`, `:` ou `/`, precisa estar **codificada** na URL (`encodeURIComponent`).
+>
+> `DIRECT_URL` (migrações e seed) deve ser o **Session pooler** (porta 5432). A conexão direta `db.<ref>.supabase.co` só funciona em redes IPv6.
+>
+> Em um banco novo, defina `ADMIN_SENHA_INICIAL` no `.env.local` antes do `npm run seed` (obrigatória em produção).
 
 ## Comandos
 

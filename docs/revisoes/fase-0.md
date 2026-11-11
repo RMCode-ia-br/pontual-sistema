@@ -83,3 +83,14 @@ Pendentes (registrados em `docs/PENDENCIAS.md`): B1, B8, B10, B11, B12, B13, B18
 ## Pendências que dependem de pessoas
 
 Ver `docs/PENDENCIAS.md`: acesso para o `vercel link` e variáveis na Vercel, segredos do backup no GitHub, teste de restauração, decisão de hospedagem de produção (Vercel Hobby é só laboratório), plano do Supabase com backup, e os dados do negócio (alíquota, margens, último número de proposta, endereço).
+
+## Adendo (2026-11-11, depois da revisão): banco novo em São Paulo
+
+A RM Code trocou o banco por um projeto Supabase em **São Paulo (`sa-east-1`)**, fez o deploy na Vercel (região `gru1`, com as variáveis cadastradas) e cadastrou `BACKUP_DATABASE_URL` e `BACKUP_PASSPHRASE` no GitHub (informado; não conferi). No banco novo foram executados e verificados:
+
+- as 2 migrações do zero, inclusive a de RLS: **0 de 19 tabelas expostas ao papel `anon`** (consulta ao catálogo); extensões `unaccent` e `pg_trgm` ativas;
+- o seed (idempotente na segunda execução): `admin` criado com a senha de `ADMIN_SENHA_INICIAL` (verificado por comparação de hash: **não** é a senha pública), troca de senha pendente, alíquota e margens vazias;
+- o bucket privado `anexos` (10 MB e 9 tipos), criado por `npm run storage:setup` (o app não o cria sozinho);
+- conexão do `DATABASE_URL` e do Storage: sucesso. O `DIRECT_URL` configurado é a conexão direta do Supabase (só IPv6) e **não conecta de redes IPv4**: as migrações rodaram sobrescrevendo-o por processo (ver `DECISOES.md`, itens 25 e 26, e `PENDENCIAS.md`).
+
+Isso resolve a pendência de LGPD (transferência internacional) e a observação de latência deste relatório (as medições de tempo citadas acima eram contra `us-east-1`). O restante do relatório não muda.

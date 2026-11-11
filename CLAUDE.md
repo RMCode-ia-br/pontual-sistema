@@ -41,10 +41,11 @@ Next.js (App Router) + TypeScript estrito + Tailwind + shadcn/ui + lucide-react;
 R1 preço (manual/tabela/composição, divisor por dentro) · R3 numeração `NNNN-AA` · R4 congelar proposta enviada · R5 aprovação transacional · R6 parcelas por gatilho · R7/R8 etapas e prazo em dias úteis (relógio inicia na medição exata) · R12 garantia de regulagem 90 dias · R14 estoque/retalhos · R15 custo real por obra.
 
 ## Ambiente e infraestrutura
-Repo `RMCode-ia-br/pontual-sistema`; Vercel `rmcode1/pontual-sistema` (região `iad1`, igual ao banco `us-east-1`); Supabase plano gratuito (sem backup automático, pausa por inatividade). Variáveis: ver `.env.example`.
+Repo `RMCode-ia-br/pontual-sistema`; Vercel `rmcode1/pontual-sistema` (região `gru1`, igual ao banco; **deploy já feito e variáveis cadastradas**, informado pela RM Code); Supabase **projeto novo em São Paulo (`sa-east-1`)**, plano gratuito (sem backup automático, pausa por inatividade). Segredos `BACKUP_DATABASE_URL` e `BACKUP_PASSPHRASE` **já estão no GitHub**. Variáveis: ver `.env.example`.
+- **Migrações e seed saindo de rede IPv4:** `DIRECT_URL` precisa ser o **Session pooler** (porta 5432), não a conexão direta `db.<ref>.supabase.co` (só IPv6; não conecta daqui). `DATABASE_URL` ideal: Transaction pooler (6543, `?pgbouncer=true`). Ver `docs/DECISOES.md` (26).
 
 ## Estado
-Fase 0 (Fundação) concluída e revisada (`docs/revisoes/fase-0.md`); aguardando o "continuar" para a Fase 1 (Cadastros). Atualize esta seção ao fim de cada fase.
+Fase 0 (Fundação) concluída e revisada (`docs/revisoes/fase-0.md`); aguardando o "continuar" para a Fase 1 (Cadastros). Banco migrado para São Paulo em 2026-11-11 (migrações e RLS aplicadas, seed e bucket criados). Atualize esta seção ao fim de cada fase.
 
 ## Documentos
 `docs/ESPECIFICACAO.md` · `docs/DECISOES.md` · `docs/PENDENCIAS.md` · `docs/OPERACAO.md` · `docs/APRENDIZADOS.md` · `docs/PADROES_RMCODE.md` · `docs/revisoes/`

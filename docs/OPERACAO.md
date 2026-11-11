@@ -19,7 +19,7 @@ Todas estão em `.env.example`. Os valores reais ficam só em `.env.local` (fora
 | Variável | Para quê | Onde obter |
 | --- | --- | --- |
 | `DATABASE_URL` | banco usado pelo app (Transaction pooler, porta 6543, `?pgbouncer=true`) | Supabase, Connect |
-| `DIRECT_URL` | migrações e backup (Session pooler, porta 5432) | Supabase, Connect |
+| `DIRECT_URL` | migrações, seed e backup: **Session pooler**, porta 5432, usuário `postgres.<ref>`. **Não** use a conexão direta `db.<ref>.supabase.co` (só IPv6: não conecta de redes IPv4, como a do escritório) | Supabase, Connect, "Session pooler" |
 | `SUPABASE_URL` | URL do projeto | Supabase, Settings |
 | `SUPABASE_SECRET_KEY` | chave secreta do servidor (Storage). **Nunca** no navegador | Supabase, API keys |
 | `SUPABASE_STORAGE_BUCKET` | nome do bucket privado (`anexos`) | fixo |
@@ -34,14 +34,15 @@ Todas estão em `.env.example`. Os valores reais ficam só em `.env.local` (fora
 
 ## 3. Publicar na Vercel
 
-A pasta ainda **não está vinculada** ao projeto da Vercel e o Vercel CLI não está instalado nesta máquina.
+**Estado (informado pela RM Code em 2026-11-11; eu não tenho acesso à Vercel para conferir):** o projeto `pontual-sistema` já foi implantado e as variáveis da seção 2 já estão cadastradas no painel. A vinculação da pasta local (`vercel link`) é opcional e não foi feita nesta máquina (sem Vercel CLI).
 
-1. Instale o CLI e entre (você faz isso; nunca envie token por chat): `npm i -g vercel` e `vercel login`.
-2. Na pasta do projeto: `vercel link` e escolha o time `rmcode1` e o projeto `pontual-sistema`.
-3. No painel da Vercel (Settings, Environment Variables), cadastre **todas** as variáveis da seção 2 para Production, Preview e Development. `AUTH_URL` e `NEXT_PUBLIC_APP_URL` devem ser o endereço público daquele ambiente.
-4. Conecte o projeto ao repositório `RMCode-ia-br/pontual-sistema` (Settings, Git). O site (`rmcode-site`) **não deve ser alterado**.
-5. A região das funções é `iad1` (em `vercel.json`), a mesma do banco no Supabase (`us-east-1`), para evitar latência. Se o banco for recriado em São Paulo, mude para `gru1`.
-6. Domínio: `sistema.pontualmacae.com.br`. Em Settings, Domains, adicione o domínio e crie no registro.br (DNS gerenciado pela RM Code) o registro que a **própria Vercel indicar** na tela.
+Passos de referência (para refazer em outro projeto ou ambiente):
+
+1. (Opcional) Instale o CLI e entre (você faz isso; nunca envie token por chat): `npm i -g vercel` e `vercel login`. Na pasta do projeto: `vercel link`, time `rmcode1`, projeto `pontual-sistema`.
+2. No painel da Vercel (Settings, Environment Variables), cadastre **todas** as variáveis da seção 2 para Production, Preview e Development. `AUTH_URL` e `NEXT_PUBLIC_APP_URL` devem ser o endereço público daquele ambiente. **Ao trocar de banco, atualize `DATABASE_URL`, `DIRECT_URL` e as chaves do Supabase na Vercel e faça novo deploy.**
+3. Conecte o projeto ao repositório `RMCode-ia-br/pontual-sistema` (Settings, Git). O site (`rmcode-site`) **não deve ser alterado**.
+4. **Região das funções: `gru1` (São Paulo)**, em `vercel.json`, a mesma do banco no Supabase (`sa-east-1`), para minimizar a latência. (Antes era `iad1`, quando o banco estava em `us-east-1`; ver `docs/DECISOES.md`, itens 3 e 25.)
+5. Domínio: `sistema.pontualmacae.com.br`. Em Settings, Domains, adicione o domínio e crie no registro.br (DNS gerenciado pela RM Code) o registro que a **própria Vercel indicar** na tela.
 
 Confira o primeiro deploy: `/api/health` deve responder `{"status":"ok"}` e o login deve abrir.
 
@@ -57,9 +58,10 @@ npm run seed             # dados iniciais, idempotente e seguro para produção
 npm run storage:setup    # cria o bucket privado de anexos (idempotente)
 ```
 
+- **Banco novo, na ordem:** (1) `DIRECT_URL` = Session pooler; (2) `npm run db:deploy` (aplica também a migração de RLS); (3) defina `ADMIN_SENHA_INICIAL` e rode `npm run seed`; (4) `npm run storage:setup` (cria o bucket privado: o app **não** o cria sozinho); (5) confira que 0 tabelas estão expostas ao `anon` (`npm run test:integracao`, arquivo `seguranca-banco`). Foi assim que o banco de São Paulo foi preparado em 2026-11-11.
 - Extensões `unaccent` e `pg_trgm` são criadas pela migração inicial.
 - **Nova migração:** altere `prisma/schema.prisma`, gere o SQL com `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script` (ou compare com o schema anterior), grave em `prisma/migrations/<AAAAMMDDHHMMSS>_<nome>/migration.sql` e aplique com `npm run db:deploy`. O `migrate dev` não funciona com o pooler do Supabase (precisa de banco-sombra).
-- **Usuário inicial:** o seed cria `admin` com troca de senha obrigatória no primeiro acesso. Em desenvolvimento a senha é a padrão pública `admin`; **em produção o seed recusa a senha padrão**: defina `ADMIN_SENHA_INICIAL` (mínimo 8 caracteres). No banco de laboratório atual a senha do `admin` já foi trocada (verificado em 2026-11-11); em qualquer banco novo, confira isso antes de publicar o endereço. Depois de cadastrar as pessoas, desative esse usuário.
+- **Usuário inicial:** o seed cria `admin` com troca de senha obrigatória no primeiro acesso. Em desenvolvimento a senha é a padrão pública `admin`; **em produção o seed recusa a senha padrão**: defina `ADMIN_SENHA_INICIAL` (mínimo 8 caracteres). No banco novo de São Paulo (2026-11-11) o `admin` foi criado com a senha de `ADMIN_SENHA_INICIAL` e a **troca no primeiro acesso ainda está pendente**: entre e troque. Em qualquer banco novo, confira isso antes de publicar o endereço. Depois de cadastrar as pessoas, desative esse usuário.
 - **Segurança do banco (RLS):** o Supabase expõe o schema `public` pela API de dados aos papéis `anon` e `authenticated`. A migração `20261111120000_seguranca_rls` fecha isso (RLS ligado, sem políticas, privilégios retirados). **Toda migração com tabela nova precisa de `ENABLE ROW LEVEL SECURITY`**; `npm run test:integracao` falha se alguma ficar sem.
 - O seed **nunca** redefine a senha de um usuário existente nem sobrescreve o que foi editado em Configurações.
 
@@ -71,10 +73,12 @@ O plano gratuito do Supabase **não tem backup automático** e **pausa o projeto
 
 Workflow `.github/workflows/backup.yml`, diário (07:00 UTC) e manual. Gera `pg_dump --schema=public` (cliente 17, só o que é do sistema), valida o arquivo com `pg_restore --list`, compacta, **criptografa** (AES-256, PBKDF2) e guarda como artefato por 30 dias. Falha de forma visível (e-mail do GitHub) se não rodar.
 
-**Para ativar**, cadastre em Settings, Secrets and variables, Actions do repositório:
+**Segredos no GitHub** (Settings, Secrets and variables, Actions): a RM Code informou em 2026-11-11 que `BACKUP_DATABASE_URL` e `BACKUP_PASSPHRASE` **já estão cadastrados** (eu não tenho como conferir). Eles precisam apontar para o **banco novo** (São Paulo); se o banco mudar de novo, atualize-os.
 
 - `BACKUP_DATABASE_URL`: a URL do **Session pooler** (porta 5432), com a senha codificada.
 - `BACKUP_PASSPHRASE`: senha de criptografia. **Guarde-a em um cofre**: sem ela o backup não abre.
+
+Ainda falta rodar o workflow **manualmente uma vez** (aba Actions, "Backup do banco", "Run workflow") e **testar a restauração** (veja abaixo).
 
 ### Restaurar (passo a passo)
 
@@ -120,11 +124,11 @@ Antes de colocar **qualquer dado real**:
 
 - [ ] A RM Code decidiu a hospedagem (Vercel Pro, outro provedor, ou confirmação escrita da Vercel de que o uso é permitido).
 - [ ] O Supabase está em plano com **backup diário** e sem pausa (ou o backup do GitHub Actions está ativo **e a restauração foi testada**).
-- [ ] Avaliada com a Pontual a **transferência internacional de dados** (banco em `us-east-1`), ou o banco foi recriado em São Paulo (e `regions` da Vercel ajustado para `gru1`).
+- [x] **Transferência internacional de dados:** o banco foi recriado em **São Paulo (`sa-east-1`)** em 2026-11-11 e `regions` da Vercel ajustado para `gru1`. (Os arquivos do Storage ficam no mesmo projeto.)
 - [ ] Senha do `admin` trocada e usuários de Marcelo e Luan criados (admin desativado).
 - [ ] `AUTH_SECRET`, `CRON_SECRET` e chaves do Supabase **novos** para produção (nunca reaproveitar os de teste).
 - [ ] Usuário dedicado `prisma` no banco (hoje pode estar usando `postgres`).
-- [ ] Segredos do backup cadastrados no GitHub e `BACKUP_PASSPHRASE` guardada em cofre.
+- [x] Segredos do backup cadastrados no GitHub (informado pela RM Code). [ ] `BACKUP_PASSPHRASE` guardada em cofre, workflow executado uma vez e **restauração testada**.
 - [ ] Monitor externo em `/api/health`.
 - [ ] Domínio `sistema.pontualmacae.com.br` com HTTPS.
 - [ ] Dados de demonstração removidos do banco de produção.

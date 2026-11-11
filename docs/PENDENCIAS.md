@@ -15,10 +15,11 @@
 ## Da RM Code
 - [ ] **Hospedagem de produção:** a Vercel Hobby é restrita a uso pessoal não comercial. Enquanto não houver decisão (Vercel Pro, outro provedor ou confirmação da Vercel), **nenhum dado real** entra em ambiente hospedado; deploy só com dados de demonstração.
 - [ ] **Supabase:** plano gratuito não tem backup automático e pausa após 1 semana sem uso. Migrar para plano pago (backup diário, sem pausa) **antes** de operar com dados reais.
-- [ ] **LGPD:** banco em `us-east-1` (fora do Brasil). Avaliar com a Pontual a transferência internacional de dados, ou recriar em São Paulo (e então ajustar `regions` da Vercel).
+- [x] **LGPD:** resolvida em 2026-11-11: o banco foi recriado em **São Paulo (`sa-east-1`)** e a região da Vercel ajustada para `gru1` (`docs/DECISOES.md`, item 25).
 - [ ] Usuário dedicado `prisma` no banco (hoje pode estar usando `postgres`).
-- [ ] **Vercel CLI:** instalar, `vercel login` e `vercel link` (a pasta ainda não está vinculada). Cadastrar as variáveis no painel da Vercel (lista em `docs/OPERACAO.md`).
-- [ ] **GitHub Actions:** cadastrar os *secrets* do backup criptografado e do CI.
+- [x] **Deploy na Vercel feito e variáveis cadastradas** (informado pela RM Code em 2026-11-11; eu não tenho acesso à Vercel para conferir). Conferir após o deploy: `/api/health` responde "ok", o login abre e as variáveis apontam para o **banco novo**. O `vercel link` da pasta local é opcional.
+- [x] **GitHub Actions:** os segredos `BACKUP_DATABASE_URL` e `BACKUP_PASSPHRASE` já estão cadastrados (informado pela RM Code; não conferi). Eles precisam apontar para o **banco novo**. Falta rodar o workflow `backup.yml` manualmente uma vez e testar a restauração (item abaixo). Os segredos do CI não são necessários (o CI usa valores fictícios).
+- [ ] **`DIRECT_URL` e `DATABASE_URL` com o formato indicado:** hoje o `DIRECT_URL` é a conexão direta (`db.<ref>.supabase.co`, só IPv6) e **não conecta de redes IPv4** (as migrações desta data rodaram sobrescrevendo-o por processo). Trocar o `DIRECT_URL` pelo **Session pooler** (5432) e usar no `DATABASE_URL` o **Transaction pooler** (6543, `?pgbouncer=true`), inclusive na Vercel. Hoje o `DATABASE_URL` é um Session pooler (5432), que limita as conexões simultâneas das funções serverless (`docs/DECISOES.md`, item 26).
 - [ ] DNS de `sistema.pontualmacae.com.br` (registro.br).
 
 ## Dívida técnica / evoluções
@@ -28,18 +29,18 @@
 
 ## Surgidas na Fase 0 (autenticação e seed)
 - [ ] **Feriados municipais de Macaé** não foram inventados: o gestor precisa cadastrá-los em Configurações → Feriados (o seed só traz os nacionais, 2026–2030, e o Carnaval como ponto facultativo).
-- [ ] **Senha inicial `admin` já existe no banco do Supabase** (usuário criado pelo seed, `precisaTrocarSenha = true`). Alguém da RM Code deve entrar e trocar a senha, ou o seed deve ser refeito com outra senha, antes de expor o endereço.
+- [ ] **Primeiro acesso do `admin` no banco novo (São Paulo):** o usuário foi criado pelo seed com a senha de `ADMIN_SENHA_INICIAL` (não a pública) e `precisaTrocarSenha = true`. Entre uma vez e troque a senha; depois cadastre Marcelo e Luan e desative o `admin`.
 - [ ] **IP do cliente no bloqueio de login** vem de `x-forwarded-for`. Na Vercel o cabeçalho é definido pela plataforma; em outra hospedagem, só confiar nele atrás de um proxy que o sobrescreva (senão o bloqueio por IP pode ser contornado).
 - [ ] **`npm audit`** reportou 7 vulnerabilidades moderadas após a instalação: avaliar na revisão sênior (podem ser só de ferramentas de desenvolvimento).
 - [ ] **Testar a restauração do backup de ponta a ponta** (`pg_dump` real, criptografia, `pg_restore` em banco vazio, `migrate deploy` sem pendências). A criptografia/descriptografia já foi testada com `openssl`; falta o trecho do PostgreSQL, que exige `pg_dump`/`pg_restore` 17 (a máquina de desenvolvimento não os tem). Rodar o workflow `backup.yml` manualmente no GitHub e restaurar em um projeto Supabase vazio.
-- [ ] **Teste de carga e latência:** o banco está em `us-east-1` e a equipe em Macaé; ações com várias idas ao banco (upload de arquivo: preparar, enviar, registrar) levam alguns segundos. Medir na revisão de desempenho (Fase 7/8) e avaliar recriar o banco em São Paulo (que também resolve a questão da LGPD).
+- [ ] **Medir a latência no banco novo:** o banco agora está em São Paulo (era `us-east-1`, ~150 ms por ida). Ações com várias idas ao banco (upload de arquivo: preparar, enviar, registrar) deveriam ficar bem mais rápidas; medir na Vercel (`gru1`) e na revisão de desempenho (Fase 7/8).
 
 ## Da revisão sênior da Fase 0 (o que NÃO foi corrigido, e por quê)
 
 Corrigidos na própria fase: bloqueio de login contornável por requisições simultâneas, tabelas expostas pela API do Supabase (RLS), redirecionamento aberto, conferência do conteúdo de uploads, auditoria de reordenação, feriado removido que não podia ser recriado, teto de valores em reais, backup só do schema public, estado "carregando", painel com widgets, aviso na exportação truncada, senha com mais de 72 bytes e outros menores (ver `docs/revisoes/fase-0.md`).
 
 **Antes de usar dados reais ou de expor o endereço (importante):**
-- [x] **Senha do `admin` no banco:** verificada em 2026-11-11, já NÃO é a senha pública `admin` (troca concluída por alguém da RM Code; os testes automáticos nunca tocam nessa conta). Para qualquer banco novo, use `ADMIN_SENHA_INICIAL` no seed e confira antes de publicar o endereço.
+- [x] **Senha do `admin`:** no banco anterior já havia sido trocada; no **banco novo** o seed usou `ADMIN_SENHA_INICIAL` (verificado em 2026-11-11: não é a senha pública `admin`). Falta apenas o primeiro acesso para a troca obrigatória (item acima). Em qualquer banco novo, use `ADMIN_SENHA_INICIAL` e confira antes de publicar o endereço.
 - [ ] **TLS do banco sem verificar o certificado** (`rejectUnauthorized: false`): instalar a CA do Supabase (`ssl.ca`) e ligar a verificação.
 
 **Dívida técnica registrada (média e baixa):**
