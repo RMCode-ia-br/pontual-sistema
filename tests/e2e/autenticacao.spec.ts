@@ -133,7 +133,8 @@ test.describe("fluxo de acesso", () => {
   test("sair encerra a sessão", async ({ page }) => {
     await entrar(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
     await expect(page).toHaveURL(/\/$/);
-    await page.getByRole("button", { name: "Sair" }).click();
+    await page.getByRole("button", { name: /^Menu de / }).click();
+    await page.getByRole("menuitem", { name: "Sair" }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.goto("/");
     await expect(page).toHaveURL(/\/login/);
