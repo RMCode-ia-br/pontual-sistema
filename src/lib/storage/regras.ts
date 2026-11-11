@@ -62,5 +62,5 @@ export function sanitizarNomeArquivo(nome: string): string {
 }
 
 /** Entidades que podem receber anexos nesta fase (cresce a cada fase). */
-export const ENTIDADES_COM_ANEXO = ["ConfiguracaoEmpresa", "Tarefa", "Cliente", "Fornecedor", "Produto", "Funcionario", "Projeto", "EventoAgenda", "MedidaRascunho"] as const;
+export const ENTIDADES_COM_ANEXO = ["ConfiguracaoEmpresa", "Tarefa", "Cliente", "Fornecedor", "Produto", "Funcionario", "Projeto", "EventoAgenda", "MedidaRascunho", "Proposta"] as const;
 export type EntidadeComAnexo = (typeof ENTIDADES_COM_ANEXO)[number];

@@ -269,3 +269,29 @@ export async function vincularEnderecoDeObra(tituloProjeto: string): Promise<str
 export async function lerEndereco(enderecoId: string): Promise<{ condominio: boolean; condominioNome: string | null; exigeAprovacaoFachada: boolean; fachadaAprovada: boolean; sindicoTelefone: string | null }> {
   return comConexao(async (c) => (await c.query(`SELECT condominio, "condominioNome", "exigeAprovacaoFachada", "fachadaAprovada", "sindicoTelefone" FROM "EnderecoCliente" WHERE id = $1`, [enderecoId])).rows[0]);
 }
+
+// ---- Fase 3: parcelas a receber e tarefas geradas pela aprovação (as telas financeiras são da Fase 5) ----
+
+export type ContaDaProposta = { ordem: number; valorCentavos: number; status: string; vencimento: string | null; comNotaFiscal: boolean };
+
+export async function contasDaProposta(numero: string, revisao = 0): Promise<ContaDaProposta[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<ContaDaProposta>(
+      `SELECT cr.ordem, cr."valorCentavos", cr.status::text AS status, to_char(cr.vencimento, 'YYYY-MM-DD') AS vencimento, cr."comNotaFiscal"
+         FROM "ContaReceber" cr JOIN "Proposta" p ON p.id = cr."propostaId"
+        WHERE p.numero = $1 AND p.revisao = $2 ORDER BY cr.ordem`,
+      [numero, revisao],
+    );
+    return r.rows;
+  });
+}
+
+export async function tarefasDoProjeto(titulo: string): Promise<{ titulo: string; tipo: string | null; status: string }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ titulo: string; tipo: string | null; status: string }>(
+      `SELECT t.titulo, t.tipo, t.status::text AS status FROM "Tarefa" t JOIN "Projeto" p ON p.id = t."projetoId" WHERE p.titulo = $1 AND t."deletadoEm" IS NULL ORDER BY t."criadoEm"`,
+      [titulo],
+    );
+    return r.rows;
+  });
+}

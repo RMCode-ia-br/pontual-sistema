@@ -53,6 +53,8 @@ async function entidadeExiste(tipo: (typeof ENTIDADES_COM_ANEXO)[number], id: st
       return !!(await prisma.eventoAgenda.findFirst(filtro));
     case "MedidaRascunho":
       return !!(await prisma.medidaRascunho.findFirst(filtro));
+    case "Proposta":
+      return !!(await prisma.proposta.findFirst(filtro));
   }
 }
 

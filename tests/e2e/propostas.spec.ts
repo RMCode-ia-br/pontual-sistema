@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E } from "./banco";
+import { contasDaProposta, prepararUsuarioE2E, tarefasDoProjeto } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
@@ -143,4 +143,55 @@ test("a lista de propostas mostra valor, situação e filtra", async ({ page }) 
   await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(page.getByText("Nenhuma proposta encontrada")).toBeVisible();
   await capturar(page, "propostas-lista");
+});
+
+test("ciclo: enviar congela, nova revisão compara, aprovar gera parcelas e leva o projeto a Aprovado", async ({ page }) => {
+  await page.goto(`/propostas/${idProposta}`);
+  const numero = (await page.getByRole("heading", { name: /^Proposta [0-9]{4}-[0-9]{2}$/ }).textContent())!.replace("Proposta ", "");
+
+  // Marcar como enviada: congela e a tela vira leitura.
+  await page.getByRole("button", { name: "Marcar como enviada" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Marcar como enviada" }).click();
+  await expect(toast(page, "marcada como enviada")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+  await expect(page.getByText("Conteúdo congelado")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Adicionar item" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Salvar proposta" })).toHaveCount(0);
+  await page.goto(`/projetos/${idProjeto}`);
+  await expect(page.getByText("Proposta enviada").first()).toBeVisible();
+
+  // Nova revisão: mesmo número, Rev. 1, e comparação sem diferenças.
+  await page.goto(`/propostas/${idProposta}`);
+  await page.getByRole("button", { name: "Nova revisão" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Criar revisão" }).click();
+  await expect(page.getByRole("heading", { name: `Proposta ${numero}` })).toBeVisible();
+  await expect(page.getByText("Rev. 1").first()).toBeVisible();
+  await page.getByRole("link", { name: "Comparar com a revisão anterior" }).click();
+  await expect(page.getByText("Nenhuma diferença nos itens")).toBeVisible();
+
+  // Aprovar a proposta original, escolhendo a opção.
+  await page.goto(`/propostas/${idProposta}`);
+  await page.getByRole("button", { name: "Aprovar", exact: true }).click();
+  const dialogo = page.getByRole("dialog");
+  await dialogo.getByLabel("Opção aprovada").selectOption({ index: 0 });
+  await dialogo.getByLabel("Forma do aceite").selectOption("WHATSAPP");
+  await dialogo.getByRole("button", { name: "Aprovar proposta" }).click();
+  await expect(toast(page, "aprovada")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+  await expect(page.getByText("Aprovada", { exact: true }).first()).toBeVisible();
+
+  // Opção 1: 4.130 + 9.050 + 4.130 (item duplicado) = 17.310,00; com nota ×1,05 = 18.175,50, em 50/25/25.
+  // A última parcela absorve o arredondamento (454.387,50 → 454388 + 454387).
+  const contas = await contasDaProposta(numero);
+  expect(contas.map((c) => c.valorCentavos)).toEqual([908775, 454388, 454387]);
+  expect(contas.reduce((soma, c) => soma + c.valorCentavos, 0)).toBe(1817550);
+  expect(contas.map((c) => c.status)).toEqual(["ABERTA", "AGUARDANDO_GATILHO", "AGUARDANDO_GATILHO"]);
+  expect(contas.every((c) => c.comNotaFiscal)).toBe(true);
+
+  const tarefas = await tarefasDoProjeto(PROJETO);
+  expect(tarefas.some((t) => t.tipo === "AGENDAR_MEDICAO" && t.status === "ABERTA")).toBe(true);
+
+  await page.goto(`/projetos/${idProjeto}`);
+  await expect(page.getByText("Aprovado", { exact: true }).first()).toBeVisible();
+  await semRolagemHorizontal(page);
 });

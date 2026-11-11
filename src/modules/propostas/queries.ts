@@ -147,3 +147,32 @@ export async function listarProjetosParaProposta() {
     select: { id: true, codigo: true, titulo: true, cliente: { select: { nome: true } } },
   });
 }
+
+/** Todas as revisões do mesmo número (da mais nova para a mais antiga). */
+export async function listarRevisoes(numero: string) {
+  return prisma.proposta.findMany({
+    where: { numero, deletadoEm: null },
+    orderBy: { revisao: "desc" },
+    select: { id: true, revisao: true, status: true, enviadaEm: true },
+  });
+}
+
+/**
+ * R13: itens por composição cujo custo de algum insumo mudou DEPOIS de o preço ser calculado
+ * ("custo desatualizado desde a emissão"). Só vale para proposta ainda em aberto.
+ */
+export async function itensComCustoDesatualizado(propostaId: string): Promise<number> {
+  const itens = await prisma.itemProposta.findMany({
+    where: { propostaId, deletadoEm: null, modoPreco: "COMPOSICAO", calculadoEm: { not: null }, tipologiaId: { not: null } },
+    select: { calculadoEm: true, tipologia: { select: { insumos: { where: { deletadoEm: null, produtoId: { not: null } }, select: { produto: { select: { custoAtualizadoEm: true } } } } } } },
+  });
+  return itens.filter((i) => i.tipologia?.insumos.some((x) => x.produto?.custoAtualizadoEm && i.calculadoEm && x.produto.custoAtualizadoEm > i.calculadoEm)).length;
+}
+
+export async function listarMotivosDeRecusa() {
+  return prisma.motivoPerda.findMany({ where: { ativo: true, deletadoEm: null }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], select: { id: true, nome: true } });
+}
+
+export async function obterMensagemDeEnvio() {
+  return prisma.modeloTexto.findFirst({ where: { chave: "whatsapp.envio_proposta", deletadoEm: null }, select: { conteudo: true } });
+}

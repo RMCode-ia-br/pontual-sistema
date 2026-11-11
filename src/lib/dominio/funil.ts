@@ -66,7 +66,7 @@ export type ResultadoMovimento =
  * Pode o projeto ir de `de` para `para` pelo funil?
  * - Entre as fases abertas, livre (nos dois sentidos).
  * - `PERDIDO` exige motivo; sair de `PERDIDO` para uma fase aberta é reabrir.
- * - `APROVADO` (e o que vem depois) só pela aprovação de uma proposta (R5, Fase 3): o funil nunca o concede.
+ * - `APROVADO` (e o que vem depois) só pela aprovação de uma proposta (R5): o funil nunca o concede.
  */
 export function avaliarMovimento(de: StatusProjeto, para: StatusProjeto): ResultadoMovimento {
   if (de === para) return { ok: false, motivo: "O projeto já está nessa fase." };
@@ -75,7 +75,7 @@ export function avaliarMovimento(de: StatusProjeto, para: StatusProjeto): Result
     return { ok: false, motivo: "Este projeto já saiu do funil comercial; o andamento dele é acompanhado em Obras." };
   }
   if ((FASES_DE_OBRA as readonly string[]).includes(para)) {
-    return { ok: false, motivo: "Um projeto só vai para \"Aprovado\" aprovando uma proposta (as propostas chegam na Fase 3)." };
+    return { ok: false, motivo: "Um projeto só vai para \"Aprovado\" aprovando uma proposta (na tela da proposta)." };
   }
   if (para === "CANCELADO") {
     return { ok: false, motivo: "Para encerrar um projeto no funil, marque-o como perdido e informe o motivo." };

@@ -17,6 +17,7 @@ import { registrarInteracao } from "@/modules/interacoes/registrar";
 
 import { lerCronograma, propostaSchema, type EntradaProposta } from "../schemas";
 import { calcularPrecoDoItem, exigirRascunho, reservarNumeroDeProposta } from "../servico";
+import { copiarProposta } from "../servico-ciclo";
 
 function revalidar(id?: string, projetoId?: string) {
   revalidatePath("/propostas");
@@ -265,109 +266,11 @@ export async function duplicarProposta(propostaIdBruto: string): Promise<Resulta
   return executar("propostas.duplicar", async () => {
     const ip = extrairIp(await headers());
     const criada = await prisma.$transaction(async (tx) => {
-      const o = await tx.proposta.findFirst({
-        where: { id: propostaId.data, deletadoEm: null, projeto: { deletadoEm: null } },
-        include: {
-          opcoes: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-          grupos: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-          parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-          itens: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } } } },
-        },
-      });
-      if (!o) throw new ErroNegocio("Proposta não encontrada.");
-      const { numero, sequencial, ano } = await reservarNumeroDeProposta(tx);
-      const autor = { criadoPorId: sessao.id, atualizadoPorId: sessao.id };
-      const nova = await tx.proposta.create({
-        data: {
-          projetoId: o.projetoId,
-          numero,
-          numeroSequencial: sequencial,
-          ano,
-          parte: o.parte,
-          data: hojeCalendario(),
-          consultorNome: o.consultorNome,
-          consultorCargo: o.consultorCargo,
-          clienteNome: o.clienteNome,
-          clienteDocumento: o.clienteDocumento,
-          clienteContato: o.clienteContato,
-          clienteTelefone: o.clienteTelefone,
-          clienteEmail: o.clienteEmail,
-          enderecoObra: o.enderecoObra,
-          tituloEscopo: o.tituloEscopo,
-          comNotaFiscal: o.comNotaFiscal,
-          acrescimoNotaPb: o.acrescimoNotaPb,
-          comissaoArquitetoPb: o.comissaoArquitetoPb,
-          comissaoIndicacaoPb: o.comissaoIndicacaoPb,
-          markupPb: o.markupPb,
-          modoPrazo: o.modoPrazo,
-          prazoTotalMinDias: o.prazoTotalMinDias,
-          prazoTotalMaxDias: o.prazoTotalMaxDias,
-          prazoMaterialDias: o.prazoMaterialDias,
-          prazoExecucaoDias: o.prazoExecucaoDias,
-          prazoVidrosDias: o.prazoVidrosDias,
-          validadeTexto: o.validadeTexto,
-          condicaoId: o.condicaoId,
-          condicaoTextoLivre: o.condicaoTextoLivre,
-          dadosPagamento: o.dadosPagamento,
-          notas: o.notas,
-          exibirValorPorItem: o.exibirValorPorItem,
-          descricoesMaiusculas: o.descricoesMaiusculas,
-          observacoesInternas: o.observacoesInternas,
-          ...autor,
-        },
-        select: { id: true, numero: true },
-      });
-      const mapaOpcao = new Map<string, string>();
-      for (const op of o.opcoes) {
-        const c = await tx.opcaoProposta.create({ data: { propostaId: nova.id, nome: op.nome, ordem: op.ordem, descontoCentavos: op.descontoCentavos, ...autor }, select: { id: true } });
-        mapaOpcao.set(op.id, c.id);
-      }
-      const mapaGrupo = new Map<string, string>();
-      for (const g of o.grupos) {
-        const c = await tx.grupoProposta.create({ data: { propostaId: nova.id, nome: g.nome, ordem: g.ordem, ...autor }, select: { id: true } });
-        mapaGrupo.set(g.id, c.id);
-      }
-      for (const i of o.itens) {
-        await tx.itemProposta.create({
-          data: {
-            propostaId: nova.id,
-            opcaoId: mapaOpcao.get(i.opcaoId)!,
-            grupoId: i.grupoId ? (mapaGrupo.get(i.grupoId) ?? null) : null,
-            ordem: i.ordem,
-            tipologiaId: i.tipologiaId,
-            linhaId: i.linhaId,
-            acabamentoId: i.acabamentoId,
-            tipoVidroId: i.tipoVidroId,
-            espessuraVidroMm: i.espessuraVidroMm,
-            folhas: i.folhas,
-            faces: i.faces,
-            torresCm: i.torresCm,
-            descricao: i.descricao,
-            descricaoEditada: i.descricaoEditada,
-            local: i.local,
-            observacoes: i.observacoes,
-            modoPreco: i.modoPreco,
-            cobranca: i.cobranca,
-            valorManualCentavos: i.valorManualCentavos,
-            precoTotalCentavos: i.precoTotalCentavos,
-            custoEstimadoCentavos: i.custoEstimadoCentavos,
-            markupPb: i.markupPb,
-            calculadoEm: i.calculadoEm,
-            avisoPreco: i.avisoPreco,
-            medidas: { create: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, ...autor })) },
-            ...autor,
-          },
-        });
-      }
-      if (o.parcelas.length > 0) {
-        await tx.propostaParcela.createMany({
-          data: o.parcelas.map((p) => ({ propostaId: nova.id, ordem: p.ordem, descricao: p.descricao, percentualPb: p.percentualPb, gatilho: p.gatilho, forma: p.forma, diasApos: p.diasApos, dataFixa: p.dataFixa, parcelasCartao: p.parcelasCartao, ...autor })),
-        });
-      }
-      const projeto = await tx.projeto.findUniqueOrThrow({ where: { id: o.projetoId }, select: { clienteId: true } });
-      await registrarInteracao(tx, { tipo: "SISTEMA", texto: `Proposta ${nova.numero} criada como cópia da ${o.numero}.`, clienteId: projeto.clienteId, projetoId: o.projetoId, usuarioId: sessao.id });
-      await registrarAuditoria(tx, { usuario: sessao, entidade: "Proposta", entidadeId: nova.id, acao: "DUPLICAR", depois: { numero: nova.numero, origem: o.numero }, ip });
-      return { id: nova.id, numero: nova.numero, projetoId: o.projetoId };
+      const c = await copiarProposta(tx, { usuarioId: sessao.id, origemId: propostaId.data, modo: "NOVA" });
+      const projeto = await tx.projeto.findUniqueOrThrow({ where: { id: c.projetoId }, select: { clienteId: true } });
+      await registrarInteracao(tx, { tipo: "SISTEMA", texto: `Proposta ${c.numero} criada como cópia da ${c.origemNumero}.`, clienteId: projeto.clienteId, projetoId: c.projetoId, usuarioId: sessao.id });
+      await registrarAuditoria(tx, { usuario: sessao, entidade: "Proposta", entidadeId: c.id, acao: "DUPLICAR", depois: { numero: c.numero, origem: c.origemNumero }, ip });
+      return c;
     });
     revalidar(criada.id, criada.projetoId);
     return sucesso({ id: criada.id }, `Proposta ${criada.numero} criada como cópia.`);
