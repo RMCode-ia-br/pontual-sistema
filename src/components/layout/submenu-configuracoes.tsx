@@ -11,6 +11,7 @@ const ABAS = [
   { titulo: "Catálogos", href: "/configuracoes/catalogos" },
   { titulo: "Feriados e férias", href: "/configuracoes/feriados" },
   { titulo: "Modelos de texto", href: "/configuracoes/modelos-texto" },
+  { titulo: "Importação", href: "/configuracoes/importacao" },
   { titulo: "Auditoria", href: "/configuracoes/auditoria" },
   { titulo: "Backup e saúde", href: "/configuracoes/backup" },
 ];

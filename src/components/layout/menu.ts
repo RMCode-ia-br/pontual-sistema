@@ -101,7 +101,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Condições de pagamento", fase: 3 },
       { titulo: "Modelo de etapas", fase: 4 },
       { titulo: "Integrações/API", fase: 8 },
-      { titulo: "Importação", fase: 1 },
+      { titulo: "Importação", href: "/configuracoes/importacao" },
       { titulo: "Auditoria", href: "/configuracoes/auditoria" },
       { titulo: "Backup e saúde", href: "/configuracoes/backup" },
     ],

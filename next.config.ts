@@ -35,6 +35,11 @@ const cabecalhosDeSeguranca = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // A importação de planilhas envia as linhas já lidas (até ~2.000 linhas) numa Server Action; o padrão do
+    // Next (1 MB) é pequeno para isso. O navegador também barra acima de 4 MB antes de enviar.
+    serverActions: { bodySizeLimit: "5mb" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: cabecalhosDeSeguranca }];
   },

@@ -58,6 +58,14 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "ContatoCliente" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`);
   await c.query(`UPDATE "Cliente" SET "indicadoPorId" = NULL WHERE nome LIKE 'E2E %'`);
   await c.query(`DELETE FROM "Cliente" WHERE nome LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "HistoricoPreco" WHERE "loteImportacaoId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1))`, [ids]);
+  await c.query(`DELETE FROM "Interacao" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE "loteImportacaoId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1)))`, [ids]);
+  await c.query(`DELETE FROM "Cliente" WHERE "loteImportacaoId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1))`, [ids]);
+  await c.query(`DELETE FROM "Fornecedor" WHERE "loteImportacaoId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1))`, [ids]);
+  await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (SELECT id FROM "Produto" WHERE "loteImportacaoId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1)))`, [ids]);
+  await c.query(`DELETE FROM "Produto" WHERE "loteImportacaoId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1))`, [ids]);
+  await c.query(`DELETE FROM "LoteImportacaoItem" WHERE "loteId" IN (SELECT id FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1))`, [ids]);
+  await c.query(`DELETE FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1)`, [ids]);
   await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (SELECT id FROM "Produto" WHERE codigo LIKE 'E2E-%')`);
   await c.query(`DELETE FROM "Produto" WHERE codigo LIKE 'E2E-%'`);
   await c.query(`DELETE FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %'`);
