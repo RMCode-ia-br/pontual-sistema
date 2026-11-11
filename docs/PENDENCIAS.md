@@ -2,8 +2,8 @@
 
 ## Do cliente (Pontual)
 - [ ] **Endereço correto:** propostas trazem o nº 185, o site traz 195. Está editável em Configurações.
-- [ ] **Alíquota efetiva do Simples** e **margem padrão / margem mínima de alerta** (campos vazios com aviso até definir).
-- [ ] **Último número de proposta usado** (próximo número é configurável) e se o contador reinicia por ano (padrão: não).
+- [ ] **Alíquota efetiva do Simples** (campo vazio com aviso até definir; usada no custo real da Fase 6). A margem de lucro foi informada em 2026-11-13: é **markup sobre o custo** (80%; 100% para guarda-corpo e vidro temperado), ver `docs/DECISOES.md` (58 e 61).
+- [ ] **Numeração das propostas:** começa em 2000-26 (informado pelo dono; o último real é próximo de 1200). Confirmar se o contador reinicia por ano (padrão: não).
 - [ ] **Limite do Simples Nacional** (padrão R$ 4.800.000,00): validar o valor atual com o contador.
 - [ ] **Preços e tabelas de fornecedores**, **composições técnicas das tipologias** e fórmulas de corte (nada é preenchido por conta própria).
 - [ ] Confirmar o **mapa gatilho → etapa** (padrão: ENTREGA_MATERIAL → FABRICACAO concluída; ENTREGA_E_INSTALACAO → INSTALACAO_VIDROS concluída).
@@ -90,3 +90,12 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Compromissos que atravessam a meia-noite** aparecem só no dia do início nas grades.
 - [ ] **E2E interrompido à força pode deixar sessão "idle in transaction"** no Postgres e travar a limpeza dos testes (ver APRENDIZADOS); ideal: banco de testes separado.
 - [ ] Atalho de teclado para "Novo" segue em aberto; teste real do `.xlsx` e `seed:demo` em banco de desenvolvimento (o demo foi criado e limpo uma vez no banco compartilhado, sem restos).
+
+## Surgidas na Fase 3 (propostas)
+- [ ] **Markup de 100%:** confirmar se, além do guarda-corpo, usam 100% o box, o fechamento de sacada, o espelho e outras esquadrias de vidro temperado, e **se existem outras categorias de markup**. Hoje só o guarda-corpo vem como categoria `VIDRO_TEMPERADO`; as demais tipologias estão em `PADRAO` (80%). Cada tipologia pode ser ajustada em Tipologias.
+- [ ] **Acréscimo da nota fiscal (5%)**, **markup padrão (80%)** e **markup de vidro temperado (100%)** foram informados pelo dono e estão em Configurações → Empresa; conferir na primeira proposta real.
+- [ ] **Comissões** (arquiteto/indicação) ficam em zero e só informativas; avisar se alguma proposta futura passar a ter comissão e como ela entra no preço.
+- [ ] **Composições técnicas e preços:** nada foi preenchido. Existe só a tipologia de EXEMPLO (desativada). O custo por hora de mão de obra e os custos dos insumos precisam ser informados para o modo composição calcular.
+- [ ] **Textos das tipologias sem template no Apêndice B** (porta de giro, fechamento de sacada, portão, pergolado, espelho) estão marcados "revisar texto".
+- [ ] **Fixture 1127-26:** os 22 valores originais estão no PDF (fora do repositório); o teste usa valores de teste que reproduzem o total de R$ 89.725,00. Trocar pelos reais quando o PDF estiver disponível.
+- [ ] **Mapa gatilho → etapa** (entrega do material = fabricação concluída; entrega e instalação = instalação de vidros concluída) segue para confirmação; as parcelas por gatilho ficam "aguardando" até a Fase 4.

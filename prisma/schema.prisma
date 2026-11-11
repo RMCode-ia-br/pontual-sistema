@@ -1,4 +1,4 @@
-// Pontual Gestão — schema das Fases 0 (Fundação), 1 (Cadastros) e 2 (Comercial).
+// Pontual Gestão — schema das Fases 0 (Fundação), 1 (Cadastros), 2 (Comercial) e 3 (Propostas).
 // Convenções (docs/ESPECIFICACAO.md, seção 4): nomes em português sem acento, dinheiro em
 // centavos (Int), medidas em mm, exclusão lógica (deletadoEm) e colunas de auditoria.
 
@@ -224,8 +224,16 @@ model ConfiguracaoEmpresa {
   // Propostas
   proximoNumeroProposta   Int?
   reiniciaNumeracaoPorAno Boolean @default(false)
+  /// Ano em que o contador de propostas foi usado pela última vez (reinício por ano opcional).
+  anoNumeracaoProposta    Int?
+  /// Acréscimo sobre o preço quando a proposta é COM nota fiscal (pontos-base: 5% = 500). Regra do dono.
+  acrescimoNotaPb         Int     @default(500)
   consultorNome           String?
   consultorCargo          String?
+  /// Markup padrão SOBRE O CUSTO (pontos-base: 80% = 8000). Informado pelo dono; editável em Configurações.
+  markupPadraoPb          Int     @default(8000)
+  /// Markup da categoria vidro temperado / guarda-corpo (100% = 10000). Informado pelo dono; editável.
+  markupVidroTemperadoPb  Int     @default(10000)
   dadosPagamento          String?
   pdfExibirValorPorItem   Boolean @default(true)
   pdfDescricoesMaiusculas Boolean @default(true)
@@ -378,38 +386,44 @@ model ModeloTexto {
 // ===================== Catálogos editáveis =====================
 
 model LinhaAluminio {
-  id              String    @id @default(cuid())
-  nome            String    @unique
-  ativo           Boolean   @default(true)
-  ordem           Int       @default(0)
+  id              String         @id @default(cuid())
+  nome            String         @unique
+  ativo           Boolean        @default(true)
+  ordem           Int            @default(0)
   produtos        Produto[]
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  precos          TabelaPreco[]
+  itensProposta   ItemProposta[]
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
 }
 
 model AcabamentoAluminio {
-  id              String    @id @default(cuid())
-  nome            String    @unique
-  ativo           Boolean   @default(true)
-  ordem           Int       @default(0)
+  id              String         @id @default(cuid())
+  nome            String         @unique
+  ativo           Boolean        @default(true)
+  ordem           Int            @default(0)
   produtos        Produto[]
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  precos          TabelaPreco[]
+  itensProposta   ItemProposta[]
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
 }
 
 model TipoVidro {
-  id              String    @id @default(cuid())
-  nome            String    @unique
-  ativo           Boolean   @default(true)
-  ordem           Int       @default(0)
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  id              String         @id @default(cuid())
+  nome            String         @unique
+  ativo           Boolean        @default(true)
+  ordem           Int            @default(0)
+  precos          TabelaPreco[]
+  itensProposta   ItemProposta[]
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -443,13 +457,14 @@ model CategoriaProduto {
 }
 
 model MotivoPerda {
-  id              String    @id @default(cuid())
-  nome            String    @unique
-  ativo           Boolean   @default(true)
-  ordem           Int       @default(0)
+  id              String     @id @default(cuid())
+  nome            String     @unique
+  ativo           Boolean    @default(true)
+  ordem           Int        @default(0)
   projetos        Projeto[]
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  propostas       Proposta[]
+  criadoEm        DateTime   @default(now())
+  atualizadoEm    DateTime   @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -524,8 +539,9 @@ model Cliente {
   projetosComoConstrutora Projeto[]         @relation("ProjetoConstrutora")
   eventosAgenda           EventoAgenda[]
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  contasReceber   ContaReceber[]
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -717,11 +733,12 @@ model Produto {
   loteImportacao        LoteImportacao?     @relation(fields: [loteImportacaoId], references: [id], onDelete: Restrict)
   historicoPrecos       HistoricoPreco[]
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
-  criadoPorId     String?
-  atualizadoPorId String?
-  deletadoEm      DateTime?
+  insumosComposicao ComposicaoInsumo[]
+  criadoEm          DateTime           @default(now())
+  atualizadoEm      DateTime           @updatedAt
+  criadoPorId       String?
+  atualizadoPorId   String?
+  deletadoEm        DateTime?
 
   @@index([deletadoEm, ativo, descricao])
   @@index([categoriaId])
@@ -931,6 +948,9 @@ model Projeto {
   resumoAtendimento            String?
   observacoes                  String?
   perdidoEm                    DateTime?
+  /// Soma das propostas aprovadas (R5). Vazio até a primeira aprovação.
+  valorFechadoCentavos         Int?
+  dataFechamento               DateTime?
   /// Última mudança de fase: base de "dias parado" e da lista "Sem retorno".
   ultimaMovimentacaoEm         DateTime            @default(now())
 
@@ -939,6 +959,8 @@ model Projeto {
   eventos        EventoAgenda[]
   medidas        MedidaRascunho[]
   historicoFases HistoricoFaseProjeto[]
+  propostas      Proposta[]
+  contasReceber  ContaReceber[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1061,4 +1083,518 @@ model ContadorSequencia {
   chave        String   @id
   valor        Int      @default(0)
   atualizadoEm DateTime @updatedAt
+}
+
+// ===================== Fase 3 (Propostas) =====================
+// Dinheiro em centavos (Int). Percentuais NOVOS em pontos-base inteiros (`...Pb`: 1% = 100; 5% = 500),
+// para nunca usar ponto flutuante. Regras do dono (docs/DECISOES.md, 57+): vendas com ou sem nota fiscal;
+// com nota soma-se o acréscimo (padrão 5%) sobre o preço, em linha separada.
+
+enum TipoCobranca {
+  POR_M2
+  POR_UNIDADE
+  POR_METRO_LINEAR
+}
+
+enum CategoriaMarkup {
+  PADRAO
+  VIDRO_TEMPERADO
+}
+
+enum ModoPreco {
+  MANUAL
+  TABELA
+  COMPOSICAO
+}
+
+enum TipoDesenho {
+  JANELA_CORRER
+  PORTA_CORRER
+  BASCULA
+  PAINEL_FIXO
+  PORTA_GIRO
+  BOX_FRONTAL
+  GUARDA_CORPO
+  FECHAMENTO_SACADA
+  PORTAO
+  PERGOLADO
+  ESPELHO
+  GENERICO
+}
+
+enum PapelMaoDeObra {
+  FABRICA
+  INSTALACAO
+}
+
+enum BaseMaoDeObra {
+  HORAS_POR_M2
+  HORAS_POR_UNIDADE
+}
+
+enum StatusProposta {
+  RASCUNHO
+  ENVIADA
+  APROVADA
+  RECUSADA
+  EXPIRADA
+  SUBSTITUIDA
+  CANCELADA
+}
+
+enum ModoPrazo {
+  NENHUM
+  TOTAL
+  POR_ETAPA
+}
+
+enum FormaAceite {
+  WHATSAPP
+  EMAIL
+  ASSINATURA
+  VERBAL
+}
+
+enum GatilhoPagamento {
+  CONFIRMACAO
+  ENTREGA_MATERIAL
+  ENTREGA_E_INSTALACAO
+  DATA_FIXA
+  DIAS_APOS_APROVACAO
+}
+
+enum FormaPagamento {
+  PIX
+  TRANSFERENCIA
+  ESPECIE
+  CARTAO_CREDITO
+  BOLETO
+}
+
+enum StatusContaReceber {
+  AGUARDANDO_GATILHO
+  ABERTA
+  PARCIAL
+  PAGA
+  CANCELADA
+}
+
+/// Tipo de janela, porta, box etc. A composição e a tabela de preços dependem dela (R1, R2).
+model Tipologia {
+  id                String          @id @default(cuid())
+  nome              String
+  categoria         TipoServico     @default(OUTRO)
+  tipoDesenho       TipoDesenho     @default(GENERICO)
+  /// Números de folhas oferecidos (ex.: 2, 3, 4). Vazio = sem escolha de folhas.
+  opcoesFolhas      Int[]
+  /// Template da descrição técnica (Apêndice B; variáveis entre chaves, plural com (S)).
+  templateDescricao String
+  /// Texto genérico criado por mim, sem template do Apêndice B: o Marcelo precisa conferir.
+  revisarTexto      Boolean         @default(false)
+  cobrancaPadrao    TipoCobranca    @default(POR_M2)
+  /// Define qual markup padrão vale para os itens desta tipologia (R1).
+  categoriaMarkup   CategoriaMarkup @default(PADRAO)
+  exigeEsquadria    Boolean         @default(true)
+  /// Tipologia de EXEMPLO (R2): desativada e marcada "validar com o Marcelo".
+  exemplo           Boolean         @default(false)
+  ativo             Boolean         @default(true)
+  ordem             Int             @default(0)
+
+  insumos   ComposicaoInsumo[]
+  maoDeObra ComposicaoMaoDeObra[]
+  precos    TabelaPreco[]
+  itens     ItemProposta[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([deletadoEm, ativo, ordem])
+}
+
+/// Insumo da composição: quantidade por fórmula em função de L, A, F, Q (interpretador seguro).
+model ComposicaoInsumo {
+  id                    String         @id @default(cuid())
+  tipologiaId           String
+  tipologia             Tipologia      @relation(fields: [tipologiaId], references: [id], onDelete: Restrict)
+  produtoId             String?
+  produto               Produto?       @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  /// Descrição livre quando não há produto cadastrado (o custo então precisa ser informado aqui).
+  descricao             String?
+  unidade               UnidadeProduto
+  formulaQuantidade     String
+  /// Perda de corte em pontos-base (5% = 500).
+  perdaPb               Int            @default(0)
+  /// Custo unitário próprio (só quando não há produto).
+  custoUnitarioCentavos Int?
+  ordem                 Int            @default(0)
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([tipologiaId, deletadoEm, ordem])
+  @@index([produtoId])
+}
+
+model ComposicaoMaoDeObra {
+  id                String         @id @default(cuid())
+  tipologiaId       String
+  tipologia         Tipologia      @relation(fields: [tipologiaId], references: [id], onDelete: Restrict)
+  papel             PapelMaoDeObra
+  base              BaseMaoDeObra
+  /// Horas em centésimos (1,5 h = 150).
+  horasCentesimos   Int
+  /// Vazio = sem custo por hora informado (o sistema avisa; nunca inventa).
+  custoHoraCentavos Int?
+  ordem             Int            @default(0)
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([tipologiaId, deletadoEm, ordem])
+}
+
+/// Linha da tabela de preços. Coluna vazia = "qualquer"; vale a linha mais específica que combina com o item.
+model TabelaPreco {
+  id               String              @id @default(cuid())
+  tipologiaId      String
+  tipologia        Tipologia           @relation(fields: [tipologiaId], references: [id], onDelete: Restrict)
+  linhaId          String?
+  linha            LinhaAluminio?      @relation(fields: [linhaId], references: [id], onDelete: Restrict)
+  acabamentoId     String?
+  acabamento       AcabamentoAluminio? @relation(fields: [acabamentoId], references: [id], onDelete: Restrict)
+  tipoVidroId      String?
+  tipoVidro        TipoVidro?          @relation(fields: [tipoVidroId], references: [id], onDelete: Restrict)
+  espessuraVidroMm Int?
+  cobranca         TipoCobranca
+  valorCentavos    Int
+  vigenciaInicio   DateTime?           @db.Date
+  vigenciaFim      DateTime?           @db.Date
+  ativo            Boolean             @default(true)
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([tipologiaId, deletadoEm, ativo])
+}
+
+/// Modelo de condição de pagamento (R6). "A combinar" = texto livre, sem parcelas.
+model CondicaoPagamento {
+  id         String  @id @default(cuid())
+  nome       String
+  descricao  String?
+  /// Preenchido só nas condições sem cronograma (ex.: "A combinar").
+  textoLivre String?
+  ativo      Boolean @default(true)
+  ordem      Int     @default(0)
+
+  parcelas  CondicaoParcela[]
+  propostas Proposta[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([deletadoEm, ativo, ordem])
+}
+
+model CondicaoParcela {
+  id             String            @id @default(cuid())
+  condicaoId     String
+  condicao       CondicaoPagamento @relation(fields: [condicaoId], references: [id], onDelete: Restrict)
+  ordem          Int
+  descricao      String
+  /// Pontos-base (50% = 5000).
+  percentualPb   Int
+  gatilho        GatilhoPagamento
+  forma          FormaPagamento?
+  diasApos       Int?
+  parcelasCartao Int?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([condicaoId, deletadoEm, ordem])
+}
+
+model Proposta {
+  id               String         @id @default(cuid())
+  projetoId        String
+  projeto          Projeto        @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  /// NNNN-AA (o número não muda entre revisões).
+  numero           String
+  numeroSequencial Int
+  ano              Int
+  revisao          Int            @default(0)
+  revisaoDeId      String?
+  /// Rótulo livre ("Parte 01/02").
+  parte            String?
+  status           StatusProposta @default(RASCUNHO)
+  /// Data de emissão (calendário).
+  data             DateTime       @db.Date
+  consultorNome    String?
+  consultorCargo   String?
+
+  // Cabeçalho do cliente (cópia editável do projeto no momento da criação).
+  clienteNome      String
+  clienteDocumento String?
+  clienteContato   String?
+  clienteTelefone  String?
+  clienteEmail     String?
+  enderecoObra     String?
+  tituloEscopo     String  @default("ESCOPO DO SERVIÇO")
+
+  // Nota fiscal (regra do dono): sem nota é o padrão; com nota soma-se o acréscimo sobre o preço.
+  comNotaFiscal       Boolean @default(false)
+  /// Acréscimo aplicado (pontos-base), copiado de Configurações ao criar e editável.
+  acrescimoNotaPb     Int     @default(500)
+  /// Comissões: começam em zero e são editáveis (entram no divisor da composição).
+  comissaoArquitetoPb Int     @default(0)
+  comissaoIndicacaoPb Int     @default(0)
+  /// Markup SOBRE O CUSTO desta proposta (pontos-base: 80% = 8000); vazio = o da categoria da tipologia/Configurações.
+  markupPb            Int?
+
+  // Prazos (R7/R8). O relógio começa na medição exata.
+  modoPrazo                    ModoPrazo @default(NENHUM)
+  prazoTotalMinDias            Int?
+  prazoTotalMaxDias            Int?
+  prazoMaterialDias            Int?
+  prazoExecucaoDias            Int?
+  prazoVidrosDias              Int?
+  validadeTexto                String?
+  validadeAte                  DateTime? @db.Date
+  validadeEncerradaPorReajuste Boolean   @default(false)
+
+  // Condição de pagamento (cópia editável; as parcelas ficam em PropostaParcela).
+  condicaoId           String?
+  condicao             CondicaoPagamento? @relation(fields: [condicaoId], references: [id], onDelete: Restrict)
+  condicaoTextoLivre   String?
+  dadosPagamento       String?
+  /// Cláusulas das "Notas importantes" (numeradas na impressão).
+  notas                String[]
+  exibirValorPorItem   Boolean            @default(true)
+  descricoesMaiusculas Boolean            @default(true)
+  observacoesInternas  String?
+
+  // Ciclo de vida (R4/R5)
+  enviadaEm             DateTime?
+  /// Conteúdo congelado ao marcar ENVIADA (PDF e comparação de revisões leem daqui).
+  snapshot              Json?
+  aceitaEm              DateTime?
+  formaAceite           FormaAceite?
+  aceiteObservacao      String?
+  aceiteAnexoId         String?
+  opcaoAprovadaId       String?
+  valorAprovadoCentavos Int?
+  recusadaEm            DateTime?
+  motivoPerdaId         String?
+  motivoPerda           MotivoPerda? @relation(fields: [motivoPerdaId], references: [id], onDelete: Restrict)
+  motivoRecusaDetalhe   String?
+
+  opcoes        OpcaoProposta[]
+  grupos        GrupoProposta[]
+  itens         ItemProposta[]
+  parcelas      PropostaParcela[]
+  contasReceber ContaReceber[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([numero, revisao])
+  @@index([projetoId, deletadoEm, status])
+  @@index([status, enviadaEm])
+  @@index([numeroSequencial])
+  @@index([criadoEm])
+}
+
+model OpcaoProposta {
+  id               String         @id @default(cuid())
+  propostaId       String
+  proposta         Proposta       @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  /// Ex.: "LINHA SUPREMA", "LINHA GOLD". Com uma só opção o nome não aparece no PDF.
+  nome             String
+  ordem            Int            @default(0)
+  /// Desconto desta opção (centavos); vale antes do acréscimo da nota.
+  descontoCentavos Int            @default(0)
+  itens            ItemProposta[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([propostaId, deletadoEm, ordem])
+}
+
+model GrupoProposta {
+  id         String         @id @default(cuid())
+  propostaId String
+  proposta   Proposta       @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  /// Ex.: "PARTE SUPERIOR", "ESCADA".
+  nome       String
+  ordem      Int            @default(0)
+  itens      ItemProposta[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([propostaId, deletadoEm, ordem])
+}
+
+model ItemProposta {
+  id                    String               @id @default(cuid())
+  propostaId            String
+  proposta              Proposta             @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  opcaoId               String
+  opcao                 OpcaoProposta        @relation(fields: [opcaoId], references: [id], onDelete: Restrict)
+  grupoId               String?
+  grupo                 GrupoProposta?       @relation(fields: [grupoId], references: [id], onDelete: Restrict)
+  /// A numeração do item é automática (posição dentro da opção).
+  ordem                 Int                  @default(0)
+  tipologiaId           String?
+  tipologia             Tipologia?           @relation(fields: [tipologiaId], references: [id], onDelete: Restrict)
+  linhaId               String?
+  linha                 LinhaAluminio?       @relation(fields: [linhaId], references: [id], onDelete: Restrict)
+  acabamentoId          String?
+  acabamento            AcabamentoAluminio?  @relation(fields: [acabamentoId], references: [id], onDelete: Restrict)
+  tipoVidroId           String?
+  tipoVidro             TipoVidro?           @relation(fields: [tipoVidroId], references: [id], onDelete: Restrict)
+  espessuraVidroMm      Int?
+  folhas                Int?
+  faces                 Int?
+  torresCm              Int?
+  /// Descrição técnica; `descricaoEditada` = a pessoa mexeu, então não é regerada sozinha.
+  descricao             String
+  descricaoEditada      Boolean              @default(false)
+  local                 String?
+  observacoes           String?
+  /// Configuração do desenho (ex.: sentido de abertura); vazio = padrão da tipologia.
+  desenhoConfig         Json?
+  modoPreco             ModoPreco            @default(MANUAL)
+  cobranca              TipoCobranca?
+  /// Valor digitado (modo MANUAL).
+  valorManualCentavos   Int?
+  /// Preço total do item (resultado do modo escolhido; sempre calculado pelo servidor).
+  precoTotalCentavos    Int                  @default(0)
+  custoEstimadoCentavos Int?
+  /// Markup só deste item (composição), sobre o custo, em pontos-base; vazio = o da proposta/categoria/Configurações.
+  markupPb              Int?
+  /// Quando o custo/preço foi calculado (R13: "custo desatualizado desde a emissão").
+  calculadoEm           DateTime?
+  /// Aviso do cálculo (ex.: "Sem linha na tabela de preços: usando valor manual").
+  avisoPreco            String?
+  medidas               ItemPropostaMedida[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([propostaId, deletadoEm, ordem])
+  @@index([opcaoId, deletadoEm, ordem])
+  @@index([grupoId])
+  @@index([tipologiaId])
+}
+
+model ItemPropostaMedida {
+  id         String       @id @default(cuid())
+  itemId     String
+  item       ItemProposta @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  larguraMm  Int
+  alturaMm   Int
+  quantidade Int          @default(1)
+  local      String?
+  ordem      Int          @default(0)
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([itemId, deletadoEm, ordem])
+}
+
+/// Cronograma de pagamento desta proposta (cópia editável da condição escolhida).
+model PropostaParcela {
+  id             String           @id @default(cuid())
+  propostaId     String
+  proposta       Proposta         @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  ordem          Int
+  descricao      String
+  percentualPb   Int
+  gatilho        GatilhoPagamento
+  forma          FormaPagamento?
+  diasApos       Int?
+  dataFixa       DateTime?        @db.Date
+  parcelasCartao Int?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([propostaId, deletadoEm, ordem])
+}
+
+/// Parcela a receber gerada na aprovação (R5/R6). As telas e os pagamentos entram na Fase 5.
+/// "Atrasada" é derivada (vencimento < hoje e não paga), nunca gravada.
+model ContaReceber {
+  id             String             @id @default(cuid())
+  projetoId      String
+  projeto        Projeto            @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  propostaId     String?
+  proposta       Proposta?          @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  clienteId      String
+  cliente        Cliente            @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  /// Posição da parcela no cronograma (junto com a proposta, evita gerar em duplicidade).
+  ordem          Int
+  descricao      String
+  valorCentavos  Int
+  percentualPb   Int?
+  /// Vazio enquanto aguarda a etapa (AGUARDANDO_GATILHO).
+  vencimento     DateTime?          @db.Date
+  gatilho        GatilhoPagamento?
+  forma          FormaPagamento?
+  parcelasCartao Int?
+  status         StatusContaReceber @default(ABERTA)
+  /// Recebimento COM nota fiscal (regra do dono): herda da proposta e pode mudar no recebimento (Fase 5).
+  comNotaFiscal  Boolean            @default(false)
+  observacao     String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([propostaId, ordem])
+  @@index([projetoId, deletadoEm])
+  @@index([status, vencimento])
+  @@index([clienteId])
 }

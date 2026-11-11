@@ -10,6 +10,7 @@ import { config } from "dotenv";
 import { gerarHashSenha, validarPoliticaSenha } from "../src/lib/auth/senha";
 import { criarClientePrisma } from "../src/lib/db/criar-cliente";
 
+import { semearPropostas } from "./seed-propostas";
 import {
   ACABAMENTOS,
   CATEGORIAS_FINANCEIRAS,
@@ -88,9 +89,13 @@ async function configuracaoEmpresa(): Promise<string> {
       corPrimaria: "#1d4ed8",
       consultorNome: "Marcelo Pinheiro",
       consultorCargo: "Gerente Comercial",
+      // Regra do dono (2026-11-13): a numeração das propostas começa em 2000 (o último real é próximo de 1200).
+      proximoNumeroProposta: 2000,
       // aliquotaImpostoPercentual, margemPadraoPercentual e margemMinimaAlertaPercentual: VAZIOS.
     },
   });
+  // Banco que já existia sem número configurado: aplica o início combinado (nunca altera um valor já definido).
+  await prisma.configuracaoEmpresa.updateMany({ where: { id: "singleton", proximoNumeroProposta: null }, data: { proximoNumeroProposta: 2000 } });
   return "configuração da empresa: ok";
 }
 
@@ -175,7 +180,7 @@ async function fornecedores(): Promise<string> {
 }
 
 async function main() {
-  const etapas = [criarAdminInicial, configuracaoEmpresa, catalogos, feriados, modelosTexto, fornecedores];
+  const etapas = [criarAdminInicial, configuracaoEmpresa, catalogos, feriados, modelosTexto, fornecedores, () => semearPropostas(prisma)];
   for (const etapa of etapas) {
     console.log(await etapa());
   }
