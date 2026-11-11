@@ -44,8 +44,8 @@ export const MENU: GrupoMenu[] = [
     titulo: "Clientes",
     icone: Users,
     itens: [
-      { titulo: "Clientes", fase: 1 },
-      { titulo: "Parceiros", fase: 1 },
+      { titulo: "Clientes", href: "/clientes" },
+      { titulo: "Parceiros", href: "/parceiros" },
     ],
   },
   {

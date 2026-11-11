@@ -103,6 +103,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
               <span className="hidden sm:inline">Novo</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => router.push("/clientes/novo")}>Novo cliente</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/tarefas/nova")}>Nova tarefa</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
