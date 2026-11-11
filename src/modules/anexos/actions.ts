@@ -33,9 +33,21 @@ const concluirSchema = arquivoSchema.extend({
 
 /** Confirma que a entidade existe antes de aceitar anexo (nunca confiar em IDs vindos do cliente). */
 async function entidadeExiste(tipo: (typeof ENTIDADES_COM_ANEXO)[number], id: string): Promise<boolean> {
-  if (tipo === "ConfiguracaoEmpresa") return id === "singleton";
-  const tarefa = await prisma.tarefa.findFirst({ where: { id, deletadoEm: null }, select: { id: true } });
-  return !!tarefa;
+  const filtro = { where: { id, deletadoEm: null }, select: { id: true } } as const;
+  switch (tipo) {
+    case "ConfiguracaoEmpresa":
+      return id === "singleton";
+    case "Tarefa":
+      return !!(await prisma.tarefa.findFirst(filtro));
+    case "Cliente":
+      return !!(await prisma.cliente.findFirst(filtro));
+    case "Fornecedor":
+      return !!(await prisma.fornecedor.findFirst(filtro));
+    case "Produto":
+      return !!(await prisma.produto.findFirst(filtro));
+    case "Funcionario":
+      return !!(await prisma.funcionario.findFirst(filtro));
+  }
 }
 
 export type UploadPreparado = { url: string; caminho: string };

@@ -1,4 +1,4 @@
-// Pontual Gestão — schema da Fase 0 (Fundação).
+// Pontual Gestão — schema das Fases 0 (Fundação) e 1 (Cadastros).
 // Convenções (docs/ESPECIFICACAO.md, seção 4): nomes em português sem acento, dinheiro em
 // centavos (Int), medidas em mm, exclusão lógica (deletadoEm) e colunas de auditoria.
 
@@ -61,6 +61,74 @@ enum CategoriaModeloTexto {
   OUTRO
 }
 
+// ----- Fase 1 (Cadastros) -----
+
+enum TipoPessoa {
+  PF
+  PJ
+}
+
+/// Origem do contato (R10). Também usada pelo Projeto na Fase 2.
+enum OrigemContato {
+  GOOGLE
+  INDICACAO_CLIENTE
+  ARQUITETO_PARCEIRO
+  INSTAGRAM
+  WHATSAPP
+  SITE
+  PLACA_NA_OBRA
+  CLIENTE_ANTIGO
+  OUTRO
+}
+
+enum TipoEndereco {
+  COBRANCA
+  OBRA
+}
+
+enum FuncaoFuncionario {
+  VENDAS
+  PROJETO
+  FABRICA
+  INSTALACAO
+  ADMINISTRATIVO
+  GESTAO
+}
+
+enum UnidadeProduto {
+  UN
+  M
+  M2
+  KG
+  BARRA
+  L
+  PAR
+  CJ
+}
+
+/// De onde veio a mudança de custo (R13).
+enum OrigemPreco {
+  MANUAL
+  REAJUSTE_LOTE
+  IMPORTACAO
+}
+
+enum TipoImportacao {
+  CLIENTES
+  FORNECEDORES
+  PRODUTOS
+}
+
+enum StatusLoteImportacao {
+  APLICADO
+  REVERTIDO
+}
+
+enum AcaoLoteItem {
+  CRIADO
+  ATUALIZADO
+}
+
 // ===================== Sistema =====================
 
 model Usuario {
@@ -77,6 +145,7 @@ model Usuario {
   /// Incrementada ao trocar/redefinir senha ou desativar: invalida sessões antigas.
   versaoSessao      Int          @default(1)
   ultimoLoginEm     DateTime?
+  funcionario       Funcionario?
 
   criadoEm          DateTime     @default(now())
   atualizadoEm      DateTime     @updatedAt
@@ -222,8 +291,9 @@ model Interacao {
   id              String        @id @default(cuid())
   tipo            TipoInteracao
   texto           String
-  // Sem FK por ora: Cliente (Fase 1) e Projeto (Fase 2) ainda não existem. Ver docs/DECISOES.md.
   clienteId       String?
+  cliente         Cliente?      @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  // Sem FK por ora: Projeto só existe na Fase 2 (ver docs/DECISOES.md, item 4).
   projetoId       String?
 
   criadoEm        DateTime      @default(now())
@@ -246,6 +316,7 @@ model Tarefa {
   status          StatusTarefa @default(ABERTA)
   concluidaEm     DateTime?
   clienteId       String?
+  cliente         Cliente?     @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   projetoId       String?
   /// Evita duplicar tarefas automáticas (ex.: "follow-up:proposta:123").
   chaveUnica      String?      @unique
@@ -299,6 +370,7 @@ model LinhaAluminio {
   nome            String    @unique
   ativo           Boolean   @default(true)
   ordem           Int       @default(0)
+  produtos        Produto[]
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   criadoPorId     String?
@@ -311,6 +383,7 @@ model AcabamentoAluminio {
   nome            String    @unique
   ativo           Boolean   @default(true)
   ordem           Int       @default(0)
+  produtos        Produto[]
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   criadoPorId     String?
@@ -348,6 +421,8 @@ model CategoriaProduto {
   nome            String    @unique
   ativo           Boolean   @default(true)
   ordem           Int       @default(0)
+  produtos        Produto[]
+  fornecedores    Fornecedor[]
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   criadoPorId     String?
@@ -396,4 +471,331 @@ model CategoriaFinanceira {
   deletadoEm      DateTime?
 
   @@unique([tipo, nome])
+}
+
+// ===================== Cadastros (Fase 1) =====================
+
+model Cliente {
+  id               String         @id @default(cuid())
+  tipoPessoa       TipoPessoa     @default(PF)
+  /// Nome (PF) ou razão social (PJ).
+  nome             String
+  nomeFantasia     String?
+  /// Só dígitos (CPF com 11 ou CNPJ com 14). Duplicidade é avisada na tela, não imposta no banco.
+  cpfCnpj          String?
+  /// E.164 ("+5522999583288").
+  telefone         String?
+  whatsapp         String?
+  email            String?
+  // Marcações combináveis (R18).
+  clienteFinal     Boolean        @default(true)
+  arquiteto        Boolean        @default(false)
+  construtora      Boolean        @default(false)
+  empresa          Boolean        @default(false)
+  origem           OrigemContato?
+  origemDetalhe    String?
+  indicadoPorId    String?
+  indicadoPor      Cliente?       @relation("Indicacao", fields: [indicadoPorId], references: [id], onDelete: Restrict)
+  indicados        Cliente[]      @relation("Indicacao")
+  observacoes      String?
+  ativo            Boolean        @default(true)
+  loteImportacaoId String?
+  loteImportacao   LoteImportacao? @relation(fields: [loteImportacaoId], references: [id], onDelete: Restrict)
+
+  enderecos        EnderecoCliente[]
+  contatos         ContatoCliente[]
+  interacoes       Interacao[]
+  tarefas          Tarefa[]
+
+  criadoEm         DateTime       @default(now())
+  atualizadoEm     DateTime       @updatedAt
+  criadoPorId      String?
+  atualizadoPorId  String?
+  deletadoEm       DateTime?
+
+  @@index([deletadoEm, ativo, nome])
+  @@index([cpfCnpj])
+  @@index([telefone])
+  @@index([whatsapp])
+  @@index([arquiteto])
+  @@index([construtora])
+  @@index([indicadoPorId])
+  @@index([loteImportacaoId])
+}
+
+model EnderecoCliente {
+  id                       String       @id @default(cuid())
+  clienteId                String
+  cliente                  Cliente      @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  tipo                     TipoEndereco @default(OBRA)
+  apelido                  String?
+  logradouro               String?
+  numero                   String?
+  complemento              String?
+  bairro                   String?
+  cidade                   String?
+  uf                       String?
+  cep                      String?
+  // Condomínio (R9): exige aprovação da fachada, horários permitidos, contato do síndico.
+  condominio               Boolean      @default(false)
+  condominioNome           String?
+  exigeAprovacaoFachada    Boolean      @default(false)
+  fachadaAprovada          Boolean      @default(false)
+  horariosPermitidos       String?
+  sindicoNome              String?
+  sindicoTelefone          String?
+
+  criadoEm                 DateTime     @default(now())
+  atualizadoEm             DateTime     @updatedAt
+  criadoPorId              String?
+  atualizadoPorId          String?
+  deletadoEm               DateTime?
+
+  @@index([clienteId, deletadoEm])
+}
+
+model ContatoCliente {
+  id              String    @id @default(cuid())
+  clienteId       String
+  cliente         Cliente   @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  nome            String
+  cargo           String?
+  telefone        String?
+  whatsapp        String?
+  email           String?
+  observacoes     String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([clienteId, deletadoEm])
+}
+
+model Fornecedor {
+  id                 String             @id @default(cuid())
+  razaoSocial        String
+  nomeFantasia       String?
+  cnpj               String?
+  categorias         CategoriaProduto[]
+  vendedorNome       String?
+  telefone           String?
+  email              String?
+  condicoesPagamento String?
+  prazoEntregaDias   Int?
+  observacoes        String?
+  ativo              Boolean            @default(true)
+  loteImportacaoId   String?
+  loteImportacao     LoteImportacao?    @relation(fields: [loteImportacaoId], references: [id], onDelete: Restrict)
+  produtos           Produto[]
+  historicoPrecos    HistoricoPreco[]
+
+  criadoEm           DateTime           @default(now())
+  atualizadoEm       DateTime           @updatedAt
+  criadoPorId        String?
+  atualizadoPorId    String?
+  deletadoEm         DateTime?
+
+  @@index([deletadoEm, ativo, razaoSocial])
+  @@index([cnpj])
+  @@index([loteImportacaoId])
+}
+
+model Funcionario {
+  id                  String            @id @default(cuid())
+  nome                String
+  cpf                 String?
+  telefone            String?
+  email               String?
+  cargo               String?
+  funcao              FuncaoFuncionario
+  admissaoEm          DateTime?         @db.Date
+  demissaoEm          DateTime?         @db.Date
+  salarioBaseCentavos Int?
+  custoHoraCentavos   Int?
+  observacoes         String?
+  ativo               Boolean           @default(true)
+  usuarioId           String?           @unique
+  usuario             Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  equipes             EquipeMembro[]
+
+  criadoEm            DateTime          @default(now())
+  atualizadoEm        DateTime          @updatedAt
+  criadoPorId         String?
+  atualizadoPorId     String?
+  deletadoEm          DateTime?
+
+  @@index([deletadoEm, ativo, nome])
+  @@index([cpf])
+}
+
+model Equipe {
+  id              String         @id @default(cuid())
+  nome            String
+  descricao       String?
+  ativo           Boolean        @default(true)
+  membros         EquipeMembro[]
+
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([deletadoEm, ativo, nome])
+}
+
+/// Ao tirar alguém da equipe, `deletadoEm` é preenchido; ao recolocar, é limpo (a unicidade vale sempre).
+model EquipeMembro {
+  id              String      @id @default(cuid())
+  equipeId        String
+  equipe          Equipe      @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  funcionarioId   String
+  funcionario     Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Restrict)
+  lider           Boolean     @default(false)
+
+  criadoEm        DateTime    @default(now())
+  atualizadoEm    DateTime    @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([equipeId, funcionarioId])
+  @@index([funcionarioId])
+}
+
+model Produto {
+  id                     String              @id @default(cuid())
+  /// Único entre os não excluídos (índice parcial criado na migração).
+  codigo                 String
+  descricao              String
+  categoriaId            String?
+  categoria              CategoriaProduto?   @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  unidade                UnidadeProduto      @default(UN)
+  linhaId                String?
+  linha                  LinhaAluminio?      @relation(fields: [linhaId], references: [id], onDelete: Restrict)
+  acabamentoId           String?
+  acabamento             AcabamentoAluminio? @relation(fields: [acabamentoId], references: [id], onDelete: Restrict)
+  fornecedorPrincipalId  String?
+  fornecedorPrincipal    Fornecedor?         @relation(fields: [fornecedorPrincipalId], references: [id], onDelete: Restrict)
+  /// Vazio = custo ainda não informado (nunca inventamos preço).
+  custoUnitarioCentavos  Int?
+  custoAtualizadoEm      DateTime?
+  comprimentoBarraMm     Int?
+  pesoKgPorMetro         Decimal?            @db.Decimal(8, 3)
+  /// Só para produto acabado de pronta entrega.
+  larguraMm              Int?
+  alturaMm               Int?
+  /// Vazio = sem alerta de estoque mínimo (R14).
+  estoqueMinimo          Decimal?            @db.Decimal(12, 3)
+  localizacao            String?
+  observacoes            String?
+  ativo                  Boolean             @default(true)
+  loteImportacaoId       String?
+  loteImportacao         LoteImportacao?     @relation(fields: [loteImportacaoId], references: [id], onDelete: Restrict)
+  historicoPrecos        HistoricoPreco[]
+
+  criadoEm               DateTime            @default(now())
+  atualizadoEm           DateTime            @updatedAt
+  criadoPorId            String?
+  atualizadoPorId        String?
+  deletadoEm             DateTime?
+
+  @@index([deletadoEm, ativo, descricao])
+  @@index([categoriaId])
+  @@index([linhaId])
+  @@index([fornecedorPrincipalId])
+  @@index([loteImportacaoId])
+}
+
+/// Toda mudança de custo de um produto (R13). Só se acrescenta; nunca se edita.
+model HistoricoPreco {
+  id                    String          @id @default(cuid())
+  produtoId             String
+  produto               Produto         @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  custoAnteriorCentavos Int?
+  custoNovoCentavos     Int
+  origem                OrigemPreco
+  fornecedorId          String?
+  fornecedor            Fornecedor?     @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  usuarioId             String?
+  loteImportacaoId      String?
+  loteImportacao        LoteImportacao? @relation(fields: [loteImportacaoId], references: [id], onDelete: Restrict)
+  /// Descrição curta do reajuste em lote ("+5% — Fornecedor X").
+  observacao            String?
+
+  criadoEm              DateTime        @default(now())
+  atualizadoEm          DateTime        @updatedAt
+  criadoPorId           String?
+  atualizadoPorId       String?
+  deletadoEm            DateTime?
+
+  @@index([produtoId, criadoEm])
+  @@index([loteImportacaoId])
+}
+
+model LoteImportacao {
+  id              String               @id @default(cuid())
+  tipo            TipoImportacao
+  nomeArquivo     String
+  totalLinhas     Int
+  criados         Int                  @default(0)
+  atualizados     Int                  @default(0)
+  ignorados       Int                  @default(0)
+  status          StatusLoteImportacao @default(APLICADO)
+  revertidoEm     DateTime?
+  revertidoPorId  String?
+  itens           LoteImportacaoItem[]
+  clientes        Cliente[]
+  fornecedores    Fornecedor[]
+  produtos        Produto[]
+  historicoPrecos HistoricoPreco[]
+
+  criadoEm        DateTime             @default(now())
+  atualizadoEm    DateTime             @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([tipo, criadoEm])
+}
+
+/// O que cada lote fez, para poder reverter: criados vão para a lixeira; atualizados voltam ao `antes`.
+model LoteImportacaoItem {
+  id              String         @id @default(cuid())
+  loteId          String
+  lote            LoteImportacao @relation(fields: [loteId], references: [id], onDelete: Restrict)
+  entidadeId      String
+  acao            AcaoLoteItem
+  /// Valores anteriores (só quando ATUALIZADO).
+  antes           Json?
+
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([loteId])
+}
+
+/// Filtros salvos por usuário e tela (spec 7: "todas as listas ... com filtros salvos").
+model FiltroSalvo {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  /// Identificador da lista ("clientes", "produtos"...).
+  tela            String
+  nome            String
+  /// Query string da lista, sem o "?" e sem a página.
+  consulta        String
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([usuarioId, tela, nome])
 }

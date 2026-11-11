@@ -28,6 +28,23 @@ export const CATEGORIAS_PRODUTO = [
   "Produtos acabados",
 ];
 
+/**
+ * Fornecedores da spec (seção 13): só nome, e categoria apenas onde o nome já a diz.
+ * O resto o Marcelo completa na tela (contato, condições, prazo). Ver docs/PENDENCIAS.md.
+ */
+export const FORNECEDORES: { razaoSocial: string; categorias: string[] }[] = [
+  { razaoSocial: "Alubold", categorias: [] },
+  { razaoSocial: "Pontimac", categorias: [] },
+  { razaoSocial: "Dafel", categorias: [] },
+  { razaoSocial: "Nova Opção", categorias: [] },
+  { razaoSocial: "Klinke", categorias: [] },
+  { razaoSocial: "AL Ferragens", categorias: ["Ferragens e acessórios"] },
+  { razaoSocial: "Viminas", categorias: [] },
+  { razaoSocial: "Simas", categorias: [] },
+  { razaoSocial: "Sandro Acessórios", categorias: ["Ferragens e acessórios"] },
+  { razaoSocial: "Blindex", categorias: ["Vidros"] },
+];
+
 export const MOTIVOS_PERDA = [
   "Preço",
   "Prazo",

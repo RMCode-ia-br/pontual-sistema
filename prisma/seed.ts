@@ -16,6 +16,7 @@ import {
   CATEGORIAS_PRODUTO,
   ESPESSURAS_VIDRO_MM,
   feriadosNacionais,
+  FORNECEDORES,
   LINHAS,
   MODELOS_TEXTO,
   MOTIVOS_BLOQUEIO,
@@ -148,8 +149,33 @@ async function modelosTexto(): Promise<string> {
   return `modelos de texto: ${MODELOS_TEXTO.length}`;
 }
 
+async function fornecedores(): Promise<string> {
+  // Fornecedor não tem nome único no banco; a idempotência é aqui: quem já existe (inclusive na
+  // lixeira, para não ressuscitar o que alguém removeu) não é recriado nem alterado.
+  const existentes = await prisma.fornecedor.findMany({
+    where: { razaoSocial: { in: FORNECEDORES.map((f) => f.razaoSocial) } },
+    select: { razaoSocial: true },
+  });
+  const jaTem = new Set(existentes.map((f) => f.razaoSocial));
+  const categorias = await prisma.categoriaProduto.findMany({ select: { id: true, nome: true } });
+  const idDaCategoria = new Map(categorias.map((c) => [c.nome, c.id]));
+
+  let criados = 0;
+  for (const f of FORNECEDORES) {
+    if (jaTem.has(f.razaoSocial)) continue;
+    await prisma.fornecedor.create({
+      data: {
+        razaoSocial: f.razaoSocial,
+        categorias: { connect: f.categorias.flatMap((nome) => (idDaCategoria.has(nome) ? [{ id: idDaCategoria.get(nome)! }] : [])) },
+      },
+    });
+    criados++;
+  }
+  return `fornecedores: ${criados} criado(s), ${FORNECEDORES.length - criados} já existiam`;
+}
+
 async function main() {
-  const etapas = [criarAdminInicial, configuracaoEmpresa, catalogos, feriados, modelosTexto];
+  const etapas = [criarAdminInicial, configuracaoEmpresa, catalogos, feriados, modelosTexto, fornecedores];
   for (const etapa of etapas) {
     console.log(await etapa());
   }
