@@ -217,3 +217,21 @@ test("PDFs: a proposta e a folha de produção abrem; sem sessão são recusados
   expect([307, 308, 401]).toContain(r.status());
   await anonimo.close();
 });
+
+test("painel mostra os números de propostas e a busca global acha pelo número", async ({ page }) => {
+  await page.goto(`/propostas/${idProposta}`);
+  const numero = (await page.getByRole("heading", { name: /^Proposta [0-9]{4}-[0-9]{2}$/ }).textContent())!.replace("Proposta ", "");
+
+  await page.goto("/");
+  const secao = page.getByRole("region", { name: "Propostas" });
+  await expect(secao.getByText("Aprovadas no mês")).toBeVisible();
+  await expect(secao.getByText("Enviadas sem resposta")).toBeVisible();
+  await semRolagemHorizontal(page);
+  await secao.getByRole("link", { name: /Aprovadas no mês/ }).click();
+  await expect(page).toHaveURL(/propostas\?status=APROVADA/);
+  await expect(page.getByText(numero).first()).toBeVisible();
+
+  await page.keyboard.press("Control+k");
+  await page.getByPlaceholder("Buscar páginas, clientes, produtos...").fill(numero);
+  await expect(page.getByRole("option", { name: new RegExp(`Proposta ${numero}`) }).first()).toBeVisible();
+});

@@ -308,6 +308,8 @@ export type ProjetoCompleto = {
   faseDaObra: string | null;
   investimentoPrevistoCentavos: number | null;
   valorEstimadoCentavos: number | null;
+  /** Soma das propostas aprovadas (R5). */
+  valorFechadoCentavos: number | null;
   prazoDesejado: string | null;
   observacoes: string | null;
   motivoPerda: { id: string; nome: string } | null;
@@ -355,6 +357,7 @@ export async function obterProjeto(id: string): Promise<ProjetoCompleto | null> 
     faseDaObra: p.faseDaObra,
     investimentoPrevistoCentavos: p.investimentoPrevistoCentavos,
     valorEstimadoCentavos: p.valorEstimadoCentavos,
+    valorFechadoCentavos: p.valorFechadoCentavos,
     prazoDesejado: p.prazoDesejado,
     observacoes: p.observacoes,
     motivoPerda: p.motivoPerda,

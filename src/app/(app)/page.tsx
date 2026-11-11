@@ -11,6 +11,7 @@ import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
 import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
 import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
 import { resumoComercial } from "@/modules/comercial/resumo";
+import { resumoDePropostas } from "@/modules/propostas/resumo";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { formatarDataHora, formatarMoeda } from "@/lib/formatadores";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
@@ -29,7 +30,7 @@ type Cartao = {
 
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
-  const [resumo, proximas, cadastros, comercial] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros(), resumoComercial()]);
+  const [resumo, proximas, cadastros, comercial, propostas] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros(), resumoComercial(), resumoDePropostas()]);
 
   const cartoes: Cartao[] = [
     {
@@ -153,6 +154,39 @@ export default async function PaginaPainel() {
               <p className="text-muted-foreground mt-1 text-xs tabular-nums">{f.valorCentavos > 0 ? formatarMoeda(f.valorCentavos) : "Sem valor estimado"}</p>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="titulo-propostas" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-propostas" className="text-lg font-medium">
+            Propostas
+          </h2>
+          <Link href="/propostas" className="text-primary text-sm hover:underline">
+            Ver todas
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Link href="/propostas?status=ENVIADA" title="Como é calculado: propostas na situação Enviada (revisão vigente). O valor soma a maior opção de cada uma, com a nota fiscal quando houver." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Enviadas, aguardando</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{propostas.enviadas}</p>
+            <p className="text-muted-foreground mt-1 text-xs tabular-nums">{propostas.enviadas > 0 ? formatarMoeda(propostas.enviadasValorCentavos) : "Nenhuma proposta enviada"}</p>
+          </Link>
+          <Link href="/propostas?status=ENVIADA" title="Como é calculado: propostas enviadas há mais dias que o prazo de 'sem retorno' definido em Configurações." className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", propostas.semResposta > 0 && "border-destructive/40 bg-destructive/5")}>
+            <p className="text-muted-foreground text-sm">Enviadas sem resposta</p>
+            <p className={cn("mt-2 text-3xl font-semibold tabular-nums", propostas.semResposta > 0 && "text-destructive")}>{propostas.semResposta}</p>
+            <p className="text-muted-foreground mt-1 text-xs">Além do prazo configurado. Hora de acompanhar.</p>
+          </Link>
+          <Link href="/propostas?status=APROVADA" title="Como é calculado: propostas aprovadas com data de aceite desde o dia 1º do mês atual; o valor é o da opção aprovada." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Aprovadas no mês</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{propostas.aprovadasNoMes}</p>
+            <p className="text-muted-foreground mt-1 text-xs tabular-nums">{propostas.aprovadasNoMes > 0 ? formatarMoeda(propostas.aprovadasNoMesValorCentavos) : "Nenhuma aprovada neste mês"}</p>
+          </Link>
+          <Link href="/propostas?status=RASCUNHO" title="Como é calculado: propostas ainda em rascunho (não enviadas)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Rascunhos</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{propostas.rascunhos}</p>
+            <p className="text-muted-foreground mt-1 text-xs">{propostas.recusadasNoMes} recusada(s) no mês.</p>
+          </Link>
         </div>
       </section>
 

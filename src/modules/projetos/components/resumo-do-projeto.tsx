@@ -65,6 +65,7 @@ export function ResumoDoProjeto({ projeto: p }: { projeto: ProjetoCompleto }) {
       </Bloco>
 
       <Bloco titulo="Valores e prazo">
+        <Item rotulo="Valor fechado (propostas aprovadas)">{p.valorFechadoCentavos != null ? formatarMoeda(p.valorFechadoCentavos) : null}</Item>
         <Item rotulo="Valor estimado">{p.valorEstimadoCentavos !== null ? formatarMoeda(p.valorEstimadoCentavos) : null}</Item>
         <Item rotulo="Investimento previsto pelo cliente">{p.investimentoPrevistoCentavos !== null ? formatarMoeda(p.investimentoPrevistoCentavos) : null}</Item>
         <Item rotulo="Prazo desejado pelo cliente">{p.prazoDesejado}</Item>

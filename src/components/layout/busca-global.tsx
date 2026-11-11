@@ -13,7 +13,7 @@ import { paginasDisponiveis } from "./menu";
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
-const VAZIO: ResultadoBusca = { clientes: [], projetos: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
+const VAZIO: ResultadoBusca = { clientes: [], projetos: [], propostas: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
 
 export function BuscaGlobal() {
   const router = useRouter();
@@ -80,7 +80,7 @@ export function BuscaGlobal() {
       <Dialog open={aberta} onOpenChange={setAberta}>
         <DialogHeader className="sr-only">
           <DialogTitle>Busca global</DialogTitle>
-          <DialogDescription>Procure páginas, clientes, projetos, fornecedores, produtos, funcionários, tarefas e usuários.</DialogDescription>
+          <DialogDescription>Procure páginas, clientes, projetos, propostas (pelo número), fornecedores, produtos, funcionários, tarefas e usuários.</DialogDescription>
         </DialogHeader>
         <DialogContent className="top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0" showCloseButton={false}>
           <Comando shouldFilter={false}>
@@ -115,6 +115,17 @@ export function BuscaGlobal() {
                       <span className="text-muted-foreground ml-auto text-xs">
                         {p.codigo} · {p.cliente}
                       </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {visivel.propostas.length > 0 ? (
+                <CommandGroup heading="Propostas">
+                  {visivel.propostas.map((p) => (
+                    <CommandItem key={p.id} value={`proposta-${p.id}`} onSelect={() => ir(`/propostas/${p.id}`)}>
+                      <FileText aria-hidden /> Proposta {p.numero}
+                      {p.revisao > 0 ? ` (Rev. ${p.revisao})` : ""}
+                      <span className="text-muted-foreground ml-auto text-xs">{p.cliente}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
