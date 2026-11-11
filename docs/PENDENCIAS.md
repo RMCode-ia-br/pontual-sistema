@@ -25,3 +25,11 @@
 - Quando existirem perfis de acesso: restringir salários de funcionários (hoje todos veem tudo).
 - Esqueci a senha por e-mail (exige e-mail transacional).
 - Plano de corte otimizado, OCR de tabelas de fornecedor, conciliação bancária (fora do escopo).
+
+## Surgidas na Fase 0 (autenticação e seed)
+- [ ] **Feriados municipais de Macaé** não foram inventados: o gestor precisa cadastrá-los em Configurações → Feriados (o seed só traz os nacionais, 2026–2030, e o Carnaval como ponto facultativo).
+- [ ] **Senha inicial `admin` já existe no banco do Supabase** (usuário criado pelo seed, `precisaTrocarSenha = true`). Alguém da RM Code deve entrar e trocar a senha, ou o seed deve ser refeito com outra senha, antes de expor o endereço.
+- [ ] **IP do cliente no bloqueio de login** vem de `x-forwarded-for`. Na Vercel o cabeçalho é definido pela plataforma; em outra hospedagem, só confiar nele atrás de um proxy que o sobrescreva (senão o bloqueio por IP pode ser contornado).
+- [ ] **Na tela de Usuários:** desativar um usuário deve incrementar `versaoSessao` (hoje a sessão só é recusada enquanto ele está inativo; reativar reviveria o token antigo).
+- [ ] **`npm audit`** reportou 7 vulnerabilidades moderadas após a instalação: avaliar na revisão sênior (podem ser só de ferramentas de desenvolvimento).
+- [ ] **Limpeza de `TentativaLogin`:** a tabela só cresce; criar a limpeza (ex.: apagar com mais de 30 dias) na rotina diária da Fase 8.
