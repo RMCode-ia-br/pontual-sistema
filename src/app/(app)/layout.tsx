@@ -1,26 +1,16 @@
-import { LogOut } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { AppShell } from "@/components/layout/app-shell";
 import { exigirSessao } from "@/lib/auth/sessao";
-import { sair } from "@/modules/usuarios/actions/sessao";
+import { obterMarca } from "@/modules/configuracoes/queries";
+import { contarNaoLidas } from "@/modules/notificacoes/queries";
 
-// Layout provisório da área logada: o menu lateral, a busca e o sino entram no passo seguinte.
 export default async function LayoutApp({ children }: { children: React.ReactNode }) {
   // Toda a área logada exige sessão válida e troca de senha em dia.
   const usuario = await exigirSessao();
+  const [marca, naoLidas] = await Promise.all([obterMarca(), contarNaoLidas(usuario.id)]);
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <span className="font-semibold">Pontual Gestão</span>
-        <form action={sair} className="flex items-center gap-3">
-          <span className="text-muted-foreground text-sm">{usuario.nome}</span>
-          <Button type="submit" variant="outline" size="sm">
-            <LogOut aria-hidden /> Sair
-          </Button>
-        </form>
-      </header>
-      <main className="flex-1 p-4">{children}</main>
-    </div>
+    <AppShell usuario={{ nome: usuario.nome, login: usuario.login }} marca={marca} naoLidas={naoLidas}>
+      {children}
+    </AppShell>
   );
 }

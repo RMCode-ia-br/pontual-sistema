@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   description: "Sistema de gestão da Pontual Soluções em Esquadrias e Vidros.",
   applicationName: "Pontual Gestão",
   robots: { index: false, follow: false },
+  icons: { icon: "/icons/icone-192.png", apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
