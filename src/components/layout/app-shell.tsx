@@ -104,6 +104,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => router.push("/clientes/novo")}>Novo cliente</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/fornecedores/novo")}>Novo fornecedor</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/tarefas/nova")}>Nova tarefa</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

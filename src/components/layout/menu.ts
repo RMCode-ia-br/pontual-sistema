@@ -83,7 +83,7 @@ export const MENU: GrupoMenu[] = [
     titulo: "Cadastros",
     icone: BookOpen,
     itens: [
-      { titulo: "Fornecedores", fase: 1 },
+      { titulo: "Fornecedores", href: "/fornecedores" },
       { titulo: "Funcionários e equipes", fase: 1 },
       { titulo: "Tipologias e preços", fase: 3 },
       { titulo: "Catálogos", href: "/configuracoes/catalogos" },

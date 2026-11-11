@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
@@ -11,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { formatarCnpj, formatarCpf } from "@/lib/validadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
-import { AcoesDoCliente } from "@/modules/clientes/components/acoes-do-cliente";
+import { excluirClientes, inativarClientes, reativarClientes } from "@/modules/clientes/actions/clientes";
 import { BotoesDeContato } from "@/modules/clientes/components/botoes-de-contato";
 import { FormCliente } from "@/modules/clientes/components/form-cliente";
 import { LinhaDoTempo } from "@/modules/clientes/components/linha-do-tempo";
@@ -69,7 +70,18 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       <CabecalhoPagina
         titulo={cliente.nome}
         descricao={descricao}
-        acoes={<AcoesDoCliente id={cliente.id} nome={cliente.nome} ativo={cliente.ativo} />}
+        acoes={
+          <AcoesDoCadastro
+            id={cliente.id}
+            nome={cliente.nome}
+            ativo={cliente.ativo}
+            voltarPara="/clientes"
+            inativar={inativarClientes}
+            reativar={reativarClientes}
+            excluir={excluirClientes}
+            preservado="Endereços, contatos e histórico são preservados."
+          />
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
