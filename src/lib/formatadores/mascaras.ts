@@ -47,3 +47,8 @@ export function mascararMoeda(texto: string): string {
   const inteiro = centavos.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${inteiro},${centavos.slice(-2)}`;
 }
+
+/** Centavos guardados → texto do campo de valor ("123456" → "1.234,56"). Vazio quando não há valor. */
+export function centavosParaCampo(centavos: number | null | undefined): string {
+  return centavos === null || centavos === undefined ? "" : mascararMoeda(String(centavos));
+}

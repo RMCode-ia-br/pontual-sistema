@@ -37,3 +37,14 @@ describe("máscaras de digitação", () => {
     expect(mascararMoeda("abc")).toBe("");
   });
 });
+
+describe("centavosParaCampo", () => {
+  it("mostra centavos como o campo de valor espera e deixa vazio quando não há valor", async () => {
+    const { centavosParaCampo } = await import("@/lib/formatadores/mascaras");
+    expect(centavosParaCampo(123456)).toBe("1.234,56");
+    expect(centavosParaCampo(5)).toBe("0,05");
+    expect(centavosParaCampo(0)).toBe("");
+    expect(centavosParaCampo(null)).toBe("");
+    expect(centavosParaCampo(undefined)).toBe("");
+  });
+});

@@ -59,6 +59,9 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`UPDATE "Cliente" SET "indicadoPorId" = NULL WHERE nome LIKE 'E2E %'`);
   await c.query(`DELETE FROM "Cliente" WHERE nome LIKE 'E2E %'`);
   await c.query(`DELETE FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "EquipeMembro" WHERE "equipeId" IN (SELECT id FROM "Equipe" WHERE nome LIKE 'E2E %') OR "funcionarioId" IN (SELECT id FROM "Funcionario" WHERE nome LIKE 'E2E %')`);
+  await c.query(`DELETE FROM "Equipe" WHERE nome LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "Funcionario" WHERE nome LIKE 'E2E %'`);
   if (ids.length > 0) await c.query(`DELETE FROM "FiltroSalvo" WHERE "usuarioId" = ANY($1)`, [ids]);
 
   await c.query(`DELETE FROM "Tarefa" WHERE titulo LIKE 'E2E %'`);
