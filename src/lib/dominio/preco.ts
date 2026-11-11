@@ -3,10 +3,11 @@
  * (1% = 100; 5,25% = 525), sem ponto flutuante em dinheiro. Divisões com BigInt, arredondando meio para cima.
  *
  * Regras do dono (Marcelo, 2026-11-13; prevalecem sobre a especificação):
- * - O preço é o que ele definir (manual é o uso principal).
- * - Proposta COM nota fiscal: preço × (1 + acréscimo%), acréscimo padrão 5% (Configurações), em linha separada.
- *   O imposto NÃO entra mais no divisor da composição.
- * - Comissões (arquiteto, indicação) começam em zero e são editáveis.
+ * - O preço é o que ele definir (manual é o uso principal; sem markup).
+ * - Composição: preço = custo × (1 + markup), markup sobre o custo (padrão 80%; 100% para guarda-corpo e vidro temperado).
+ * - Proposta COM nota fiscal: total × (1 + acréscimo%), acréscimo padrão 5% (Configurações), em linha separada,
+ *   sempre DEPOIS do markup (nunca em divisor).
+ * - Comissões (arquiteto, indicação) começam em zero, são editáveis e só informativas (não alteram o preço).
  */
 
 export type ModoPreco = "MANUAL" | "TABELA" | "COMPOSICAO";
@@ -73,27 +74,48 @@ export function precoPorCobranca(cobranca: TipoCobranca, valorUnitarioCentavos: 
   }
 }
 
-// ----- Composição (custo + margem) -----
+// ----- Composição (custo × (1 + markup)) -----
 
 export type ResultadoComposicao = { ok: true; precoCentavos: number } | { ok: false; erro: string };
 
+/** Teto do markup: 1.000% (evita digitação absurda; em pontos-base). */
+export const MARKUP_MAXIMO_PB = 100_000;
+
 /**
- * Método do divisor "por dentro": preço = custo ÷ (1 − margem% − comissões%).
- * O imposto da nota fiscal NÃO entra aqui (é um acréscimo separado sobre o preço).
- * Bloqueia se margem + comissões ≥ 100%.
+ * Markup SOBRE O CUSTO (regra do dono, 2026-11-13): preço = custo × (1 + markup).
+ * Ordem do cálculo: custo → × (1 + markup) → preço do item. O acréscimo da nota fiscal vem DEPOIS,
+ * sobre o total (calcularTotais), e nunca entra antes do markup nem em divisor.
+ * O markup só se aplica ao modo COMPOSICAO: manual e tabela usam o preço informado.
  */
-export function precoPorComposicao(custoTotalCentavos: number, margemPb: number, comissaoPb = 0): ResultadoComposicao {
+export function precoPorComposicao(custoTotalCentavos: number, markupPb: number): ResultadoComposicao {
   if (!Number.isInteger(custoTotalCentavos) || custoTotalCentavos < 0) return { ok: false, erro: "O custo total é inválido." };
-  const retido = margemPb + comissaoPb;
-  if (retido >= PONTOS_BASE_100) {
-    return { ok: false, erro: "Margem e comissões somam 100% ou mais: o preço não pode ser calculado. Reduza a margem ou as comissões." };
+  if (!Number.isInteger(markupPb) || markupPb < 0 || markupPb > MARKUP_MAXIMO_PB) {
+    return { ok: false, erro: "O markup precisa estar entre 0% e 1.000%." };
   }
-  const preco = dividirArredondando(BigInt(custoTotalCentavos) * BigInt(PONTOS_BASE_100), BigInt(PONTOS_BASE_100 - retido));
+  const preco = dividirArredondando(BigInt(custoTotalCentavos) * BigInt(PONTOS_BASE_100 + markupPb), BigInt(PONTOS_BASE_100));
   if (preco > BigInt(MAXIMO_CENTAVOS)) return { ok: false, erro: "O preço calculado passa do valor máximo aceito." };
   return { ok: true, precoCentavos: Number(preco) };
 }
 
-/** Análise interna (nunca vai ao PDF): margem em R$ e %, e preço por m². */
+export type CategoriaMarkup = "PADRAO" | "VIDRO_TEMPERADO";
+
+/**
+ * Qual markup vale para o item. Precedência: item > proposta > categoria da tipologia > padrão.
+ * Os valores padrão (80% e 100% para guarda-corpo/vidro temperado) vêm de Configurações, nunca do código.
+ */
+export function resolverMarkup(entrada: {
+  itemPb?: number | null;
+  propostaPb?: number | null;
+  categoria: CategoriaMarkup;
+  config: { padraoPb: number; vidroTemperadoPb: number };
+}): { markupPb: number; origem: "ITEM" | "PROPOSTA" | "CATEGORIA" | "PADRAO" } {
+  if (entrada.itemPb != null) return { markupPb: entrada.itemPb, origem: "ITEM" };
+  if (entrada.propostaPb != null) return { markupPb: entrada.propostaPb, origem: "PROPOSTA" };
+  if (entrada.categoria === "VIDRO_TEMPERADO") return { markupPb: entrada.config.vidroTemperadoPb, origem: "CATEGORIA" };
+  return { markupPb: entrada.config.padraoPb, origem: "PADRAO" };
+}
+
+/** Análise interna (nunca vai ao PDF): lucro em R$, margem real sobre o preço (%) e preço por m². */
 export function analisarMargem(precoCentavos: number, custoCentavos: number | null, medidas: Medida[]) {
   const m2 = areaM2(medidas);
   const precoPorM2Centavos = m2 > 0 ? Math.round(precoCentavos / m2) : null;

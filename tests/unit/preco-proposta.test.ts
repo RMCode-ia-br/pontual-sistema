@@ -10,6 +10,7 @@ import {
   metrosLineares,
   percentualParaPontosBase,
   precoPorComposicao,
+  resolverMarkup,
   precoPorCobranca,
   quantidadeTotal,
 } from "@/lib/dominio/preco";
@@ -51,29 +52,80 @@ describe("preço por tabela", () => {
   });
 });
 
-describe("preço por composição (sem imposto no divisor)", () => {
-  it("custo ÷ (1 − margem): R$ 700 com 30% → R$ 1.000", () => {
-    expect(precoPorComposicao(70000, 3000)).toEqual({ ok: true, precoCentavos: 100000 });
+describe("preço por composição: custo × (1 + markup) sobre o custo", () => {
+  const CONFIG = { padraoPb: 8000, vidroTemperadoPb: 10000 };
+
+  it("(a) markup padrão 80%: custo R$ 1.000,00 → R$ 1.800,00", () => {
+    expect(precoPorComposicao(100000, 8000)).toEqual({ ok: true, precoCentavos: 180000 });
   });
-  it("comissões entram no divisor (começam em zero)", () => {
-    expect(precoPorComposicao(70000, 2500, 500)).toEqual({ ok: true, precoCentavos: 100000 });
-    expect(precoPorComposicao(70000, 3000, 0)).toEqual({ ok: true, precoCentavos: 100000 });
+  it("(b) markup 100% (guarda-corpo / vidro temperado): custo R$ 1.000,00 → R$ 2.000,00", () => {
+    expect(precoPorComposicao(100000, 10000)).toEqual({ ok: true, precoCentavos: 200000 });
   });
-  it("margem 0% devolve o próprio custo", () => {
+  it("markup 0% devolve o próprio custo", () => {
     expect(precoPorComposicao(12345, 0)).toEqual({ ok: true, precoCentavos: 12345 });
   });
-  it("bloqueia margem + comissões ≥ 100%", () => {
-    expect(precoPorComposicao(1000, 10000).ok).toBe(false);
-    expect(precoPorComposicao(1000, 9000, 1000).ok).toBe(false);
-    expect(precoPorComposicao(1000, 9000, 999).ok).toBe(true);
-  });
   it("arredonda meio centavo para cima", () => {
-    // 100 ÷ 0,6 = 166,666… → 167
-    expect(precoPorComposicao(100, 4000)).toEqual({ ok: true, precoCentavos: 167 });
+    // 5 centavos × 1,1 = 5,5 → 6
+    expect(precoPorComposicao(5, 1000)).toEqual({ ok: true, precoCentavos: 6 });
+    // 3 centavos × 1,8 = 5,4 → 5
+    expect(precoPorComposicao(3, 8000)).toEqual({ ok: true, precoCentavos: 5 });
   });
-  it("recusa custo inválido", () => {
-    expect(precoPorComposicao(-1, 3000).ok).toBe(false);
-    expect(precoPorComposicao(1.5, 3000).ok).toBe(false);
+  it("recusa custo ou markup inválido e preço acima do teto", () => {
+    expect(precoPorComposicao(-1, 8000).ok).toBe(false);
+    expect(precoPorComposicao(1.5, 8000).ok).toBe(false);
+    expect(precoPorComposicao(1000, -1).ok).toBe(false);
+    expect(precoPorComposicao(1000, 100_001).ok).toBe(false);
+    expect(precoPorComposicao(2_000_000_000, 10000).ok).toBe(false);
+  });
+
+  it("precedência do markup: item > proposta > categoria > padrão (valores vêm de Configurações)", () => {
+    expect(resolverMarkup({ itemPb: 5000, propostaPb: 9000, categoria: "VIDRO_TEMPERADO", config: CONFIG })).toEqual({ markupPb: 5000, origem: "ITEM" });
+    expect(resolverMarkup({ itemPb: 0, categoria: "PADRAO", config: CONFIG })).toEqual({ markupPb: 0, origem: "ITEM" });
+    expect(resolverMarkup({ propostaPb: 9000, categoria: "VIDRO_TEMPERADO", config: CONFIG })).toEqual({ markupPb: 9000, origem: "PROPOSTA" });
+    expect(resolverMarkup({ categoria: "VIDRO_TEMPERADO", config: CONFIG })).toEqual({ markupPb: 10000, origem: "CATEGORIA" });
+    expect(resolverMarkup({ categoria: "PADRAO", config: CONFIG })).toEqual({ markupPb: 8000, origem: "PADRAO" });
+    // Se o gestor mudar os padrões em Configurações, o resultado muda (nada fixo no código).
+    expect(resolverMarkup({ categoria: "PADRAO", config: { padraoPb: 7000, vidroTemperadoPb: 9500 } }).markupPb).toBe(7000);
+  });
+
+  describe("(c) COM nota fiscal: o 5% vem DEPOIS do markup, em linha separada", () => {
+    const um = [{ larguraMm: 1000, alturaMm: 1000, quantidade: 1 }];
+    const totalDoItem = (custo: number, markupPb: number, comNota: boolean) => {
+      const preco = precoPorComposicao(custo, markupPb);
+      if (!preco.ok) throw new Error(preco.erro);
+      return calcularTotais([{ opcaoId: "o", precoTotalCentavos: preco.precoCentavos, medidas: um }], [{ id: "o" }], comNota, 500)[0];
+    };
+
+    it("custo R$ 1.000,00 × 1,8 × 1,05 = R$ 1.890,00 (acréscimo R$ 90,00)", () => {
+      const t = totalDoItem(100000, 8000, true);
+      expect(t.baseCentavos).toBe(180000);
+      expect(t.acrescimoNotaCentavos).toBe(9000);
+      expect(t.totalCentavos).toBe(189000);
+    });
+    it("custo R$ 1.000,00 × 2 × 1,05 = R$ 2.100,00 (acréscimo R$ 100,00)", () => {
+      const t = totalDoItem(100000, 10000, true);
+      expect(t.baseCentavos).toBe(200000);
+      expect(t.acrescimoNotaCentavos).toBe(10000);
+      expect(t.totalCentavos).toBe(210000);
+    });
+    it("SEM nota: só o markup", () => {
+      expect(totalDoItem(100000, 8000, false).totalCentavos).toBe(180000);
+      expect(totalDoItem(100000, 10000, false).acrescimoNotaCentavos).toBe(0);
+    });
+    it("o 5% não altera o preço do item nem o markup (ordem: custo → markup → desconto → nota)", () => {
+      const preco = precoPorComposicao(100000, 8000);
+      expect(preco).toEqual({ ok: true, precoCentavos: 180000 });
+      const [t] = calcularTotais([{ opcaoId: "o", precoTotalCentavos: 180000, medidas: um }], [{ id: "o", descontoCentavos: 18000 }], true, 500);
+      expect(t.baseCentavos).toBe(162000);
+      expect(t.totalCentavos).toBe(170100);
+    });
+  });
+
+  it("modo MANUAL: o preço é o do Marcelo, sem markup; só os 5% se houver nota", () => {
+    const um = [{ larguraMm: 1000, alturaMm: 1000, quantidade: 1 }];
+    const item = [{ opcaoId: "o", precoTotalCentavos: 100000, medidas: um }];
+    expect(calcularTotais(item, [{ id: "o" }], false, 500)[0].totalCentavos).toBe(100000);
+    expect(calcularTotais(item, [{ id: "o" }], true, 500)[0].totalCentavos).toBe(105000);
   });
 });
 
@@ -276,6 +328,10 @@ describe("descrição com plural", () => {
   it("PAINEL(IS) → PAINÉIS", () => {
     expect(aplicarPlural("PAINEL(IS) FIXO(S)", 1)).toBe("PAINEL FIXO");
     expect(aplicarPlural("PAINEL(IS) FIXO(S)", 3)).toBe("PAINÉIS FIXOS");
+  });
+  it("PORTÃO(ÕES) → PORTÕES", () => {
+    expect(aplicarPlural("PORTÃO(ÕES) EM ALUMÍNIO", 1)).toBe("PORTÃO EM ALUMÍNIO");
+    expect(aplicarPlural("PORTÃO(ÕES) EM ALUMÍNIO", 2)).toBe("PORTÕES EM ALUMÍNIO");
   });
   it("variável sem valor é listada e não inventada", () => {
     const r = gerarDescricao("LINHA {LINHA} COR {COR}", { LINHA: "GOLD" }, um);

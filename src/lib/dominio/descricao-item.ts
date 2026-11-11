@@ -1,8 +1,8 @@
 /**
  * Descrição técnica do item gerada por template (Apêndice B), com plural pela quantidade.
  *
- * Marcas de plural: `JANELA(S)` → JANELA / JANELAS; `PAINEL(IS)` → PAINEL / PAINÉIS; `(ES)` → +ES.
- * Variáveis entre chaves: {FOLHAS} {LINHA} {COR} {MM} {ACABAMENTO} {FACES} {TORRES_CM} {MEDIDAS} {L} {A}.
+ * Marcas de plural: `JANELA(S)` → JANELA / JANELAS; `PAINEL(IS)` → PAINEL / PAINÉIS; `PORTÃO(ÕES)` → PORTÃO / PORTÕES; `(ES)` → +ES.
+ * Variáveis entre chaves: {FOLHAS} {LINHA} {COR} {MM} {ACABAMENTO} {FACES} (já com a palavra: "1 FACE"/"2 FACES") {TORRES_CM} {MEDIDAS} {L} {A}.
  * Variável sem valor é deixada em branco e listada em `faltando` (a interface avisa; nunca inventa).
  */
 import type { Medida } from "./preco";
@@ -13,12 +13,13 @@ export type VariavelTemplate = (typeof VARIAVEIS_TEMPLATE)[number];
 
 export function aplicarPlural(texto: string, quantidade: number): string {
   const plural = quantidade !== 1;
-  return texto.replace(/([\p{L}]+)\((IS|ES|S)\)/gu, (_t, palavra: string, sufixo: string) => {
+  return texto.replace(/([\p{L}]+)\((IS|ES|ÕES|S)\)/gu, (_t, palavra: string, sufixo: string) => {
     if (!plural) return palavra;
     if (sufixo === "IS") {
       if (/EL$/i.test(palavra)) return palavra.slice(0, -2) + (palavra.endsWith("el") ? "éis" : "ÉIS");
       return palavra.replace(/L$/i, (l) => (l === "l" ? "is" : "IS"));
     }
+    if (sufixo === "ÕES") return palavra.replace(/ÃO$/i, (t) => (t === "ão" ? "ões" : "ÕES"));
     if (sufixo === "ES") return palavra + "ES";
     return palavra + "S";
   });
