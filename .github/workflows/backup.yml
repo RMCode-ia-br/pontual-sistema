@@ -10,6 +10,9 @@ on:
     - cron: "0 7 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   backup:
     runs-on: ubuntu-latest
@@ -38,14 +41,17 @@ jobs:
         run: |
           set -euo pipefail
           DATA=$(date -u +%Y%m%d-%H%M)
+          # Só o schema "public" (as tabelas do sistema e as extensões que o Prisma usa). Os schemas internos
+          # do Supabase (auth, storage, realtime, vault, graphql...) não são nossos e dariam ruído/erro.
           /usr/lib/postgresql/17/bin/pg_dump --no-owner --no-privileges --format=custom --compress=9 \
-            --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime --exclude-schema=vault \
-            "$BACKUP_DATABASE_URL" -f "pontual-$DATA.dump"
+            --schema=public "$BACKUP_DATABASE_URL" -f "pontual-$DATA.dump"
+          # Valida o dump ANTES de criptografar: se não for legível pelo pg_restore, o job falha (visível).
+          /usr/lib/postgresql/17/bin/pg_restore --list "pontual-$DATA.dump" > /dev/null
+          test "$(/usr/lib/postgresql/17/bin/pg_restore --list "pontual-$DATA.dump" | grep -c 'TABLE DATA')" -ge 1
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE \
             -in "pontual-$DATA.dump" -out "pontual-$DATA.dump.enc"
           rm "pontual-$DATA.dump"
           test -s "pontual-$DATA.dump.enc"
-          echo "ARQUIVO=pontual-$DATA.dump.enc" >> "$GITHUB_ENV"
 
       - name: Guardar artefato (retenção de 30 dias)
         uses: actions/upload-artifact@v4

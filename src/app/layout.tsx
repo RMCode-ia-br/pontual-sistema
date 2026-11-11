@@ -32,7 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-full flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <TooltipProvider>{children}</TooltipProvider>
-          <Toaster richColors closeButton />
+          {/* No topo: embaixo os avisos cobriam o botão Salvar (barra fixa) e a navegação do celular. */}
+          <Toaster richColors closeButton position="top-center" />
         </ThemeProvider>
       </body>
     </html>

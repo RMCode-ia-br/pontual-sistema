@@ -28,6 +28,13 @@ describe("política de senha", () => {
     expect(validarPoliticaSenha("admin   ")).toMatchObject({ valida: false });
   });
 
+  it("rejeita senha acima de 72 bytes (o bcrypt ignoraria o excedente)", () => {
+    expect(validarPoliticaSenha("a".repeat(72))).toEqual({ valida: true });
+    expect(validarPoliticaSenha("a".repeat(73))).toMatchObject({ valida: false });
+    // 40 letras acentuadas = 80 bytes em UTF-8, embora só 40 caracteres
+    expect(validarPoliticaSenha("ç".repeat(40))).toMatchObject({ valida: false });
+  });
+
   it("rejeita senha só de espaços", () => {
     expect(validarPoliticaSenha("        ")).toMatchObject({ valida: false });
   });

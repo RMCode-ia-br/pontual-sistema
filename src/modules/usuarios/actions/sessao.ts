@@ -6,8 +6,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { registrarAuditoria } from "@/lib/auditoria";
-import { extrairIp, normalizarIdentificador, statusBloqueioLogin } from "@/lib/auth/autenticar";
+import { extrairIp, resolverConta, statusBloqueioLogin } from "@/lib/auth/autenticar";
 import { signIn, signOut } from "@/lib/auth";
+import { destinoSeguro } from "@/lib/auth/destino";
 import { conferirSenha, gerarHashSenha, validarPoliticaSenha } from "@/lib/auth/senha";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
@@ -20,14 +21,6 @@ const loginSchema = z.object({
   destino: z.string().max(500).optional(),
 });
 
-/** Só aceita caminhos internos (evita redirecionamento aberto). */
-function destinoSeguro(destino: string | undefined): string {
-  if (destino && destino.startsWith("/") && !destino.startsWith("//") && !destino.startsWith("/\\")) {
-    return destino;
-  }
-  return "/";
-}
-
 export async function entrar(_anterior: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
   const dados = loginSchema.safeParse(Object.fromEntries(formData));
   if (!dados.success) {
@@ -38,7 +31,7 @@ export async function entrar(_anterior: EstadoFormulario, formData: FormData): P
   const ip = extrairIp(await headers());
 
   // O mesmo bloqueio também é aplicado dentro do authorize(); aqui só serve para dar a mensagem certa.
-  const bloqueio = await statusBloqueioLogin(normalizarIdentificador(login), ip);
+  const bloqueio = await statusBloqueioLogin(await resolverConta(login), ip);
   if (bloqueio.bloqueado) {
     return {
       erro: `Muitas tentativas. Tente novamente em ${bloqueio.minutosRestantes} minuto${bloqueio.minutosRestantes > 1 ? "s" : ""}.`,
@@ -50,7 +43,11 @@ export async function entrar(_anterior: EstadoFormulario, formData: FormData): P
     await signIn("credentials", { login, senha, redirect: false });
   } catch (erro) {
     if (erro instanceof AuthError) {
-      return { erro: "Usuário ou senha inválidos.", campos: { login } };
+      // Só "credencial inválida" vira esse aviso; falha de infraestrutura (ex.: banco fora do ar) não pode
+      // fingir que a senha está errada, senão a pessoa insiste sem saber que o problema é do sistema.
+      if (erro.type === "CredentialsSignin") return { erro: "Usuário ou senha inválidos.", campos: { login } };
+      console.error(JSON.stringify({ evento: "auth.indisponivel", tipo: erro.type }));
+      return { erro: "Não foi possível entrar agora. Tente novamente em instantes.", campos: { login } };
     }
     throw erro;
   }

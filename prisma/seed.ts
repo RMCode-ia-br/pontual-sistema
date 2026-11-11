@@ -7,7 +7,7 @@
  */
 import { config } from "dotenv";
 
-import { gerarHashSenha } from "../src/lib/auth/senha";
+import { gerarHashSenha, validarPoliticaSenha } from "../src/lib/auth/senha";
 import { criarClientePrisma } from "../src/lib/db/criar-cliente";
 
 import {
@@ -29,19 +29,37 @@ config({ quiet: true });
 // O seed usa a conexão direta (Session pooler): é um processo curto e sequencial.
 const prisma = criarClientePrisma(process.env.DIRECT_URL ?? process.env.DATABASE_URL);
 
+/** Erro de configuração do seed com mensagem segura para mostrar (nunca contém segredos). */
+class ErroDeSeed extends Error {}
+
 async function criarAdminInicial(): Promise<string> {
   const total = await prisma.usuario.count();
   if (total > 0) return "admin: já existem usuários, nada a fazer";
+
+  // A senha inicial "admin" (padrão da especificação) é PÚBLICA: serve só para desenvolvimento local.
+  // Em ambiente hospedado, defina ADMIN_SENHA_INICIAL; o admin ainda assim precisa trocá-la no 1º acesso.
+  const informada = process.env.ADMIN_SENHA_INICIAL;
+  if (process.env.NODE_ENV === "production" && !informada) {
+    throw new ErroDeSeed(
+      "NODE_ENV=production sem ADMIN_SENHA_INICIAL: recusando criar o admin com a senha padrão pública. Defina ADMIN_SENHA_INICIAL.",
+    );
+  }
+  if (informada) {
+    const politica = validarPoliticaSenha(informada);
+    if (!politica.valida) throw new ErroDeSeed(`ADMIN_SENHA_INICIAL inválida: ${politica.motivo}`);
+  }
 
   await prisma.usuario.create({
     data: {
       nome: "Administrador",
       login: "admin",
-      senhaHash: await gerarHashSenha("admin"),
+      senhaHash: await gerarHashSenha(informada || "admin"),
       precisaTrocarSenha: true,
     },
   });
-  return "admin: criado (senha inicial deve ser trocada no primeiro acesso)";
+  return informada
+    ? "admin: criado com a senha de ADMIN_SENHA_INICIAL (troca obrigatória no primeiro acesso)"
+    : "admin: criado com a senha padrão PÚBLICA 'admin' (só para desenvolvimento; troca obrigatória no primeiro acesso)";
 }
 
 async function configuracaoEmpresa(): Promise<string> {
@@ -139,6 +157,11 @@ async function main() {
 
 main()
   .catch((erro: unknown) => {
+    if (erro instanceof ErroDeSeed) {
+      console.error(`Falha no seed: ${erro.message}`);
+      process.exitCode = 1;
+      return;
+    }
     // Nunca imprime a connection string; só o tipo do erro.
     const tipo = erro instanceof Error ? erro.name : "Erro";
     const codigo = (erro as { code?: string }).code;

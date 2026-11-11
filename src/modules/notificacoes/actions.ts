@@ -20,7 +20,8 @@ export async function listarNotificacoes(): Promise<NotificacaoItem[]> {
     orderBy: { criadoEm: "desc" },
     take: 20,
   });
-  return itens.map((n) => ({ ...n, criadoEm: n.criadoEm.toISOString() }));
+  // Só os campos que a tela usa: nada de usuarioId, chaveUnica ou outros campos internos para o navegador.
+  return itens.map((n) => ({ id: n.id, titulo: n.titulo, texto: n.texto, link: n.link, lida: n.lida, criadoEm: n.criadoEm.toISOString() }));
 }
 
 export async function marcarNotificacoesComoLidas(): Promise<void> {
