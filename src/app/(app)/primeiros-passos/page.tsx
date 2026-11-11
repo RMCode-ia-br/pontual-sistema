@@ -22,10 +22,14 @@ type Passo = {
 export default async function PaginaPrimeirosPassos() {
   await exigirSessao();
 
-  const [cfg, admin, outrosAtivos] = await Promise.all([
+  const [cfg, admin, outrosAtivos, fornecedoresCompletos, produtosComCusto, funcionarios, clientes] = await Promise.all([
     obterConfiguracao(),
     prisma.usuario.findFirst({ where: { login: "admin", deletadoEm: null }, select: { precisaTrocarSenha: true, ativo: true } }),
     prisma.usuario.count({ where: { ativo: true, deletadoEm: null, login: { not: "admin" } } }),
+    prisma.fornecedor.count({ where: { deletadoEm: null, telefone: { not: null } } }),
+    prisma.produto.count({ where: { deletadoEm: null, custoUnitarioCentavos: { not: null } } }),
+    prisma.funcionario.count({ where: { deletadoEm: null } }),
+    prisma.cliente.count({ where: { deletadoEm: null } }),
   ]);
 
   const empresaCompleta = !!(cfg?.razaoSocial && cfg?.cnpj && cfg?.endereco && cfg?.telefone);
@@ -72,6 +76,30 @@ export default async function PaginaPrimeirosPassos() {
       descricao: "Linhas, acabamentos, tipos de vidro e motivos de perda já vêm prontos. Ajuste ao jeito da Pontual.",
       href: "/configuracoes/catalogos",
       feito: null,
+    },
+    {
+      titulo: "Completar os dados dos fornecedores",
+      descricao: "Os fornecedores principais já vêm cadastrados só com o nome. Preencha contato, prazo de entrega e condições de pagamento.",
+      href: "/fornecedores",
+      feito: fornecedoresCompletos > 0,
+    },
+    {
+      titulo: "Cadastrar ou importar os produtos e os custos",
+      descricao: "Perfis, vidros e ferragens com o custo de cada um. Dá para importar uma planilha. Sem custo, o sistema não calcula preço.",
+      href: "/produtos",
+      feito: produtosComCusto > 0,
+    },
+    {
+      titulo: "Cadastrar os funcionários e as equipes de instalação",
+      descricao: "Quem trabalha na Pontual e como se organizam as equipes.",
+      href: "/funcionarios",
+      feito: funcionarios > 0,
+    },
+    {
+      titulo: "Cadastrar os clientes",
+      descricao: "Um a um, ou importando uma planilha. A busca (Ctrl+K) já acha qualquer cliente pelo nome, telefone ou CPF.",
+      href: "/clientes",
+      feito: clientes > 0,
     },
     {
       titulo: "Cadastrar a primeira tipologia e a tabela de preços",

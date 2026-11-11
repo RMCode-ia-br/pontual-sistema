@@ -61,3 +61,15 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **`registrarInteracao`** ainda não tem teste de integração (a linha do tempo chega com Clientes, Fase 1).
 - [ ] **Troca de senha** (`/trocar-senha`) ainda usa `<form action>`: os três campos de senha se limpam após um erro (aceitável para senhas, mas incoerente com os outros formulários).
 - [ ] **Erro "Já existe um item..." nos catálogos** permanece na tela até o próximo envio.
+
+## Surgidas na Fase 1 (cadastros)
+- [ ] **Fornecedores do seed:** vieram só com o nome (e categoria onde o nome já a diz: AL Ferragens, Sandro Acessórios, Blindex). O Marcelo precisa completar contato, categorias, prazo e condições.
+- [ ] **Produtos e custos reais:** nenhum foi cadastrado por mim. Importar a planilha de fornecedores (ou cadastrar) quando houver; até lá o sistema mostra "sem custo".
+- [ ] **Salário e custo por hora** de funcionários são visíveis a todos os usuários (já era dívida; agora há aviso na tela e a exportação os omite). Restringir quando existirem perfis.
+- [ ] **Parceiros:** projetos indicados, fechamentos e valor entram na Fase 2 (dependem de `Projeto`). O relatório "sem contato há 12 meses" passa a usar projetos também.
+- [ ] **Importação da tabela de preços** (spec 7.12) fica para a Fase 3, quando a entidade existir.
+- [ ] **Limite de 2.000 linhas por planilha** e 5 MB por envio: confirmar com o Marcelo se bastam (a lista de produtos tem ~300 itens).
+- [ ] **Teste com um `.xlsx` real** (exportado do Excel da Pontual): os testes automáticos usam CSV; a leitura de XLSX usa `read-excel-file` e precisa ser conferida com uma planilha de verdade.
+- [ ] **`npm audit`:** 7 avisos moderados continuam, todos na cadeia do `shadcn` (ferramenta de desenvolvimento, `deepmerge`); `read-excel-file` não trouxe nenhum.
+- [ ] Atalho de teclado para "Novo" (pendência da Fase 0) segue em aberto; a busca (Ctrl+K) já cobre clientes, fornecedores, produtos e funcionários.
+- [ ] **`seed:demo` não foi executado** (o banco é compartilhado): rodar em um banco de desenvolvimento com `ALLOW_DEMO_SEED=true` para ver os painéis com volume.

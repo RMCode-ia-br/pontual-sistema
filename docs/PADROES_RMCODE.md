@@ -45,3 +45,18 @@ Separação de pastas: `src/lib/*` (e alguns `src/components/*`) **não conhecem
 ## O que NÃO é reutilizável (é da Pontual)
 
 Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que tenha regra do negócio (prazos em dias úteis, textos de proposta, limites do plano gratuito, categorias do DRE) e os dados do seed.
+
+## Blocos da Fase 1 (cadastros)
+
+| Bloco | Onde | O que entrega | Depende de |
+| --- | --- | --- | --- |
+| Leitor de planilhas | `src/lib/csv/{ler,arquivo}.ts` | CSV (separador automático, BOM, aspas, Windows-1252) e XLSX lidos no navegador, com limites de tamanho, linhas, colunas e célula | `read-excel-file` |
+| Domínio de cadastros | `src/lib/dominio/{numeros,duplicidade,mapeamento,reajuste,modelos-texto}.ts` | números pt-BR e centavos, duplicidade, mapeamento de colunas, reajuste (meio para cima), modelos com `{{variáveis}}` | nenhuma |
+| Campos de formulário | `src/lib/validadores/campos.ts` | fábricas Zod (telefone E.164, CPF, CNPJ, CEP, moeda, datas, inteiros) | `zod` |
+| Máscaras e proteção de saída | `src/lib/formatadores/mascaras.ts`, `src/lib/hooks/usar-protecao-de-saida.ts`, `src/components/campo-mascarado.tsx` | máscara enquanto digita; aviso ao sair com alterações | nenhuma |
+| Infra de listas | `src/lib/listas/parametros.ts`, `src/components/lista/*`, `src/modules/filtros` | busca/ordem/página na URL, tabela + cartões no celular, colunas, ação em lote, filtros salvos | `f_unaccent` + Prisma |
+| Ações de cadastro | `src/components/{acoes-do-cadastro,confirmar-acao}.tsx` | inativar, reativar, lixeira com confirmação | shadcn |
+| Importação reversível | `src/modules/importacao` (`linhas`/`analisar`/`aplicar`) | assistente de 4 passos, lote com antes/depois, desfazer seguro | Prisma (`LoteImportacao*`) |
+| Lixeira | `src/modules/lixeira` | listar e restaurar conferindo unicidade | Prisma |
+
+**Reaproveitar:** copie `src/lib/{csv,dominio,listas,validadores,formatadores}`, `src/components/lista` e `src/components/{confirmar-acao,acoes-do-cadastro,campo-mascarado}.tsx`; recrie `campos.ts`/`linhas.ts` da importação com os campos do projeto novo. **Da Pontual (não reutilizável):** tipos de cadastro, regras de reajuste por fornecedor, categorias e unidades.

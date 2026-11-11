@@ -1,4 +1,4 @@
-import { CheckCircle2, ClipboardList, ListChecks, TriangleAlert, UserRound } from "lucide-react";
+import { CheckCircle2, ClipboardList, Handshake, History, ListChecks, PackageX, TriangleAlert, UserPlus, UserRound, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -6,6 +6,9 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { formatarDataCalendario } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { resumoDeCadastros } from "@/modules/cadastros/resumo";
+import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
+import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
 import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -22,7 +25,7 @@ type Cartao = {
 
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
-  const [resumo, proximas] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" })]);
+  const [resumo, proximas, cadastros] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros()]);
 
   const cartoes: Cartao[] = [
     {
@@ -56,6 +59,54 @@ export default async function PaginaPainel() {
     },
   ];
 
+  const cartoesDeCadastros: Cartao[] = [
+    { titulo: "Clientes ativos", valor: cadastros.clientesAtivos, href: "/clientes", icone: Users, definicao: "Clientes cadastrados e ativos (fora da lixeira)." },
+    { titulo: "Novos clientes no mês", valor: cadastros.clientesNovosNoMes, href: "/clientes?ordem=criadoEm&direcao=desc", icone: UserPlus, definicao: "Clientes ativos cadastrados desde o dia 1º do mês atual." },
+    { titulo: "Parceiros", valor: cadastros.parceiros, href: "/parceiros", icone: Handshake, definicao: "Clientes ativos marcados como arquiteto/designer ou construtora." },
+    {
+      titulo: "Sem contato há 12 meses",
+      valor: cadastros.clientesSemContato,
+      href: "/clientes?parado=1",
+      icone: History,
+      definicao: `Clientes ativos cadastrados há mais de ${MESES_SEM_CONTATO} meses, sem nenhum registro de ligação, WhatsApp, visita, e-mail ou anotação no período. Boa lista para reativar.`,
+    },
+    {
+      titulo: "Produtos sem custo",
+      valor: cadastros.produtosSemCusto,
+      href: "/produtos?custo=sem",
+      icone: PackageX,
+      definicao: "Produtos ativos com o custo ainda não informado (o sistema nunca inventa preço).",
+      alerta: cadastros.produtosSemCusto > 0,
+    },
+    {
+      titulo: "Custos desatualizados",
+      valor: cadastros.produtosComCustoAntigo,
+      href: "/produtos?custo=antigo",
+      icone: TriangleAlert,
+      definicao: `Produtos ativos cujo custo não é atualizado há mais de ${DIAS_CUSTO_DESATUALIZADO} dias.`,
+      alerta: cadastros.produtosComCustoAntigo > 0,
+    },
+  ];
+
+  const cartaoJsx = (c: Cartao) => {
+    const Icone = c.icone;
+    return (
+      <Link
+        key={c.titulo}
+        href={c.href}
+        title={`Como é calculado: ${c.definicao}`}
+        className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", c.alerta && "border-destructive/40 bg-destructive/5")}
+      >
+        <p className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Icone className={cn("size-4", c.alerta && "text-destructive")} aria-hidden />
+          {c.titulo}
+        </p>
+        <p className={cn("mt-2 text-3xl font-semibold tabular-nums", c.alerta && "text-destructive")}>{c.valor}</p>
+        <p className="text-muted-foreground mt-1 text-xs">{c.definicao}</p>
+      </Link>
+    );
+  };
+
   return (
     <>
       <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. Os módulos de vendas, obras e financeiro chegam nas próximas etapas." />
@@ -79,6 +130,13 @@ export default async function PaginaPainel() {
             </Link>
           );
         })}
+      </section>
+
+      <section aria-labelledby="titulo-cadastros" className="mt-8">
+        <h2 id="titulo-cadastros" className="mb-3 text-lg font-medium">
+          Cadastros
+        </h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{cartoesDeCadastros.map(cartaoJsx)}</div>
       </section>
 
       <section aria-labelledby="titulo-proximas" className="mt-8">

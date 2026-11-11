@@ -6,14 +6,16 @@ import { calcularPaginacao, lerParametrosLista, padraoLike, type ParametrosBruto
 
 import { UNIDADES } from "./schemas";
 
+export const DIAS_CUSTO_DESATUALIZADO = 90;
+
 export const CONFIG_LISTA_PRODUTOS = { ordenaveis: ["codigo", "descricao", "custo", "atualizadoEm"], ordemPadrao: "codigo" } as const;
 
 export type FiltrosProdutos = {
   categoria?: string;
   linha?: string;
   fornecedor?: string;
-  /** "sem" = produtos sem custo informado; "com" = com custo. */
-  custo?: "sem" | "com";
+  /** "sem" = sem custo informado; "com" = com custo; "antigo" = custo sem atualização há mais de ${DIAS_CUSTO_DESATUALIZADO} dias. */
+  custo?: "sem" | "com" | "antigo";
   situacao: "ativos" | "inativos" | "todos";
 };
 
@@ -32,7 +34,7 @@ export function lerListaProdutos(brutos: ParametrosBrutos) {
       categoria: idOuNada(um(brutos.categoria)),
       linha: idOuNada(um(brutos.linha)),
       fornecedor: idOuNada(um(brutos.fornecedor)),
-      custo: custo === "sem" || custo === "com" ? custo : undefined,
+      custo: custo === "sem" || custo === "com" || custo === "antigo" ? custo : undefined,
       situacao: situacao === "inativos" || situacao === "todos" ? situacao : "ativos",
     } satisfies FiltrosProdutos,
   };
@@ -59,7 +61,13 @@ async function montarFiltro(parametros: ParametrosLista, filtros: FiltrosProduto
     ...(filtros.categoria ? { categoriaId: filtros.categoria } : {}),
     ...(filtros.linha ? { linhaId: filtros.linha } : {}),
     ...(filtros.fornecedor ? { fornecedorPrincipalId: filtros.fornecedor } : {}),
-    ...(filtros.custo === "sem" ? { custoUnitarioCentavos: null } : filtros.custo === "com" ? { custoUnitarioCentavos: { not: null } } : {}),
+    ...(filtros.custo === "sem"
+      ? { custoUnitarioCentavos: null }
+      : filtros.custo === "com"
+        ? { custoUnitarioCentavos: { not: null } }
+        : filtros.custo === "antigo"
+          ? { custoUnitarioCentavos: { not: null }, custoAtualizadoEm: { lt: new Date(Date.now() - DIAS_CUSTO_DESATUALIZADO * 86_400_000) } }
+          : {}),
     ...(ids ? { id: { in: ids } } : {}),
   };
 }

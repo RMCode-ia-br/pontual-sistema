@@ -25,7 +25,11 @@ export type FiltrosClientes = {
   marcacao?: Marcacao;
   origem?: (typeof ORIGENS)[number];
   situacao: "ativos" | "inativos" | "todos";
+  /** Só quem não tem nenhum contato registrado (ligação, WhatsApp, visita...) há mais de 12 meses. */
+  semContato?: boolean;
 };
+
+export const MESES_SEM_CONTATO = 12;
 
 function um(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
@@ -41,6 +45,7 @@ export function lerFiltrosClientes(brutos: ParametrosBrutos): FiltrosClientes {
     marcacao: (MARCACOES as readonly string[]).includes(marcacao ?? "") ? (marcacao as Marcacao) : undefined,
     origem: (ORIGENS as readonly string[]).includes(origem ?? "") ? (origem as FiltrosClientes["origem"]) : undefined,
     situacao: situacao === "inativos" || situacao === "todos" ? situacao : "ativos",
+    semContato: um(brutos.parado) === "1" ? true : undefined,
   };
 }
 
@@ -68,6 +73,16 @@ async function idsPorBusca(termo: string): Promise<string[]> {
   return linhas.map((l) => l.id);
 }
 
+/**
+ * "Sem contato há 12 meses" (aproximação até existirem projetos, Fase 2): cadastrado há mais de 12 meses e sem
+ * nenhum registro manual na linha do tempo (eventos do sistema não contam) no período.
+ */
+function filtroSemContato(): Prisma.ClienteWhereInput {
+  const limite = new Date();
+  limite.setMonth(limite.getMonth() - MESES_SEM_CONTATO);
+  return { criadoEm: { lt: limite }, interacoes: { none: { deletadoEm: null, tipo: { not: "SISTEMA" }, criadoEm: { gte: limite } } } };
+}
+
 async function montarFiltro(parametros: ParametrosLista, filtros: FiltrosClientes, soParceiros: boolean): Promise<Prisma.ClienteWhereInput | null> {
   const ids = parametros.busca ? await idsPorBusca(parametros.busca) : null;
   if (ids && ids.length === 0) return null; // nada combina: evita consultar à toa
@@ -77,6 +92,7 @@ async function montarFiltro(parametros: ParametrosLista, filtros: FiltrosCliente
     ...(filtros.tipo ? { tipoPessoa: filtros.tipo } : {}),
     ...(filtros.marcacao ? { [filtros.marcacao]: true } : {}),
     ...(filtros.origem ? { origem: filtros.origem } : {}),
+    ...(filtros.semContato ? filtroSemContato() : {}),
     ...(soParceiros ? { OR: [{ arquiteto: true }, { construtora: true }] } : {}),
     ...(ids ? { id: { in: ids } } : {}),
   };

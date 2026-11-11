@@ -3,7 +3,7 @@ export const TELAS_COM_FILTRO_SALVO = ["clientes", "parceiros", "fornecedores", 
 export type TelaComFiltroSalvo = (typeof TELAS_COM_FILTRO_SALVO)[number];
 
 /** Parâmetros que descrevem o FILTRO (a página e o tamanho não entram: valem para a visita, não para o filtro). */
-const PARAMETROS_DE_FILTRO = new Set(["busca", "tipo", "marcacao", "origem", "situacao", "categoria", "linha", "fornecedor", "funcao", "custo", "ordem", "direcao"]);
+const PARAMETROS_DE_FILTRO = new Set(["busca", "tipo", "marcacao", "origem", "situacao", "categoria", "linha", "fornecedor", "funcao", "custo", "parado", "ordem", "direcao"]);
 
 /** Deixa só parâmetros conhecidos, sem repetição e sem valores vazios. */
 export function limparConsulta(consulta: string): string {

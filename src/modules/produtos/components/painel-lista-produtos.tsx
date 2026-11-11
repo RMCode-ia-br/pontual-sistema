@@ -78,7 +78,7 @@ export async function PainelListaProdutos({ brutos, usuarioId }: { brutos: Param
           <FiltroSelect nome="categoria" rotulo="Categoria" valor={filtros.categoria} opcoes={opcoes.categorias.map((c) => ({ valor: c.id, rotulo: c.nome }))} />
           <FiltroSelect nome="fornecedor" rotulo="Fornecedor" valor={filtros.fornecedor} opcoes={opcoes.fornecedores.map((f) => ({ valor: f.id, rotulo: f.nome }))} />
           <FiltroSelect nome="linha" rotulo="Linha" valor={filtros.linha} opcoes={opcoes.linhas.map((l) => ({ valor: l.id, rotulo: l.nome }))} />
-          <FiltroSelect nome="custo" rotulo="Custo" valor={filtros.custo} opcoes={[{ valor: "sem", rotulo: "Sem custo informado" }, { valor: "com", rotulo: "Com custo" }]} />
+          <FiltroSelect nome="custo" rotulo="Custo" valor={filtros.custo} opcoes={[{ valor: "sem", rotulo: "Sem custo informado" }, { valor: "com", rotulo: "Com custo" }, { valor: "antigo", rotulo: "Custo desatualizado (+90 dias)" }]} />
           <FiltroSelect nome="situacao" rotulo="Situação" valor={filtros.situacao === "ativos" ? undefined : filtros.situacao} todos="Ativos" opcoes={[{ valor: "inativos", rotulo: "Inativos" }, { valor: "todos", rotulo: "Todos" }]} />
         </FiltrosDaLista>
         <div className="flex flex-wrap items-center gap-2">

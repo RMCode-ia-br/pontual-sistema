@@ -76,11 +76,12 @@ export async function PainelListaClientes({ brutos, usuarioId, parceiros = false
     marcacao: filtros.marcacao,
     origem: filtros.origem,
     situacao: filtros.situacao === "ativos" ? undefined : filtros.situacao,
+    parado: filtros.semContato ? "1" : undefined,
     ordem: parametros.ordem === "nome" && parametros.direcao === "asc" ? undefined : parametros.ordem,
     direcao: parametros.ordem === "nome" && parametros.direcao === "asc" ? undefined : parametros.direcao,
     tamanho: parametros.tamanho === 25 ? undefined : parametros.tamanho,
   };
-  const filtrado = !!(parametros.busca || filtros.tipo || filtros.marcacao || filtros.origem || filtros.situacao !== "ativos");
+  const filtrado = !!(parametros.busca || filtros.tipo || filtros.marcacao || filtros.origem || filtros.semContato || filtros.situacao !== "ativos");
   const consultaDoFiltro = montarConsulta({ ...atuais, tamanho: undefined }).replace(/^\?/, "");
   const linkExportar = `/api/exportar/clientes${montarConsulta({ ...atuais, parceiros: parceiros })}`;
 

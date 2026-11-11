@@ -97,3 +97,26 @@ Mostra quanto do espaço gratuito já foi usado (banco e arquivos). Fica **amare
 ## 13. Algo deu errado?
 
 Se aparecer “Algo deu errado”, toque em **Tentar de novo**. Se continuar, **anote o código** que aparece na tela e envie à RM Code.
+
+## 14. Clientes e parceiros
+
+- **Clientes → Clientes → Novo cliente.** Só o nome é obrigatório. Ao digitar o CPF/CNPJ ou o telefone de alguém que já existe, o sistema **avisa** e deixa abrir o cadastro que já existe (ou cadastrar assim mesmo).
+- Na ficha: **Dados**, **Endereços** (de obra, com dados de condomínio: fachada, horários e síndico), **Contatos**, **Arquivos** e **Linha do tempo** (anote ligações, mensagens e visitas; o sistema registra sozinho o que acontece).
+- Botões **Ligar**, **WhatsApp** e **E-mail** na ficha. Quem é **arquiteto ou construtora** aparece também em **Parceiros**.
+- Na lista: busque (sem se preocupar com acento ou maiúscula), filtre, ordene, escolha as colunas (**Colunas**), salve combinações em **Meus filtros**, marque vários para inativar ou mandar para a lixeira, e **Exporte CSV**.
+
+## 15. Fornecedores, funcionários, equipes e produtos
+
+- **Fornecedores:** contato, vendedor, o que fornece, prazo e condições. Os 10 principais já vêm cadastrados só com o nome; complete.
+- **Funcionários e equipes:** função, datas e custo. Salário e custo por hora são sensíveis (hoje todos os usuários veem). Em **Equipes**, monte as equipes de instalação e escolha o líder.
+- **Produtos:** código, unidade, categoria, fornecedor, **custo** (pode ficar vazio) e medidas. Cada mudança de custo fica na aba **Histórico de preço**.
+- **Reajuste em lote (Produtos → Reajuste em lote):** escolha o fornecedor (ou categoria), informe + ou − em % ou em R$, **veja a prévia** produto a produto e só então aplique. Se alguém mudar um custo enquanto você olha a prévia, o sistema recusa e pede para ver de novo.
+
+## 16. Importar planilhas
+
+**Configurações → Importação.** 1) escolha o tipo e o arquivo (.csv ou .xlsx; há um **modelo para baixar**); 2) confira quais colunas são cada informação (o sistema sugere); 3) **confira o resultado**: o que será criado, o que é repetido e quais linhas têm erro (e o motivo); 4) confirme. Linhas com erro podem ficar de fora. Em produtos, dá para **atualizar** os que já existem pelo código (célula vazia nunca apaga nada). Toda importação fica em **Importações anteriores** e pode ser **desfeita**.
+
+## 17. Busca e lixeira
+
+- **Ctrl+K** (ou o botão Buscar) acha clientes, fornecedores, produtos, funcionários, tarefas e páginas.
+- **Cadastros → Lixeira:** tudo que foi removido fica guardado e pode voltar. Se o código de um produto (ou o CNPJ/CPF) já foi usado por outro cadastro, o sistema explica por que não dá para restaurar.
