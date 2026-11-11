@@ -1,8 +1,11 @@
 /**
- * Cria o bucket privado de anexos no Supabase (idempotente). Uso: `npm run storage:setup`.
+ * Cria (ou ajusta) o bucket privado de anexos no Supabase. Idempotente. Uso: `npm run storage:setup`.
+ * Fixa no próprio bucket o tamanho máximo e os tipos permitidos (defesa além da validação do app).
  * Mostra só o resultado; nunca imprime chaves.
  */
 import { config } from "dotenv";
+
+import { TAMANHO_MAXIMO_BYTES, TIPOS_PERMITIDOS } from "../src/lib/storage/regras";
 
 config({ path: ".env.local", quiet: true });
 config({ quiet: true });
@@ -15,19 +18,28 @@ async function main() {
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "anexos";
   if (!url || !chave) throw new Error("SUPABASE_URL/SUPABASE_SECRET_KEY ausentes no .env.local");
 
+  const opcoes = {
+    public: false,
+    fileSizeLimit: TAMANHO_MAXIMO_BYTES,
+    allowedMimeTypes: Object.keys(TIPOS_PERMITIDOS),
+  };
+
   const sb = createClient(url, chave, { auth: { persistSession: false } });
   const { data, error } = await sb.storage.listBuckets();
   if (error) throw new Error(`Não foi possível listar buckets (${error.name})`);
 
   const existente = data.find((b) => b.name === bucket);
   if (existente) {
-    console.log(`Bucket "${bucket}": já existe (${existente.public ? "PÚBLICO — corrija!" : "privado"}).`);
-    process.exitCode = existente.public ? 1 : 0;
+    // Reaplica as regras: um bucket criado antes (ou ajustado à mão) volta a ficar privado e limitado.
+    const { error: erroAtualizar } = await sb.storage.updateBucket(bucket, opcoes);
+    if (erroAtualizar) throw new Error(`Falha ao atualizar o bucket (${erroAtualizar.name})`);
+    console.log(`Bucket "${bucket}": já existia, regras reaplicadas (privado, ${TAMANHO_MAXIMO_BYTES / 1024 / 1024} MB, ${opcoes.allowedMimeTypes.length} tipos).`);
     return;
   }
-  const { error: erroCriar } = await sb.storage.createBucket(bucket, { public: false, fileSizeLimit: 10 * 1024 * 1024 });
+
+  const { error: erroCriar } = await sb.storage.createBucket(bucket, opcoes);
   if (erroCriar) throw new Error(`Falha ao criar o bucket (${erroCriar.name})`);
-  console.log(`Bucket "${bucket}": criado (privado, limite de 10 MB por arquivo).`);
+  console.log(`Bucket "${bucket}": criado (privado, ${TAMANHO_MAXIMO_BYTES / 1024 / 1024} MB, ${opcoes.allowedMimeTypes.length} tipos).`);
 }
 
 main().catch((erro: unknown) => {

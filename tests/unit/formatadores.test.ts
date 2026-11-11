@@ -11,7 +11,7 @@ import {
   normalizarTelefone,
   parseMoedaParaCentavos,
 } from "@/lib/formatadores";
-import { sanitizarNomeArquivo, TAMANHO_MAXIMO_BYTES, validarArquivo } from "@/lib/storage/regras";
+import { assinaturaConfere, sanitizarNomeArquivo, TAMANHO_MAXIMO_BYTES, validarArquivo } from "@/lib/storage/regras";
 import { emailValido, formatarCnpj, formatarCpf, urlHttpValida, validarCnpj, validarCpf } from "@/lib/validadores";
 
 const semEspacoEspecial = (s: string) => s.replace(/ /g, " ");
@@ -140,5 +140,41 @@ describe("regras de upload", () => {
     expect(sanitizarNomeArquivo('a<b>:"c|?*.pdf')).toBe("abc.pdf");
     expect(sanitizarNomeArquivo("   ")).toBe("arquivo");
     expect(sanitizarNomeArquivo("x".repeat(300))).toHaveLength(120);
+  });
+});
+
+describe("assinatura real do arquivo (o tipo declarado pelo navegador pode mentir)", () => {
+  const bytes = (...v: number[]) => new Uint8Array(v);
+  const texto = (t: string) => new TextEncoder().encode(t);
+
+  it("aceita os cabeçalhos corretos de PNG, JPEG, WebP e PDF", () => {
+    expect(assinaturaConfere("image/png", bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0))).toBe(true);
+    expect(assinaturaConfere("image/jpeg", bytes(0xff, 0xd8, 0xff, 0xe0))).toBe(true);
+    expect(assinaturaConfere("image/webp", texto("RIFF....WEBPVP8 "))).toBe(true);
+    expect(assinaturaConfere("application/pdf", texto("%PDF-1.7 conteudo"))).toBe(true);
+  });
+
+  it("recusa um executável ou HTML declarado como imagem ou PDF", () => {
+    // "MZ" é o início de todo executável do Windows.
+    expect(assinaturaConfere("image/png", bytes(0x4d, 0x5a, 0x90, 0x00))).toBe(false);
+    expect(assinaturaConfere("image/png", texto("<html><script>alert(1)</script>"))).toBe(false);
+    expect(assinaturaConfere("image/jpeg", bytes(0x89, 0x50, 0x4e, 0x47))).toBe(false);
+    expect(assinaturaConfere("application/pdf", texto("<?php system($_GET['x']); ?>"))).toBe(false);
+    expect(assinaturaConfere("image/webp", texto("RIFF....WAVEfmt "))).toBe(false);
+  });
+
+  it("texto não pode ter bytes nulos (binário disfarçado)", () => {
+    expect(assinaturaConfere("text/plain", texto("conteúdo normal"))).toBe(true);
+    expect(assinaturaConfere("text/csv", texto("a;b;1;2"))).toBe(true);
+    expect(assinaturaConfere("text/plain", bytes(0x4d, 0x5a, 0x00, 0x01))).toBe(false);
+  });
+
+  it("arquivo vazio e tipo desconhecido são recusados", () => {
+    expect(assinaturaConfere("image/png", bytes())).toBe(false);
+    expect(assinaturaConfere("application/x-msdownload", texto("MZ"))).toBe(false);
+  });
+
+  it("o Windows declara .csv como application/vnd.ms-excel: é aceito", () => {
+    expect(validarArquivo("application/vnd.ms-excel", 1000)).toEqual({ valido: true, extensao: "csv" });
   });
 });

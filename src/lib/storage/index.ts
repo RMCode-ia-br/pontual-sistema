@@ -47,6 +47,15 @@ export async function infoDoObjeto(caminho: string): Promise<{ tamanhoBytes: num
   return { tamanhoBytes: Number(meta.size ?? 0), mime: String(meta.mimetype ?? "") };
 }
 
+/** Lê só os primeiros bytes do objeto (requisição com Range), para conferir a assinatura do arquivo. */
+export async function lerPrimeirosBytes(caminho: string, quantidade = 16): Promise<Uint8Array> {
+  const url = await criarUrlDeDownload(caminho, 30);
+  const resposta = await fetch(url, { headers: { Range: `bytes=0-${quantidade - 1}` }, cache: "no-store" });
+  if (!resposta.ok) throw new Error("Não foi possível conferir o arquivo enviado.");
+  // Se o servidor ignorar o Range e mandar o arquivo todo, usa só o início.
+  return new Uint8Array((await resposta.arrayBuffer()).slice(0, quantidade));
+}
+
 export async function removerObjeto(caminho: string): Promise<void> {
   await supabase().storage.from(nomeDoBucket()).remove([caminho]);
 }

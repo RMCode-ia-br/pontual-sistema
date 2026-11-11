@@ -1,15 +1,122 @@
+import { CheckCircle2, ClipboardList, ListChecks, TriangleAlert, UserRound } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
+import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { formatarDataCalendario } from "@/lib/formatadores";
+import { cn } from "@/lib/utils";
+import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
 
 export const metadata: Metadata = { title: "Painel" };
 
+type Cartao = {
+  titulo: string;
+  valor: number;
+  href: string;
+  icone: typeof ClipboardList;
+  /** Como o número é calculado (a especificação exige mostrar a definição de cada indicador). */
+  definicao: string;
+  alerta?: boolean;
+};
+
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
+  const [resumo, proximas] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" })]);
+
+  const cartoes: Cartao[] = [
+    {
+      titulo: "Tarefas abertas",
+      valor: resumo.abertas,
+      href: "/tarefas?status=abertas",
+      icone: ClipboardList,
+      definicao: "Tarefas que ainda não foram concluídas.",
+    },
+    {
+      titulo: "Tarefas vencidas",
+      valor: resumo.vencidas,
+      href: "/tarefas?status=abertas",
+      icone: TriangleAlert,
+      definicao: "Tarefas abertas cujo vencimento é anterior a hoje.",
+      alerta: resumo.vencidas > 0,
+    },
+    {
+      titulo: "Minhas tarefas",
+      valor: resumo.minhasAbertas,
+      href: "/tarefas?status=abertas&quem=minhas",
+      icone: UserRound,
+      definicao: "Tarefas abertas em que você é o responsável.",
+    },
+    {
+      titulo: "Concluídas na semana",
+      valor: resumo.concluidasNos7Dias,
+      href: "/tarefas?status=concluidas",
+      icone: CheckCircle2,
+      definicao: "Tarefas concluídas nos últimos 7 dias.",
+    },
+  ];
+
   return (
-    <section>
-      <h1 className="text-2xl font-semibold tracking-tight">Olá, {usuario.nome}</h1>
-      <p className="text-muted-foreground mt-1 text-sm">O painel será construído nas próximas etapas.</p>
-    </section>
+    <>
+      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. Os módulos de vendas, obras e financeiro chegam nas próximas etapas." />
+
+      <section aria-label="Resumo de tarefas" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {cartoes.map((c) => {
+          const Icone = c.icone;
+          return (
+            <Link
+              key={c.titulo}
+              href={c.href}
+              title={`Como é calculado: ${c.definicao}`}
+              className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", c.alerta && "border-destructive/40 bg-destructive/5")}
+            >
+              <p className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Icone className={cn("size-4", c.alerta && "text-destructive")} aria-hidden />
+                {c.titulo}
+              </p>
+              <p className={cn("mt-2 text-3xl font-semibold tabular-nums", c.alerta && "text-destructive")}>{c.valor}</p>
+              <p className="text-muted-foreground mt-1 text-xs">{c.definicao}</p>
+            </Link>
+          );
+        })}
+      </section>
+
+      <section aria-labelledby="titulo-proximas" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-proximas" className="text-lg font-medium">
+            Próximas tarefas
+          </h2>
+          <Link href="/tarefas" className="text-primary text-sm hover:underline">
+            Ver todas
+          </Link>
+        </div>
+        {proximas.length === 0 ? (
+          <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
+            <ListChecks className="text-muted-foreground mb-2 size-6" aria-hidden />
+            <p className="font-medium">Nenhuma tarefa aberta</p>
+            <p className="text-muted-foreground mt-1 text-sm">Anote o que precisa ser feito em Tarefas ou pelo botão “Novo”.</p>
+          </div>
+        ) : (
+          <ul className="divide-y rounded-xl border">
+            {proximas.slice(0, 5).map((t) => (
+              <li key={t.id} className="flex items-center justify-between gap-3 p-3">
+                <Link href={`/tarefas/${t.id}`} className="min-w-0 truncate text-sm font-medium hover:underline">
+                  {t.titulo}
+                </Link>
+                <span className={cn("shrink-0 text-xs tabular-nums", t.vencida ? "text-destructive font-medium" : "text-muted-foreground")}>
+                  {t.vencimento ? `${t.vencida ? "Venceu em" : "Vence em"} ${formatarDataCalendario(t.vencimento)}` : "Sem vencimento"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <p className="mt-8 text-sm">
+        <Link href="/primeiros-passos" className="text-primary hover:underline">
+          Veja o que falta configurar nos Primeiros passos →
+        </Link>
+      </p>
+    </>
   );
 }

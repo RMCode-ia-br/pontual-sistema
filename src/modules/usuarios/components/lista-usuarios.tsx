@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, KeyRound, Loader2, MoreHorizontal, Pencil, Plus, UserCheck, UserX } from "lucide-react";
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Campo, ariaDoCampo } from "@/components/formulario";
@@ -20,8 +20,8 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import type { ResultadoAcao } from "@/lib/acoes";
 import { formatarDataHora } from "@/lib/formatadores";
+import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 
 import { alternarAtivoUsuario, criarUsuario, editarUsuario, redefinirSenhaUsuario, type SenhaTemporaria } from "../actions/usuarios";
 import type { UsuarioLista } from "../queries";
@@ -193,13 +193,11 @@ export function ListaUsuarios({ usuarios, usuarioAtualId }: { usuarios: UsuarioL
 }
 
 function DialogoNovo({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (c: SenhaTemporaria) => void }) {
-  const [estado, acao, pendente] = useActionState(
-    async (anterior: ResultadoAcao<SenhaTemporaria> | null, formData: FormData) => {
-      const r = await criarUsuario(anterior, formData);
+  const { estado, pendente, aoEnviar } = useAcaoDeFormulario<SenhaTemporaria>(
+    (formData) => criarUsuario(null, formData),
+    (r) => {
       if (r.ok && r.dados) aoCriar(r.dados);
-      return r;
     },
-    null,
   );
   const campos = estado && !estado.ok ? (estado.campos ?? {}) : {};
 
@@ -210,7 +208,7 @@ function DialogoNovo({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (c:
           <DialogTitle>Novo usuário</DialogTitle>
           <DialogDescription>Será criada uma senha temporária. A pessoa troca a senha no primeiro acesso.</DialogDescription>
         </DialogHeader>
-        <form action={acao} className="grid gap-4">
+        <form onSubmit={aoEnviar} className="grid gap-4">
           <Campo id="nome" rotulo="Nome" erro={campos.nome} obrigatorio>
             <Input id="nome" name="nome" required maxLength={120} autoFocus autoComplete="off" {...ariaDoCampo("nome", campos.nome)} />
           </Campo>
@@ -249,16 +247,14 @@ function DialogoNovo({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (c:
 }
 
 function DialogoEditar({ usuario, aoFechar }: { usuario: UsuarioLista; aoFechar: () => void }) {
-  const [estado, acao, pendente] = useActionState(
-    async (anterior: ResultadoAcao | null, formData: FormData) => {
-      const r = await editarUsuario(anterior, formData);
+  const { estado, pendente, aoEnviar } = useAcaoDeFormulario(
+    (formData) => editarUsuario(null, formData),
+    (r) => {
       if (r.ok) {
         toast.success(r.mensagem ?? "Usuário atualizado.");
         aoFechar();
       }
-      return r;
     },
-    null,
   );
   const campos = estado && !estado.ok ? (estado.campos ?? {}) : {};
 
@@ -269,7 +265,7 @@ function DialogoEditar({ usuario, aoFechar }: { usuario: UsuarioLista; aoFechar:
           <DialogTitle>Editar usuário</DialogTitle>
           <DialogDescription>O login não pode ser alterado.</DialogDescription>
         </DialogHeader>
-        <form action={acao} className="grid gap-4">
+        <form onSubmit={aoEnviar} className="grid gap-4">
           <input type="hidden" name="id" value={usuario.id} />
           <Campo id="nome" rotulo="Nome" erro={campos.nome} obrigatorio>
             <Input id="nome" name="nome" required maxLength={120} defaultValue={usuario.nome} autoFocus {...ariaDoCampo("nome", campos.nome)} />
