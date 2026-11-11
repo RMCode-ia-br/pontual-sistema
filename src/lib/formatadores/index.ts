@@ -1,4 +1,4 @@
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 export const FUSO_PADRAO = "America/Sao_Paulo";
 
@@ -77,4 +77,31 @@ export function formatarTelefone(valor: string | null | undefined): string {
 /** "Hoje" como data de calendário (meia-noite UTC) no fuso de São Paulo, para comparar com colunas `@db.Date`. */
 export function hojeCalendario(agora: Date = new Date()): Date {
   return new Date(`${formatInTimeZone(agora, FUSO_PADRAO, "yyyy-MM-dd")}T00:00:00.000Z`);
+}
+
+/** Instante (UTC) → data local de São Paulo, "aaaa-mm-dd". */
+export function dataLocalDoInstante(instante: Date | string | number): string {
+  return formatInTimeZone(instante, FUSO_PADRAO, "yyyy-MM-dd");
+}
+
+/** Instante (UTC) → "aaaa-mm-ddTHH:mm" no fuso de São Paulo (valor de `<input type="datetime-local">`). */
+export function instanteParaInputDataHora(instante: Date | string | number | null | undefined): string {
+  return instante ? formatInTimeZone(instante, FUSO_PADRAO, "yyyy-MM-dd'T'HH:mm") : "";
+}
+
+/**
+ * Data local de São Paulo ("aaaa-mm-dd") + hora ("HH:mm") → instante UTC. Null se inválido
+ * (formato errado ou data/hora inexistente, como 31/02 ou 25:00).
+ */
+export function instanteDeDataHoraLocal(data: string, hora: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return null;
+  if (!inputParaData(data)) return null;
+  const instante = fromZonedTime(`${data}T${hora}:00`, FUSO_PADRAO);
+  return Number.isNaN(instante.getTime()) ? null : instante;
+}
+
+/** `<input type="datetime-local">` ("aaaa-mm-ddTHH:mm", horário de São Paulo) → instante UTC. Null se inválido. */
+export function inputDataHoraParaInstante(texto: string): Date | null {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(texto.trim());
+  return m ? instanteDeDataHoraLocal(m[1], m[2]) : null;
 }

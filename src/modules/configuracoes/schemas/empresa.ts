@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { faixasValidas } from "@/lib/dominio/porte";
 import { formatarTelefone, normalizarTelefone, parseMoedaParaCentavos } from "@/lib/formatadores";
 import { emailValido, formatarCep, formatarCnpj, somenteDigitos, urlHttpValida, validarCnpj } from "@/lib/validadores";
 
@@ -203,6 +204,10 @@ export const empresaSchema = z
     custoMaoDeObraPorM2Centavos: dinheiroOpcional("Custo de mão de obra por m²"),
     tipoDias: campo(z.enum(["UTEIS", "CORRIDOS"], { message: "Escolha dias úteis ou corridos." })),
     diasFollowUpProposta: inteiroObrigatorio("Dias para acompanhar proposta", 0, 90),
+    diasSemRetornoProposta: inteiroObrigatorio("Dias para considerar a proposta sem retorno", 1, 365),
+    diasPedidoAvaliacao: inteiroObrigatorio("Dias para pedir a avaliação", 0, 90),
+    porteMedioMinimoCentavos: dinheiroOpcional("Valor a partir do qual o projeto é médio"),
+    porteGrandeMinimoCentavos: dinheiroOpcional("Valor a partir do qual o projeto é grande"),
     diasAlertaPrazoAmarelo: inteiroObrigatorio("Dias do alerta amarelo", 0, 30),
     limiteSimplesCentavos: dinheiroObrigatorio("Limite do Simples"),
 
@@ -223,6 +228,14 @@ export const empresaSchema = z
         code: "custom",
         path: ["margemPadraoPercentual"],
         message: "Alíquota de imposto + margem padrão não podem chegar a 100%.",
+      });
+    }
+    // R10: o valor do porte grande precisa ser maior que o do médio.
+    if (!faixasValidas({ medioMinimoCentavos: d.porteMedioMinimoCentavos, grandeMinimoCentavos: d.porteGrandeMinimoCentavos })) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["porteGrandeMinimoCentavos"],
+        message: "O valor do projeto grande precisa ser maior que o do médio.",
       });
     }
   });
@@ -273,6 +286,10 @@ export function empresaParaFormulario(cfg: Registro | null): Record<string, stri
     custoMaoDeObraPorM2Centavos: moedaParaTexto(c.custoMaoDeObraPorM2Centavos),
     tipoDias: s("tipoDias") || "UTEIS",
     diasFollowUpProposta: n("diasFollowUpProposta"),
+    diasSemRetornoProposta: n("diasSemRetornoProposta"),
+    diasPedidoAvaliacao: n("diasPedidoAvaliacao"),
+    porteMedioMinimoCentavos: moedaParaTexto(c.porteMedioMinimoCentavos),
+    porteGrandeMinimoCentavos: moedaParaTexto(c.porteGrandeMinimoCentavos),
     diasAlertaPrazoAmarelo: n("diasAlertaPrazoAmarelo"),
     limiteSimplesCentavos: moedaParaTexto(c.limiteSimplesCentavos),
     proximoNumeroProposta: n("proximoNumeroProposta"),

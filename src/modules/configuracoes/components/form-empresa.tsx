@@ -121,6 +121,19 @@ export function FormEmpresa({ valores, marcados }: Props) {
 
       <Card>
         <CardHeader>
+          <CardTitle role="heading" aria-level={2}>Funil e acompanhamento</CardTitle>
+          <CardDescription>Prazos do acompanhamento comercial (em dias corridos) e porte dos projetos.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {t("diasSemRetornoProposta", "Proposta sem retorno após", { modo: "numeric", max: 3, sufixo: "dias", obrigatorio: true, dica: "Propostas enviadas paradas há mais que isso entram na lista \"Sem retorno\"." })}
+          {t("diasPedidoAvaliacao", "Pedir avaliação no Google após", { modo: "numeric", max: 2, sufixo: "dias", obrigatorio: true, dica: "Dias depois da conclusão da obra." })}
+          {t("porteMedioMinimoCentavos", "Projeto médio a partir de (opcional)", { modo: "decimal", max: 20, sufixo: "R$", dica: "Vazio = o porte é sempre escolhido à mão, sem sugestão." })}
+          {t("porteGrandeMinimoCentavos", "Projeto grande a partir de (opcional)", { modo: "decimal", max: 20, sufixo: "R$" })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle role="heading" aria-level={2}>Horário de atendimento</CardTitle>
           <CardDescription>Usado para sugerir horários livres de visita. Deixe em branco o dia sem expediente.</CardDescription>
         </CardHeader>

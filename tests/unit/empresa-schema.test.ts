@@ -10,6 +10,8 @@ const base = {
   garantiaRegulagemDias: "90",
   tipoDias: "UTEIS",
   diasFollowUpProposta: "3",
+  diasSemRetornoProposta: "7",
+  diasPedidoAvaliacao: "2",
   diasAlertaPrazoAmarelo: "3",
   limiteSimplesCentavos: "4.800.000,00",
 };
@@ -45,6 +47,16 @@ describe("configuração da empresa", () => {
     expect(erros({ ...base, aliquotaImpostoPercentual: "40", margemPadraoPercentual: "60" }).margemPadraoPercentual).toMatch(/100%/);
     expect(erros({ ...base, aliquotaImpostoPercentual: "40", margemPadraoPercentual: "59,99" })).toEqual({});
     expect(erros({ ...base, margemPadraoPercentual: "100" }).margemPadraoPercentual).toMatch(/100%/);
+  });
+
+  it("faixas de porte são opcionais (vazias = null) e o grande precisa superar o médio", () => {
+    const r = empresaSchema.parse(base);
+    expect(r.porteMedioMinimoCentavos).toBeNull();
+    expect(r.porteGrandeMinimoCentavos).toBeNull();
+    expect(erros({ ...base, porteMedioMinimoCentavos: "50.000,00", porteGrandeMinimoCentavos: "150.000,00" })).toEqual({});
+    expect(erros({ ...base, porteMedioMinimoCentavos: "50.000,00", porteGrandeMinimoCentavos: "50.000,00" }).porteGrandeMinimoCentavos).toMatch(/maior/);
+    expect(erros({ ...base, diasSemRetornoProposta: "0" }).diasSemRetornoProposta).toBeTruthy();
+    expect(erros({ ...base, diasPedidoAvaliacao: "" }).diasPedidoAvaliacao).toBeTruthy();
   });
 
   it("rejeita percentual inválido", () => {
@@ -101,6 +113,9 @@ describe("configuração da empresa", () => {
       garantiaRegulagemDias: 90,
       visitaDuracaoMin: 60,
       diasFollowUpProposta: 3,
+      diasSemRetornoProposta: 7,
+      diasPedidoAvaliacao: 2,
+      porteMedioMinimoCentavos: 5000000,
       diasAlertaPrazoAmarelo: 3,
       tipoDias: "UTEIS",
       aliquotaImpostoPercentual: "6.5",
@@ -114,6 +129,8 @@ describe("configuração da empresa", () => {
     expect(volta.metaFaturamentoMensalCentavos).toBe(30000000);
     expect(volta.limiteSimplesCentavos).toBe(480000000);
     expect(volta.aliquotaImpostoPercentual).toBe("6.5");
+    expect(volta.porteMedioMinimoCentavos).toBe(5000000);
+    expect(volta.porteGrandeMinimoCentavos).toBeNull();
     expect(volta.telefone).toBe("+5522999583288");
   });
 });
