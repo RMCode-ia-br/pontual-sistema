@@ -1,0 +1,58 @@
+/**
+ * Descrição técnica do item gerada por template (Apêndice B), com plural pela quantidade.
+ *
+ * Marcas de plural: `JANELA(S)` → JANELA / JANELAS; `PAINEL(IS)` → PAINEL / PAINÉIS; `(ES)` → +ES.
+ * Variáveis entre chaves: {FOLHAS} {LINHA} {COR} {MM} {ACABAMENTO} {FACES} {TORRES_CM} {MEDIDAS} {L} {A}.
+ * Variável sem valor é deixada em branco e listada em `faltando` (a interface avisa; nunca inventa).
+ */
+import type { Medida } from "./preco";
+import { quantidadeTotal } from "./preco";
+
+export const VARIAVEIS_TEMPLATE = ["FOLHAS", "LINHA", "COR", "MM", "ACABAMENTO", "FACES", "TORRES_CM", "MEDIDAS", "L", "A"] as const;
+export type VariavelTemplate = (typeof VARIAVEIS_TEMPLATE)[number];
+
+export function aplicarPlural(texto: string, quantidade: number): string {
+  const plural = quantidade !== 1;
+  return texto.replace(/([\p{L}]+)\((IS|ES|S)\)/gu, (_t, palavra: string, sufixo: string) => {
+    if (!plural) return palavra;
+    if (sufixo === "IS") {
+      if (/EL$/i.test(palavra)) return palavra.slice(0, -2) + (palavra.endsWith("el") ? "éis" : "ÉIS");
+      return palavra.replace(/L$/i, (l) => (l === "l" ? "is" : "IS"));
+    }
+    if (sufixo === "ES") return palavra + "ES";
+    return palavra + "S";
+  });
+}
+
+/** `2000 X 3600 / 2000 X 2600`. */
+export function formatarMedidas(medidas: Medida[]): string {
+  return medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}`).join(" / ");
+}
+
+export type ValoresTemplate = Partial<Record<Exclude<VariavelTemplate, "MEDIDAS" | "L" | "A">, string | number | null | undefined>>;
+
+export function gerarDescricao(template: string, valores: ValoresTemplate, medidas: Medida[]): { texto: string; faltando: string[] } {
+  const faltando = new Set<string>();
+  const comMedidas: Record<string, string> = {
+    MEDIDAS: formatarMedidas(medidas),
+    L: medidas[0] ? String(medidas[0].larguraMm) : "",
+    A: medidas[0] ? String(medidas[0].alturaMm) : "",
+  };
+  const preenchido = template.replace(/\{([A-Z_]+)\}/g, (_t, nome: string) => {
+    const bruto = nome in comMedidas ? comMedidas[nome] : valores[nome as keyof ValoresTemplate];
+    const valor = bruto === null || bruto === undefined ? "" : String(bruto).trim();
+    if (valor === "") faltando.add(nome);
+    return valor;
+  });
+  const texto = aplicarPlural(preenchido, quantidadeTotal(medidas)).replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+  return { texto, faltando: [...faltando] };
+}
+
+/** Variáveis citadas em um template (para o editor da tipologia validar e avisar). */
+export function variaveisDoTemplate(template: string): { validas: string[]; desconhecidas: string[] } {
+  const achadas = [...new Set([...template.matchAll(/\{([A-Za-z_]+)\}/g)].map((m) => m[1]))];
+  return {
+    validas: achadas.filter((n) => (VARIAVEIS_TEMPLATE as readonly string[]).includes(n)),
+    desconhecidas: achadas.filter((n) => !(VARIAVEIS_TEMPLATE as readonly string[]).includes(n)),
+  };
+}
