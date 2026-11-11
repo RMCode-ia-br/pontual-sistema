@@ -73,7 +73,7 @@ export const MENU: GrupoMenu[] = [
     titulo: "Estoque e compras",
     icone: Package,
     itens: [
-      { titulo: "Produtos", fase: 1 },
+      { titulo: "Produtos", href: "/produtos" },
       { titulo: "Movimentações", fase: 6 },
       { titulo: "Retalhos", fase: 6 },
       { titulo: "Compras", fase: 6 },

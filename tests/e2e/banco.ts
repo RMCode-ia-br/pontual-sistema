@@ -58,6 +58,8 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "ContatoCliente" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`);
   await c.query(`UPDATE "Cliente" SET "indicadoPorId" = NULL WHERE nome LIKE 'E2E %'`);
   await c.query(`DELETE FROM "Cliente" WHERE nome LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (SELECT id FROM "Produto" WHERE codigo LIKE 'E2E-%')`);
+  await c.query(`DELETE FROM "Produto" WHERE codigo LIKE 'E2E-%'`);
   await c.query(`DELETE FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %'`);
   await c.query(`DELETE FROM "EquipeMembro" WHERE "equipeId" IN (SELECT id FROM "Equipe" WHERE nome LIKE 'E2E %') OR "funcionarioId" IN (SELECT id FROM "Funcionario" WHERE nome LIKE 'E2E %')`);
   await c.query(`DELETE FROM "Equipe" WHERE nome LIKE 'E2E %'`);
@@ -183,4 +185,15 @@ export async function obterModeloTexto(chave: string): Promise<ModeloTextoLinha>
 
 export async function restaurarModeloTexto(m: ModeloTextoLinha): Promise<void> {
   await comConexao((c) => c.query(`UPDATE "ModeloTexto" SET titulo = $2, conteudo = $3, ativo = $4 WHERE id = $1`, [m.id, m.titulo, m.conteudo, m.ativo]));
+}
+
+// ---- Produtos: simula outra pessoa mexendo no custo enquanto a prévia do reajuste está aberta ----
+
+/** Altera o custo direto no banco (sem passar pela tela), como se outro usuário tivesse editado o produto. */
+export async function alterarCustoDiretoNoBanco(codigo: string, centavos: number): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Produto" SET "custoUnitarioCentavos" = $2 WHERE codigo = $1`, [codigo, centavos]));
+}
+
+export async function lerCustoNoBanco(codigo: string): Promise<number | null> {
+  return comConexao(async (c) => (await c.query<{ v: number | null }>(`SELECT "custoUnitarioCentavos" AS v FROM "Produto" WHERE codigo = $1`, [codigo])).rows[0]?.v ?? null);
 }
