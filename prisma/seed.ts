@@ -59,8 +59,8 @@ async function configuracaoEmpresa(): Promise<string> {
       cidade: "Macaé",
       uf: "RJ",
       cep: "27940-050",
-      telefone: "(22) 99958-3288",
-      whatsapp: "(22) 99958-3288",
+      telefone: "+5522999583288", // E.164, o mesmo formato gravado pelo formulário
+      whatsapp: "+5522999583288",
       emailContato: "vidracariapontual@gmail.com",
       emailPropostas: "vidracariapontual@gmail.com",
       siteUrl: "https://pontualmacae.com.br",
