@@ -51,6 +51,22 @@ async function limpar(c: Client): Promise<void> {
     await c.query(`DELETE FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
   }
 
+  // Fase 3 (propostas): tudo que os testes criam usa nome/título "E2E " (filhos antes dos pais).
+  const projetosDaFase3 = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
+  const propostasE2E = `SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetosDaFase3})`;
+  await c.query(`DELETE FROM "ContaReceber" WHERE "propostaId" IN (${propostasE2E}) OR "projetoId" IN (${projetosDaFase3})`);
+  await c.query(`DELETE FROM "ItemPropostaMedida" WHERE "itemId" IN (SELECT id FROM "ItemProposta" WHERE "propostaId" IN (${propostasE2E}))`);
+  await c.query(`DELETE FROM "ItemProposta" WHERE "propostaId" IN (${propostasE2E})`);
+  await c.query(`DELETE FROM "PropostaParcela" WHERE "propostaId" IN (${propostasE2E})`);
+  await c.query(`DELETE FROM "GrupoProposta" WHERE "propostaId" IN (${propostasE2E})`);
+  await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (${propostasE2E})`);
+  await c.query(`DELETE FROM "Proposta" WHERE id IN (${propostasE2E})`);
+  await c.query(`DELETE FROM "TabelaPreco" WHERE "tipologiaId" IN (SELECT id FROM "Tipologia" WHERE nome LIKE 'E2E %')`);
+  await c.query(`DELETE FROM "ComposicaoInsumo" WHERE "tipologiaId" IN (SELECT id FROM "Tipologia" WHERE nome LIKE 'E2E %')`);
+  await c.query(`DELETE FROM "ComposicaoMaoDeObra" WHERE "tipologiaId" IN (SELECT id FROM "Tipologia" WHERE nome LIKE 'E2E %')`);
+  await c.query(`DELETE FROM "Tipologia" WHERE nome LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "CondicaoParcela" WHERE "condicaoId" IN (SELECT id FROM "CondicaoPagamento" WHERE nome LIKE 'E2E %')`);
+  await c.query(`DELETE FROM "CondicaoPagamento" WHERE nome LIKE 'E2E %'`);
   // Fase 2 (comercial): projetos, visitas e medidas dos testes (título/nome "E2E "), filhos antes dos pais.
   const projetosE2E = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
   const eventosE2E = `SELECT id FROM "EventoAgenda" WHERE titulo LIKE 'E2E %' OR "projetoId" IN (${projetosE2E}) OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
