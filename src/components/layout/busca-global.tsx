@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, FileText, Search, User } from "lucide-react";
+import { CheckSquare, FileText, HardHat, Package, Search, Truck, User, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -13,7 +13,7 @@ import { paginasDisponiveis } from "./menu";
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
-const VAZIO: ResultadoBusca = { tarefas: [], usuarios: [] };
+const VAZIO: ResultadoBusca = { clientes: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
 
 export function BuscaGlobal() {
   const router = useRouter();
@@ -80,11 +80,11 @@ export function BuscaGlobal() {
       <Dialog open={aberta} onOpenChange={setAberta}>
         <DialogHeader className="sr-only">
           <DialogTitle>Busca global</DialogTitle>
-          <DialogDescription>Procure páginas, tarefas e usuários.</DialogDescription>
+          <DialogDescription>Procure páginas, clientes, fornecedores, produtos, funcionários, tarefas e usuários.</DialogDescription>
         </DialogHeader>
         <DialogContent className="top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0" showCloseButton={false}>
           <Comando shouldFilter={false}>
-            <CommandInput placeholder="Buscar páginas, tarefas e usuários..." value={termo} onValueChange={setTermo} />
+            <CommandInput placeholder="Buscar páginas, clientes, produtos..." value={termo} onValueChange={setTermo} />
             <CommandList>
               <CommandEmpty>Nada encontrado.</CommandEmpty>
               {paginas.length > 0 ? (
@@ -93,6 +93,45 @@ export function BuscaGlobal() {
                     <CommandItem key={p.href} value={`pagina-${p.href}`} onSelect={() => ir(p.href)}>
                       <FileText aria-hidden /> {p.titulo}
                       <span className="text-muted-foreground ml-auto text-xs">{p.grupo}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {visivel.clientes.length > 0 ? (
+                <CommandGroup heading="Clientes">
+                  {visivel.clientes.map((c) => (
+                    <CommandItem key={c.id} value={`cliente-${c.id}`} onSelect={() => ir(`/clientes/${c.id}`)}>
+                      <Users aria-hidden /> {c.nome}
+                      {c.detalhe ? <span className="text-muted-foreground ml-auto text-xs">{c.detalhe}</span> : null}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {visivel.fornecedores.length > 0 ? (
+                <CommandGroup heading="Fornecedores">
+                  {visivel.fornecedores.map((f) => (
+                    <CommandItem key={f.id} value={`fornecedor-${f.id}`} onSelect={() => ir(`/fornecedores/${f.id}`)}>
+                      <Truck aria-hidden /> {f.nome}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {visivel.produtos.length > 0 ? (
+                <CommandGroup heading="Produtos">
+                  {visivel.produtos.map((p) => (
+                    <CommandItem key={p.id} value={`produto-${p.id}`} onSelect={() => ir(`/produtos/${p.id}`)}>
+                      <Package aria-hidden /> {p.descricao}
+                      <span className="text-muted-foreground ml-auto text-xs">{p.codigo}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {visivel.funcionarios.length > 0 ? (
+                <CommandGroup heading="Funcionários">
+                  {visivel.funcionarios.map((f) => (
+                    <CommandItem key={f.id} value={`funcionario-${f.id}`} onSelect={() => ir(`/funcionarios/${f.id}`)}>
+                      <HardHat aria-hidden /> {f.nome}
+                      {f.cargo ? <span className="text-muted-foreground ml-auto text-xs">{f.cargo}</span> : null}
                     </CommandItem>
                   ))}
                 </CommandGroup>
