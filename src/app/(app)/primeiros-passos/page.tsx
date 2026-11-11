@@ -55,10 +55,10 @@ export default async function PaginaPrimeirosPassos() {
       feito: empresaCompleta,
     },
     {
-      titulo: "Definir a alíquota do Simples e a margem",
-      descricao: "Sem esses dois valores o sistema não calcula preço por composição. Combine a alíquota com o contador.",
+      titulo: "Definir a alíquota do Simples",
+      descricao: "Será usada no custo real de cada obra. Combine o valor com o contador. O markup (80%) e o acréscimo da nota (5%) já vêm preenchidos e ficam na mesma tela.",
       href: "/configuracoes/empresa",
-      feito: cfg?.aliquotaImpostoPercentual != null && cfg?.margemPadraoPercentual != null,
+      feito: cfg?.aliquotaImpostoPercentual != null,
     },
     {
       titulo: "Enviar o logo",

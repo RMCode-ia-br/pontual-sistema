@@ -15,7 +15,6 @@ export default async function PaginaEmpresa() {
 
   const faltando: string[] = [];
   if (cfg?.aliquotaImpostoPercentual == null) faltando.push("a alíquota do Simples");
-  if (cfg?.margemPadraoPercentual == null) faltando.push("a margem padrão");
 
   return (
     <>
@@ -25,7 +24,7 @@ export default async function PaginaEmpresa() {
         <p role="status" className="mb-6 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
           <span>
-            Defina {faltando.join(" e ")} em <strong>Preços e metas</strong>. Sem isso o sistema não calcula preço por composição nem margem.
+            Defina {faltando.join(" e ")} em <strong>Preços e metas</strong>. Ela será usada no custo real da obra (não entra no preço da proposta).
           </span>
         </p>
       ) : null}

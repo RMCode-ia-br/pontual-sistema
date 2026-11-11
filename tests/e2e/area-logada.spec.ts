@@ -134,7 +134,7 @@ test.describe("área logada", () => {
     await page.goto("/primeiros-passos");
     await expect(page.getByRole("heading", { name: "Primeiros passos" })).toBeVisible();
     await expect(page.getByRole("status")).toContainText(/\d+ de \d+/);
-    await expect(page.getByText("Definir a alíquota do Simples e a margem")).toBeVisible();
+    await expect(page.getByText("Definir a alíquota do Simples")).toBeVisible();
     await expect(page.getByText("Cadastrar a primeira tipologia e a tabela de preços")).toBeVisible();
     // Só dentro do conteúdo: no celular o menu lateral existe, mas está escondido.
     await expect(page.locator("main").getByText("Em breve").first()).toBeVisible();

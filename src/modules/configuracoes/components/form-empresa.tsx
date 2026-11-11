@@ -99,9 +99,11 @@ export function FormEmpresa({ valores, marcados }: Props) {
           <CardDescription>Estes valores alimentam o preço das propostas, os alertas e o painel.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          {t("aliquotaImpostoPercentual", "Alíquota efetiva do Simples", { modo: "decimal", max: 6, sufixo: "%", dica: "Defina com o contador. Sem ela, o preço por composição fica bloqueado." })}
-          {t("margemPadraoPercentual", "Margem padrão", { modo: "decimal", max: 6, sufixo: "%" })}
-          {t("margemMinimaAlertaPercentual", "Margem mínima de alerta", { modo: "decimal", max: 6, sufixo: "%", dica: "Abaixo disso a proposta mostra um aviso." })}
+          {t("aliquotaImpostoPercentual", "Alíquota efetiva do Simples", { modo: "decimal", max: 6, sufixo: "%", dica: "Defina com o contador. Não entra no preço da proposta; será usada no custo real da obra." })}
+          {t("markupPadraoPb", "Markup padrão sobre o custo", { modo: "decimal", max: 6, sufixo: "%", obrigatorio: true, dica: "Preço por composição = custo × (1 + markup). Padrão informado: 80%. Não vale para itens com preço manual ou de tabela." })}
+          {t("markupVidroTemperadoPb", "Markup de vidro temperado e guarda-corpo", { modo: "decimal", max: 6, sufixo: "%", obrigatorio: true, dica: "Vale para as tipologias marcadas com essa categoria (hoje: guarda-corpo). Padrão informado: 100%." })}
+          {t("acrescimoNotaPb", "Acréscimo quando a venda é com nota fiscal", { modo: "decimal", max: 5, sufixo: "%", obrigatorio: true, dica: "Somado ao total (preço × 1,05 com 5%), em linha separada na proposta. Vendas sem nota não têm acréscimo." })}
+          {t("margemMinimaAlertaPercentual", "Margem mínima de alerta", { modo: "decimal", max: 6, sufixo: "%", dica: "Margem real sobre o preço (lucro ÷ preço). Abaixo disso a proposta mostra um aviso. Vazio = sem alerta." })}
           {t("metaFaturamentoMensalCentavos", "Meta de faturamento mensal", { modo: "decimal", max: 20, sufixo: "R$", obrigatorio: true })}
           {t("limiteSimplesCentavos", "Limite anual do Simples Nacional", { modo: "decimal", max: 20, sufixo: "R$", obrigatorio: true, dica: "Valide o valor atual com o contador." })}
           {t("capacidadeProducaoM2Mes", "Capacidade de produção por mês", { modo: "numeric", max: 6, sufixo: "m²", obrigatorio: true })}
@@ -151,7 +153,7 @@ export function FormEmpresa({ valores, marcados }: Props) {
           <CardTitle role="heading" aria-level={2}>Propostas</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          {t("proximoNumeroProposta", "Próximo número de proposta", { modo: "numeric", max: 6, dica: "Informe o último número usado + 1 (ex.: 1158). Formato final: 1158-26." })}
+          {t("proximoNumeroProposta", "Próximo número de proposta", { modo: "numeric", max: 6, dica: "O número que a próxima proposta vai receber (começa em 2000: 2000-26). Sobe sozinho a cada proposta criada." })}
           <div className="flex items-end pb-1">
             <CaixaMarcacao id="reiniciaNumeracaoPorAno" name="reiniciaNumeracaoPorAno" rotulo="Reiniciar a numeração a cada ano" defaultChecked={marcados.reiniciaNumeracaoPorAno} />
           </div>

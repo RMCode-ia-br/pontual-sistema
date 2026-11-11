@@ -37,36 +37,37 @@ test.describe("empresa, logo e auditoria", () => {
     await entrarEEsperarPainel(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
   });
 
-  test("avisa que faltam a alíquota e a margem (nunca inventa valores)", async ({ page }) => {
+  test("avisa que falta a alíquota (nunca inventa valores) e mostra os valores informados pelo dono", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
-    await expect(page.getByRole("status").filter({ hasText: "Defina a alíquota do Simples e a margem padrão" })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Defina a alíquota do Simples" })).toBeVisible();
     await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveValue("");
-    await expect(page.getByLabel("Margem padrão")).toHaveValue("");
+    // Regra do dono: markup 80%, 100% para vidro temperado/guarda-corpo e 5% de acréscimo com nota.
+    await expect(page.getByLabel("Markup padrão sobre o custo")).toHaveValue("80");
+    await expect(page.getByLabel("Markup de vidro temperado e guarda-corpo")).toHaveValue("100");
+    await expect(page.getByLabel("Acréscimo quando a venda é com nota fiscal")).toHaveValue("5");
     // Dados reais da empresa vêm do seed e do banco, não do código.
     await expect(page.getByLabel("CNPJ")).toHaveValue("37.323.333/0001-61");
   });
 
-  test("valida no servidor: CNPJ inválido e imposto + margem de 100% ou mais", async ({ page }) => {
+  test("valida no servidor: CNPJ inválido e percentuais fora do limite", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
     await page.getByLabel("CNPJ").fill("11.111.111/1111-11");
     await page.getByLabel("Alíquota efetiva do Simples").fill("60");
-    await page.getByLabel("Margem padrão", { exact: true }).fill("50");
+    await page.getByLabel("Markup padrão sobre o custo").fill("1500");
     await page.getByRole("button", { name: "Salvar configurações" }).click();
 
-    // Os campos com erro de formato aparecem primeiro; a regra entre campos (imposto + margem) só é
-    // checada quando cada campo está válido.
     await expect(page.locator("form").getByText("CNPJ inválido.")).toBeVisible();
     await expect(page.getByRole("alert").filter({ hasText: "Corrija os campos destacados." })).toBeVisible();
 
     // Regressão: o React 19 limpava os campos após o erro; o que a pessoa digitou tem que permanecer.
     await expect(page.getByLabel("CNPJ")).toHaveValue("11.111.111/1111-11");
     await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveValue("60");
-    await expect(page.getByLabel("Margem padrão", { exact: true })).toHaveValue("50");
+    await expect(page.getByLabel("Markup padrão sobre o custo")).toHaveValue("1500");
 
-    // Corrigido o CNPJ, aparece a regra do divisor do preço.
+    // Corrigido o CNPJ, o markup acima de 1.000% continua sendo recusado.
     await page.getByLabel("CNPJ").fill("37.323.333/0001-61");
     await page.getByRole("button", { name: "Salvar configurações" }).click();
-    await expect(page.locator("form").getByText("não podem chegar a 100%")).toBeVisible();
+    await expect(page.locator("#markupPadraoPb-erro")).toContainText("Markup padrão: informe um percentual");
     expect(await lerCampoConfiguracao("aliquotaImpostoPercentual")).toBeNull();
   });
 
@@ -75,15 +76,14 @@ test.describe("empresa, logo e auditoria", () => {
     await semRolagemHorizontal(page);
     await page.getByLabel("Cargo na assinatura").fill("Cargo E2E");
     await page.getByLabel("Alíquota efetiva do Simples").fill("6,5");
-    await page.getByLabel("Margem padrão", { exact: true }).fill("30");
     await page.getByRole("button", { name: "Salvar configurações" }).click();
     await expect(toast(page, "Configurações salvas.")).toBeVisible();
 
     await page.reload();
     await expect(page.getByLabel("Cargo na assinatura")).toHaveValue("Cargo E2E");
     await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveValue("6,5");
-    // Com os dois valores definidos, o aviso some.
-    await expect(page.getByText("Defina a alíquota do Simples e a margem padrão")).toHaveCount(0);
+    // Com a alíquota definida, o aviso some.
+    await expect(page.getByText("Defina a alíquota do Simples")).toHaveCount(0);
 
     // No banco: alíquota como decimal e telefone normalizado em E.164.
     expect(String(await lerCampoConfiguracao("aliquotaImpostoPercentual"))).toBe("6.50");

@@ -14,6 +14,9 @@ const base = {
   diasPedidoAvaliacao: "2",
   diasAlertaPrazoAmarelo: "3",
   limiteSimplesCentavos: "4.800.000,00",
+  markupPadraoPb: "80",
+  markupVidroTemperadoPb: "100",
+  acrescimoNotaPb: "5",
 };
 
 const erros = (entrada: Record<string, string>) => {
@@ -28,25 +31,38 @@ describe("configuração da empresa", () => {
     expect(r.limiteSimplesCentavos).toBe(480000000);
     expect(r.custoMaoDeObraPorM2Centavos).toBeNull();
     expect(r.aliquotaImpostoPercentual).toBeNull();
-    expect(r.margemPadraoPercentual).toBeNull();
   });
 
   it("alíquota e margem vazias NÃO são inventadas (ficam null)", () => {
-    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "", margemPadraoPercentual: "" });
+    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "" });
     expect(r.aliquotaImpostoPercentual).toBeNull();
-    expect(r.margemPadraoPercentual).toBeNull();
   });
 
   it("aceita percentual com vírgula e guarda como texto decimal", () => {
-    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "6,5", margemPadraoPercentual: "30" });
+    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "6,5" });
     expect(r.aliquotaImpostoPercentual).toBe("6.5");
-    expect(r.margemPadraoPercentual).toBe("30");
   });
 
-  it("bloqueia imposto + margem ≥ 100% (divisor do preço)", () => {
-    expect(erros({ ...base, aliquotaImpostoPercentual: "40", margemPadraoPercentual: "60" }).margemPadraoPercentual).toMatch(/100%/);
-    expect(erros({ ...base, aliquotaImpostoPercentual: "40", margemPadraoPercentual: "59,99" })).toEqual({});
-    expect(erros({ ...base, margemPadraoPercentual: "100" }).margemPadraoPercentual).toMatch(/100%/);
+  it("markup e acréscimo da nota viram pontos-base inteiros (80% = 8000; 5% = 500)", () => {
+    const r = empresaSchema.parse(base);
+    expect(r.markupPadraoPb).toBe(8000);
+    expect(r.markupVidroTemperadoPb).toBe(10000);
+    expect(r.acrescimoNotaPb).toBe(500);
+    const outro = empresaSchema.parse({ ...base, markupPadraoPb: "75,5", acrescimoNotaPb: "0" });
+    expect(outro.markupPadraoPb).toBe(7550);
+    expect(outro.acrescimoNotaPb).toBe(0);
+  });
+
+  it("recusa markup/acréscimo vazio, negativo, com 3 casas ou acima do teto", () => {
+    for (const campo of ["markupPadraoPb", "markupVidroTemperadoPb", "acrescimoNotaPb"]) {
+      expect(erros({ ...base, [campo]: "" })[campo], campo).toBeTruthy();
+      expect(erros({ ...base, [campo]: "-1" })[campo], campo).toBeTruthy();
+      expect(erros({ ...base, [campo]: "5,555" })[campo], campo).toBeTruthy();
+      expect(erros({ ...base, [campo]: "abc" })[campo], campo).toBeTruthy();
+    }
+    expect(erros({ ...base, markupPadraoPb: "1000,01" }).markupPadraoPb).toBeTruthy();
+    expect(erros({ ...base, markupPadraoPb: "1000" })).toEqual({});
+    expect(erros({ ...base, acrescimoNotaPb: "100,01" }).acrescimoNotaPb).toBeTruthy();
   });
 
   it("faixas de porte são opcionais (vazias = null) e o grande precisa superar o médio", () => {
@@ -119,12 +135,17 @@ describe("configuração da empresa", () => {
       diasAlertaPrazoAmarelo: 3,
       tipoDias: "UTEIS",
       aliquotaImpostoPercentual: "6.5",
+      markupPadraoPb: 8000,
+      markupVidroTemperadoPb: 10000,
+      acrescimoNotaPb: 525,
       telefone: "+5522999583288",
     };
     const form = empresaParaFormulario(doBanco);
     expect(form.metaFaturamentoMensalCentavos).toBe("300.000,00");
     expect(form.aliquotaImpostoPercentual).toBe("6,5");
     expect(form.telefone).toBe("(22) 99958-3288");
+    expect(form.markupPadraoPb).toBe("80");
+    expect(form.acrescimoNotaPb).toBe("5,25");
     const volta = empresaSchema.parse(form);
     expect(volta.metaFaturamentoMensalCentavos).toBe(30000000);
     expect(volta.limiteSimplesCentavos).toBe(480000000);
@@ -132,5 +153,6 @@ describe("configuração da empresa", () => {
     expect(volta.porteMedioMinimoCentavos).toBe(5000000);
     expect(volta.porteGrandeMinimoCentavos).toBeNull();
     expect(volta.telefone).toBe("+5522999583288");
+    expect([volta.markupPadraoPb, volta.markupVidroTemperadoPb, volta.acrescimoNotaPb]).toEqual([8000, 10000, 525]);
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { faixasValidas } from "@/lib/dominio/porte";
+import { MARKUP_MAXIMO_PB, percentualParaPontosBase, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarTelefone, normalizarTelefone, parseMoedaParaCentavos } from "@/lib/formatadores";
 import { emailValido, formatarCep, formatarCnpj, somenteDigitos, urlHttpValida, validarCnpj } from "@/lib/validadores";
 
@@ -70,6 +71,22 @@ const percentual = (rotulo: string) =>
           return z.NEVER;
         }
         return v.replace(",", ".");
+      }),
+  );
+
+/** Percentual digitado ("80", "5,5") → pontos-base inteiros (80% = 8000). Obrigatório, de 0 até o máximo informado. */
+const percentualEmPontosBase = (rotulo: string, maximoPb: number) =>
+  campo(
+    z
+      .string()
+      .trim()
+      .transform((v, ctx): number => {
+        const pb = v === "" ? null : percentualParaPontosBase(v);
+        if (pb === null || pb > maximoPb) {
+          ctx.addIssue({ code: "custom", message: `${rotulo}: informe um percentual entre 0 e ${maximoPb / 100}, com até 2 casas, ex.: 80.` });
+          return z.NEVER;
+        }
+        return pb;
       }),
   );
 
@@ -195,7 +212,10 @@ export const empresaSchema = z
     visitaDuracaoMin: inteiroObrigatorio("Duração da visita", 15, 480),
 
     aliquotaImpostoPercentual: percentual("Alíquota de imposto"),
-    margemPadraoPercentual: percentual("Margem padrão"),
+    // Regra do dono (2026-11-13): preço de composição = custo × (1 + markup); nota fiscal soma o acréscimo depois.
+    markupPadraoPb: percentualEmPontosBase("Markup padrão", MARKUP_MAXIMO_PB),
+    markupVidroTemperadoPb: percentualEmPontosBase("Markup de vidro temperado e guarda-corpo", MARKUP_MAXIMO_PB),
+    acrescimoNotaPb: percentualEmPontosBase("Acréscimo da nota fiscal", 10000),
     margemMinimaAlertaPercentual: percentual("Margem mínima"),
     metaFaturamentoMensalCentavos: dinheiroObrigatorio("Meta mensal"),
     capacidadeProducaoM2Mes: inteiroObrigatorio("Capacidade de produção", 1, 100000),
@@ -220,16 +240,6 @@ export const empresaSchema = z
     pdfDescricoesMaiusculas: marcado,
   })
   .superRefine((d, ctx) => {
-    // R1: o divisor (1 − imposto% − margem%) precisa ser positivo.
-    const imposto = d.aliquotaImpostoPercentual === null ? 0 : Number(d.aliquotaImpostoPercentual);
-    const margem = d.margemPadraoPercentual === null ? 0 : Number(d.margemPadraoPercentual);
-    if (imposto + margem >= 100) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["margemPadraoPercentual"],
-        message: "Alíquota de imposto + margem padrão não podem chegar a 100%.",
-      });
-    }
     // R10: o valor do porte grande precisa ser maior que o do médio.
     if (!faixasValidas({ medioMinimoCentavos: d.porteMedioMinimoCentavos, grandeMinimoCentavos: d.porteGrandeMinimoCentavos })) {
       ctx.addIssue({
@@ -277,7 +287,9 @@ export function empresaParaFormulario(cfg: Registro | null): Record<string, stri
     horarioSabadoFim: s("horarioSabadoFim"),
     visitaDuracaoMin: n("visitaDuracaoMin"),
     aliquotaImpostoPercentual: decimalParaTexto(c.aliquotaImpostoPercentual),
-    margemPadraoPercentual: decimalParaTexto(c.margemPadraoPercentual),
+    markupPadraoPb: typeof c.markupPadraoPb === "number" ? pontosBaseParaPercentual(c.markupPadraoPb) : "",
+    markupVidroTemperadoPb: typeof c.markupVidroTemperadoPb === "number" ? pontosBaseParaPercentual(c.markupVidroTemperadoPb) : "",
+    acrescimoNotaPb: typeof c.acrescimoNotaPb === "number" ? pontosBaseParaPercentual(c.acrescimoNotaPb) : "",
     margemMinimaAlertaPercentual: decimalParaTexto(c.margemMinimaAlertaPercentual),
     metaFaturamentoMensalCentavos: moedaParaTexto(c.metaFaturamentoMensalCentavos),
     capacidadeProducaoM2Mes: n("capacidadeProducaoM2Mes"),
