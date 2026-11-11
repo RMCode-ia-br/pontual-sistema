@@ -93,7 +93,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Lixeira", href: "/lixeira" },
     ],
   },
-  { titulo: "Relatórios", icone: BarChart3 },
+  { titulo: "Relatórios", icone: BarChart3, href: "/relatorios" },
   {
     titulo: "Configurações",
     icone: Settings,

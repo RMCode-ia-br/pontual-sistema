@@ -10,6 +10,10 @@ import { resumoDeCadastros } from "@/modules/cadastros/resumo";
 import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
 import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
 import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
+import { resumoComercial } from "@/modules/comercial/resumo";
+import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
+import { formatarDataHora, formatarMoeda } from "@/lib/formatadores";
+import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -25,7 +29,7 @@ type Cartao = {
 
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
-  const [resumo, proximas, cadastros] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros()]);
+  const [resumo, proximas, cadastros, comercial] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros(), resumoComercial()]);
 
   const cartoes: Cartao[] = [
     {
@@ -109,7 +113,7 @@ export default async function PaginaPainel() {
 
   return (
     <>
-      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. Os módulos de vendas, obras e financeiro chegam nas próximas etapas." />
+      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. Obras e financeiro chegam nas próximas etapas." />
 
       <section aria-label="Resumo de tarefas" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {cartoes.map((c) => {
@@ -130,6 +134,105 @@ export default async function PaginaPainel() {
             </Link>
           );
         })}
+      </section>
+
+      <section aria-labelledby="titulo-funil" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-funil" className="text-lg font-medium">
+            Funil comercial
+          </h2>
+          <Link href="/funil" className="text-primary text-sm hover:underline">
+            Abrir o funil
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {comercial.funil.map((f) => (
+            <Link key={f.status} href={`/projetos?status=${f.status}`} title="Como é calculado: projetos nessa fase hoje e a soma dos valores estimados (campo opcional do projeto)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+              <p className="text-muted-foreground text-sm">{ROTULO_STATUS_PROJETO[f.status]}</p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums">{f.quantidade}</p>
+              <p className="text-muted-foreground mt-1 text-xs tabular-nums">{f.valorCentavos > 0 ? formatarMoeda(f.valorCentavos) : "Sem valor estimado"}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="titulo-atencao" className="mt-8">
+        <h2 id="titulo-atencao" className="mb-3 text-lg font-medium">
+          Atenção hoje
+        </h2>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Visitas de hoje e de amanhã</h3>
+            {comercial.visitas.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhuma visita marcada para hoje ou amanhã.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {comercial.visitas.map((v) => (
+                  <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <Link href={`/agenda/${v.id}`} className="min-w-0 hover:underline">
+                      <span className="font-medium">{v.clienteNome ?? v.projetoTitulo ?? "Visita"}</span>
+                      <span className="text-muted-foreground block text-xs">
+                        {v.dia === "hoje" ? "Hoje" : "Amanhã"} · {formatarDataHora(v.inicio).slice(11)}
+                        {v.local ? ` · ${v.local}` : ""}
+                      </span>
+                    </Link>
+                    <Link href={`/agenda/${v.id}`} className="text-primary text-xs hover:underline">
+                      Enviar lembrete
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <Link href="/projetos?semRetorno=1" title="Como é calculado: projetos em Proposta enviada ou Negociação parados além do prazo de 'sem retorno' definido em Configurações." className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", comercial.semRetorno > 0 && "border-destructive/40 bg-destructive/5")}>
+            <p className="text-muted-foreground text-sm">Propostas sem retorno</p>
+            <p className={cn("mt-2 text-3xl font-semibold tabular-nums", comercial.semRetorno > 0 && "text-destructive")}>{comercial.semRetorno}</p>
+            <p className="text-muted-foreground mt-1 text-xs">Parados além do prazo configurado. Toque para ver a lista e cobrar o cliente.</p>
+          </Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="titulo-origem" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-origem" className="text-lg font-medium">
+            Origem dos clientes e motivos de perda (mês)
+          </h2>
+          <Link href="/relatorios/funil" className="text-primary text-sm hover:underline">
+            Ver relatório
+          </Link>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Projetos criados no mês, por origem</h3>
+            {comercial.origensDoMes.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhum projeto criado neste mês.</p>
+            ) : (
+              <ul className="grid gap-1 text-sm">
+                {comercial.origensDoMes.map((o) => (
+                  <li key={o.origem ?? "sem"} className="flex justify-between gap-2">
+                    <span>{o.origem ? (ROTULO_ORIGEM[o.origem as keyof typeof ROTULO_ORIGEM] ?? o.origem) : "Não informada"}</span>
+                    <span className="tabular-nums">{o.quantidade}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Projetos perdidos no mês, por motivo</h3>
+            {comercial.perdasDoMes.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhum projeto perdido neste mês.</p>
+            ) : (
+              <ul className="grid gap-1 text-sm">
+                {comercial.perdasDoMes.map((p) => (
+                  <li key={p.nome} className="flex justify-between gap-2">
+                    <span>{p.nome}</span>
+                    <span className="tabular-nums">{p.quantidade}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </section>
 
       <section aria-labelledby="titulo-cadastros" className="mt-8">

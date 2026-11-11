@@ -22,7 +22,7 @@ type Passo = {
 export default async function PaginaPrimeirosPassos() {
   await exigirSessao();
 
-  const [cfg, admin, outrosAtivos, fornecedoresCompletos, produtosComCusto, funcionarios, clientes] = await Promise.all([
+  const [cfg, admin, outrosAtivos, fornecedoresCompletos, produtosComCusto, funcionarios, clientes, projetos] = await Promise.all([
     obterConfiguracao(),
     prisma.usuario.findFirst({ where: { login: "admin", deletadoEm: null }, select: { precisaTrocarSenha: true, ativo: true } }),
     prisma.usuario.count({ where: { ativo: true, deletadoEm: null, login: { not: "admin" } } }),
@@ -30,6 +30,7 @@ export default async function PaginaPrimeirosPassos() {
     prisma.produto.count({ where: { deletadoEm: null, custoUnitarioCentavos: { not: null } } }),
     prisma.funcionario.count({ where: { deletadoEm: null } }),
     prisma.cliente.count({ where: { deletadoEm: null } }),
+    prisma.projeto.count({ where: { deletadoEm: null } }),
   ]);
 
   const empresaCompleta = !!(cfg?.razaoSocial && cfg?.cnpj && cfg?.endereco && cfg?.telefone);
@@ -100,6 +101,12 @@ export default async function PaginaPrimeirosPassos() {
       descricao: "Um a um, ou importando uma planilha. A busca (Ctrl+K) já acha qualquer cliente pelo nome, telefone ou CPF.",
       href: "/clientes",
       feito: clientes > 0,
+    },
+    {
+      titulo: "Criar o primeiro projeto e agendar uma visita",
+      descricao: "Cada pedido de orçamento vira um projeto no funil. Agende a visita técnica pela ficha do projeto: ela aparece na Agenda e no seu Google Agenda.",
+      href: "/projetos/novo",
+      feito: projetos > 0,
     },
     {
       titulo: "Cadastrar a primeira tipologia e a tabela de preços",
