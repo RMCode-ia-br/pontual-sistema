@@ -24,12 +24,13 @@ export async function listarUsuariosAtivos() {
   });
 }
 
-export async function listarTarefas(filtro: { status: FiltroStatus; responsavelId?: string }): Promise<TarefaLista[]> {
+export async function listarTarefas(filtro: { status: FiltroStatus; responsavelId?: string; projetoId?: string }): Promise<TarefaLista[]> {
   const tarefas = await prisma.tarefa.findMany({
     where: {
       deletadoEm: null,
       ...(filtro.status === "abertas" ? { status: "ABERTA" } : filtro.status === "concluidas" ? { status: "CONCLUIDA" } : {}),
       ...(filtro.responsavelId ? { responsavelId: filtro.responsavelId } : {}),
+      ...(filtro.projetoId ? { projetoId: filtro.projetoId } : {}),
     },
     // Abertas: vencimento mais próximo primeiro (sem data por último). Concluídas: mais recentes primeiro.
     orderBy:

@@ -23,9 +23,13 @@ type Props = {
   tarefa?: { id: string; titulo: string; descricao: string | null; vencimento: string | null; responsavelId: string | null };
   /** Após criar: "limpar" mantém na lista (cadastro rápido); "voltar" vai para a lista. */
   aoCriar?: "limpar" | "voltar";
+  /** Tarefa nova ligada a um projeto (vindo da ficha do projeto). */
+  projeto?: { id: string; rotulo: string };
+  /** Para onde ir depois de criar, quando ligada a um projeto. */
+  voltarPara?: string;
 };
 
-export function FormTarefa({ usuarios, usuarioAtualId, tarefa, aoCriar = "limpar" }: Props) {
+export function FormTarefa({ usuarios, usuarioAtualId, tarefa, aoCriar = "limpar", projeto, voltarPara }: Props) {
   const router = useRouter();
   const [versao, setVersao] = useState(0);
   const editando = !!tarefa;
@@ -36,7 +40,7 @@ export function FormTarefa({ usuarios, usuarioAtualId, tarefa, aoCriar = "limpar
       if (r.ok) {
         toast.success(r.mensagem ?? "Salvo.");
         if (!editando) {
-          if (aoCriar === "voltar") router.push("/tarefas");
+          if (aoCriar === "voltar") router.push(voltarPara ?? "/tarefas");
           else setVersao((v) => v + 1);
         }
       }
@@ -48,6 +52,12 @@ export function FormTarefa({ usuarios, usuarioAtualId, tarefa, aoCriar = "limpar
   return (
     <form key={versao} onSubmit={aoEnviar} className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
       {tarefa ? <input type="hidden" name="id" value={tarefa.id} /> : null}
+      {projeto ? (
+        <>
+          <input type="hidden" name="projetoId" value={projeto.id} />
+          <p className="text-muted-foreground text-sm sm:col-span-2">Projeto: {projeto.rotulo}</p>
+        </>
+      ) : null}
       <Campo id="titulo" rotulo="O que precisa ser feito?" erro={erros.titulo} obrigatorio className="sm:col-span-2">
         <Input id="titulo" name="titulo" required maxLength={160} defaultValue={tarefa?.titulo ?? ""} autoFocus={!editando} autoComplete="off" {...ariaDoCampo("titulo", erros.titulo)} />
       </Campo>

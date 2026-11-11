@@ -13,7 +13,12 @@ import { AcoesDoEvento } from "@/modules/agenda/components/acoes-do-evento";
 import { tituloDoEvento } from "@/modules/agenda/components/calendario";
 import { estiloDoEvento } from "@/modules/agenda/components/estilo-do-evento";
 import { FormEvento } from "@/modules/agenda/components/form-evento";
-import { obterEvento, obterExpediente } from "@/modules/agenda/queries";
+import { obterEvento, obterExpediente, variaveisDaVisita } from "@/modules/agenda/queries";
+import { BotoesDeContato } from "@/modules/clientes/components/botoes-de-contato";
+import { listarMensagensProntas } from "@/modules/clientes/queries";
+import { obterConfiguracao } from "@/modules/configuracoes/queries";
+import { primeiroNome } from "@/lib/dominio/modelos-texto";
+import { prisma } from "@/lib/db";
 import { OPCOES_LEMBRETE, ROTULO_STATUS_EVENTO, ROTULO_TIPO_EVENTO } from "@/modules/agenda/schemas";
 import { listarEquipes } from "@/modules/funcionarios/queries";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
@@ -39,6 +44,13 @@ export default async function PaginaEvento({ params }: { params: Promise<{ id: s
   const duracaoMin = Math.round((new Date(evento.fim).getTime() - new Date(evento.inicio).getTime()) / 60_000);
   const lembrete = OPCOES_LEMBRETE.find((o) => o.valor === String(evento.lembreteMin ?? ""))?.rotulo ?? (evento.lembreteMin ? `${evento.lembreteMin} minutos antes` : null);
   const dia = dataLocalDoInstante(evento.inicio);
+  const [cliente, config] = await Promise.all([
+    evento.clienteId ? prisma.cliente.findFirst({ where: { id: evento.clienteId, deletadoEm: null }, select: { nome: true, telefone: true, whatsapp: true, email: true } }) : null,
+    obterConfiguracao(),
+  ]);
+  const mensagens = cliente
+    ? await listarMensagensProntas({ cliente: primeiroNome(cliente.nome), nomeFantasia: config?.nomeFantasia ?? undefined, linkAvaliacao: config?.linkAvaliacaoGoogle ?? undefined, ...variaveisDaVisita(evento) })
+    : [];
 
   return (
     <>
@@ -71,6 +83,12 @@ export default async function PaginaEvento({ params }: { params: Promise<{ id: s
         </Badge>
         <Badge variant={evento.status === "CANCELADO" || evento.status === "NAO_COMPARECEU" ? "destructive" : evento.status === "REALIZADO" ? "default" : "secondary"}>{ROTULO_STATUS_EVENTO[evento.status]}</Badge>
       </div>
+
+      {cliente ? (
+        <div className="mb-6">
+          <BotoesDeContato telefone={cliente.telefone} whatsapp={cliente.whatsapp} email={cliente.email} mensagens={mensagens} />
+        </div>
+      ) : null}
 
       <dl className="mb-8 grid gap-4 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-3">
         <Item rotulo="Quando">

@@ -29,6 +29,13 @@ export const tarefaSchema = z.object({
     .max(64)
     .transform((v) => (v === "" ? null : v))
     .optional(),
+  /** Tarefa ligada a um projeto (o cliente vem do projeto). */
+  projetoId: z
+    .string()
+    .trim()
+    .max(64)
+    .transform((v) => (v === "" ? null : v))
+    .optional(),
 });
 
 export const editarTarefaSchema = tarefaSchema.extend({ id: z.string().min(1).max(64) });

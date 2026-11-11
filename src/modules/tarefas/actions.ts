@@ -18,6 +18,8 @@ const campos = { id: true, titulo: true, descricao: true, vencimento: true, stat
 
 function revalidar() {
   revalidatePath("/tarefas");
+  revalidatePath("/projetos/[id]", "page");
+  revalidatePath("/funil");
   revalidatePath("/", "layout");
 }
 
@@ -37,10 +39,16 @@ export async function criarTarefa(_anterior: ResultadoAcao<{ id: string }> | nul
 
   return executar("tarefas.criar", async () => {
     await conferirResponsavel(dados.data.responsavelId);
+    const projeto = dados.data.projetoId
+      ? await prisma.projeto.findFirst({ where: { id: dados.data.projetoId, deletadoEm: null }, select: { id: true, clienteId: true } })
+      : null;
+    if (dados.data.projetoId && !projeto) throw new ErroNegocio("O projeto escolhido não foi encontrado.");
     const ip = extrairIp(await headers());
     const criada = await prisma.$transaction(async (tx) => {
       const nova = await tx.tarefa.create({
         data: {
+          projetoId: projeto?.id ?? null,
+          clienteId: projeto?.clienteId ?? null,
           titulo: dados.data.titulo,
           descricao: dados.data.descricao ?? null,
           vencimento: dados.data.vencimento ?? null,

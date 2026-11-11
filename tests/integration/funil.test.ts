@@ -118,6 +118,31 @@ describe("mudança de fase", () => {
   });
 });
 
+describe("follow-up automático (R11)", () => {
+  it("proposta enviada cria UMA tarefa 'Acompanhar proposta' ligada ao projeto, em D+N, e cada nova entrada na fase cria outra", async () => {
+    const projeto = await novoProjeto("Follow-up", { responsavelId: usuario.id });
+    const tarefas = () => prisma.tarefa.findMany({ where: { projetoId: projeto.id }, orderBy: { criadoEm: "asc" } });
+
+    await prisma.$transaction((tx) => mudarFaseDoProjeto(tx, { usuario, projeto, para: "PROPOSTA_ENVIADA" }));
+    const [primeira] = await tarefas();
+    expect(await tarefas()).toHaveLength(1);
+    expect(primeira).toMatchObject({ tipo: "FOLLOW_UP_PROPOSTA", status: "ABERTA", clienteId, responsavelId: usuario.id });
+    expect(primeira.titulo).toContain("Acompanhar proposta");
+    expect(primeira.chaveUnica).toMatch(/^followup:acompanhar-proposta:/);
+    expect(primeira.vencimento).not.toBeNull();
+
+    // Outras fases não criam tarefa.
+    await prisma.$transaction((tx) => mudarFaseDoProjeto(tx, { usuario, projeto: { ...projeto, status: "PROPOSTA_ENVIADA" }, para: "NEGOCIACAO" }));
+    expect(await tarefas()).toHaveLength(1);
+
+    // Voltar para "Proposta enviada" é outro fato: nova tarefa (chave diferente).
+    await prisma.$transaction((tx) => mudarFaseDoProjeto(tx, { usuario, projeto: { ...projeto, status: "NEGOCIACAO" }, para: "PROPOSTA_ENVIADA" }));
+    const todas = await tarefas();
+    expect(todas).toHaveLength(2);
+    expect(new Set(todas.map((t) => t.chaveUnica)).size).toBe(2);
+  });
+});
+
 describe("integridade", () => {
   it("o banco recusa tarefa e interação de projeto inexistente (chave estrangeira)", async () => {
     await expect(prisma.tarefa.create({ data: { titulo: `${PREFIXO} órfã`, projetoId: "nao-existe" } })).rejects.toThrow();

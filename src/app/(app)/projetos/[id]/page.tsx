@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { formatarTelefone } from "@/lib/formatadores";
@@ -17,12 +18,16 @@ import { LinhaDoTempo } from "@/modules/clientes/components/linha-do-tempo";
 import { listarInteracoesDoVinculo } from "@/modules/clientes/queries";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
 import { EventosDoProjeto } from "@/modules/agenda/components/eventos-do-projeto";
-import { listarEventosDoProjeto } from "@/modules/agenda/queries";
+import { listarEventosDoProjeto, proximaVisitaDoProjeto, variaveisDaVisita } from "@/modules/agenda/queries";
+import { listarMensagensProntas } from "@/modules/clientes/queries";
+import { primeiroNome } from "@/lib/dominio/modelos-texto";
 import { excluirInteracaoDoProjeto, registrarInteracaoDoProjeto } from "@/modules/projetos/actions/interacoes";
 import { ControleDoProjeto } from "@/modules/projetos/components/controle-do-projeto";
 import { FormProjeto } from "@/modules/projetos/components/form-projeto";
 import { ResumoDoProjeto } from "@/modules/projetos/components/resumo-do-projeto";
 import { listarMotivosPerda, obterProjeto } from "@/modules/projetos/queries";
+import { ListaTarefas } from "@/modules/tarefas/components/lista-tarefas";
+import { listarTarefas } from "@/modules/tarefas/queries";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 
 export const metadata: Metadata = { title: "Projeto" };
@@ -31,6 +36,7 @@ const ABAS = [
   { valor: "resumo", titulo: "Resumo" },
   { valor: "dados", titulo: "Dados" },
   { valor: "visitas", titulo: "Visitas" },
+  { valor: "tarefas", titulo: "Tarefas" },
   { valor: "propostas", titulo: "Propostas" },
   { valor: "anexos", titulo: "Arquivos e fotos" },
   { valor: "linha-do-tempo", titulo: "Linha do tempo" },
@@ -44,9 +50,15 @@ export default async function PaginaProjeto({ params, searchParams }: { params: 
   const projeto = await obterProjeto(id);
   if (!projeto) notFound();
   const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "resumo";
-  const [motivos, config] = await Promise.all([listarMotivosPerda(), obterConfiguracao()]);
+  const [motivos, config, visita] = await Promise.all([listarMotivosPerda(), obterConfiguracao(), proximaVisitaDoProjeto(projeto.id)]);
+  const mensagens = await listarMensagensProntas({
+    cliente: primeiroNome(projeto.cliente.nome),
+    nomeFantasia: config?.nomeFantasia ?? undefined,
+    linkAvaliacao: config?.linkAvaliacaoGoogle ?? undefined,
+    ...(visita ? variaveisDaVisita(visita) : {}),
+  });
 
-  const contagem: Record<string, number | undefined> = { visitas: projeto.qtdVisitas };
+  const contagem: Record<string, number | undefined> = { visitas: projeto.qtdVisitas, tarefas: projeto.qtdTarefasAbertas };
 
   return (
     <>
@@ -71,7 +83,7 @@ export default async function PaginaProjeto({ params, searchParams }: { params: 
       </div>
 
       <div className="mb-6">
-        <BotoesDeContato telefone={projeto.cliente.telefone} whatsapp={projeto.cliente.whatsapp} email={projeto.cliente.email} mensagens={[]} />
+        <BotoesDeContato telefone={projeto.cliente.telefone} whatsapp={projeto.cliente.whatsapp} email={projeto.cliente.email} mensagens={mensagens} />
       </div>
 
       <nav aria-label="Seções do projeto" className="mb-6 flex gap-1 overflow-x-auto border-b">
@@ -120,6 +132,17 @@ export default async function PaginaProjeto({ params, searchParams }: { params: 
               observacoes: projeto.observacoes,
             }}
           />
+        </div>
+      ) : null}
+      {aba === "tarefas" ? (
+        <div className="max-w-3xl">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="font-medium">Tarefas do projeto</h2>
+            <Link href={`/tarefas/nova?projeto=${projeto.id}`} className={buttonVariants()}>
+              <Plus aria-hidden /> Nova tarefa
+            </Link>
+          </div>
+          <ListaTarefas tarefas={await listarTarefas({ status: "abertas", projetoId: projeto.id })} vazioPorFiltro={false} />
         </div>
       ) : null}
       {aba === "visitas" ? (

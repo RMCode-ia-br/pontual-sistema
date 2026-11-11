@@ -3,7 +3,9 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { horariosLivres, limitesDoDia, type ConfigExpediente, type EventoOcupando, type Intervalo, type PeriodoDoCalendario } from "@/lib/dominio/agenda";
-import { dataLocalDoInstante, inputParaData } from "@/lib/formatadores";
+import { formatInTimeZone } from "date-fns-tz";
+
+import { dataLocalDoInstante, FUSO_PADRAO, inputParaData } from "@/lib/formatadores";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
 
 import { STATUS_EVENTO, TIPOS_EVENTO, type StatusEvento, type TipoEvento } from "./schemas";
@@ -196,4 +198,20 @@ export { STATUS_EVENTO };
 export async function listarEventosDoProjeto(projetoId: string): Promise<EventoDaAgenda[]> {
   const eventos = await prisma.eventoAgenda.findMany({ where: { projetoId, deletadoEm: null }, orderBy: { inicio: "desc" }, take: 100, select: selecao });
   return eventos.map(eventoParaAgenda);
+}
+
+/** Variáveis dos modelos de WhatsApp de visita (`{{dataVisita}}`, `{{horaVisita}}`, `{{enderecoObra}}`). */
+export function variaveisDaVisita(e: Pick<EventoDaAgenda, "inicio" | "local">): Record<string, string | undefined> {
+  const dia = dataLocalDoInstante(e.inicio).split("-").reverse().join("/");
+  return { dataVisita: dia, horaVisita: formatInTimeZone(e.inicio, FUSO_PADRAO, "HH:mm"), enderecoObra: e.local ?? undefined };
+}
+
+/** Próxima visita técnica em aberto do projeto (para as mensagens de confirmação e lembrete). */
+export async function proximaVisitaDoProjeto(projetoId: string): Promise<EventoDaAgenda | null> {
+  const e = await prisma.eventoAgenda.findFirst({
+    where: { projetoId, tipo: "VISITA_TECNICA", deletadoEm: null, status: { in: ["AGENDADO", "CONFIRMADO", "REMARCADO"] }, fim: { gte: new Date() } },
+    orderBy: { inicio: "asc" },
+    select: selecao,
+  });
+  return e ? eventoParaAgenda(e) : null;
 }

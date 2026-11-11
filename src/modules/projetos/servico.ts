@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { anoEmSaoPaulo, chaveContadorProjeto, formatarCodigoProjeto } from "@/lib/dominio/codigo-projeto";
+import { chaveFollowUp, vencimentoAcompanharProposta } from "@/lib/dominio/followup";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
 
@@ -66,6 +67,32 @@ export async function mudarFaseDoProjeto(
     data: { projetoId: projeto.id, de: projeto.status, para, criadoEm: agora, criadoPorId: usuario.id },
     select: { id: true },
   });
+
+  // R11: proposta enviada → "Acompanhar proposta" em D+N. A chave inclui o movimento de fase: refazer o mesmo
+  // movimento não duplica a tarefa, mas sair e voltar à fase (outro fato) cria uma nova.
+  if (para === "PROPOSTA_ENVIADA") {
+    const [config, dono] = await Promise.all([
+      tx.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { diasFollowUpProposta: true } }),
+      tx.projeto.findUnique({ where: { id: projeto.id }, select: { responsavelId: true } }),
+    ]);
+    await tx.tarefa.createMany({
+      data: [
+        {
+          titulo: `Acompanhar proposta — ${projeto.titulo}`,
+          descricao: `Projeto ${projeto.codigo}: veja se o cliente recebeu a proposta e tire as dúvidas.`,
+          tipo: "FOLLOW_UP_PROPOSTA",
+          responsavelId: dono?.responsavelId ?? null,
+          vencimento: vencimentoAcompanharProposta(agora, config?.diasFollowUpProposta ?? 3),
+          clienteId: projeto.clienteId,
+          projetoId: projeto.id,
+          chaveUnica: chaveFollowUp("acompanhar-proposta", projeto.id, historico.id),
+          criadoPorId: usuario.id,
+          atualizadoPorId: usuario.id,
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
 
   const complemento = perdendo ? ` Motivo: ${nomeDoMotivo}${perda?.concorrente ? ` (${perda.concorrente})` : ""}.` : "";
   await registrarInteracao(tx, {
