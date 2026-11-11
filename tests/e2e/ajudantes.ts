@@ -29,11 +29,12 @@ export function toast(page: Page, texto: string | RegExp) {
 
 /** Espera os avisos temporários (toasts) desaparecerem: no celular eles cobrem o fim da página. */
 export async function aguardarAvisosSumirem(page: Page) {
-  // Fecha pelo botão (o aviso pausa o relógio enquanto o mouse está sobre ele) e confere que sumiu.
-  for (const fechar of await page.locator("[data-sonner-toast] [data-close-button]").all()) {
-    await fechar.click({ force: true }).catch(() => undefined);
-  }
-  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
+  // O Sonner PAUSA o relógio dos avisos enquanto o mouse está sobre eles: tira o ponteiro de cima
+  // (canto inferior esquerdo da janela) e deixa expirarem sozinhos. Clicar no "x" deixaria o mouse
+  // parado em cima da pilha e os avisos nunca sumiriam.
+  const altura = page.viewportSize()?.height ?? 700;
+  await page.mouse.move(1, altura - 1);
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 20_000 });
 }
 
 /** Mensagem de erro do formulário atual (o Next também tem um role="alert" para anunciar rotas). */
