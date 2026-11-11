@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pontual Gestão
 
-## Getting Started
+Sistema de gestão (CRM, obras, financeiro e estoque) da **Pontual Soluções em Esquadrias e Vidros**, em Macaé-RJ. Construído pela RM Code.
 
-First, run the development server:
+- Especificação completa: [`docs/ESPECIFICACAO.md`](docs/ESPECIFICACAO.md) (fonte da verdade)
+- Operação, deploy e backup: [`docs/OPERACAO.md`](docs/OPERACAO.md)
+- Guia de uso (para quem opera o sistema): [`docs/GUIA_DE_USO.md`](docs/GUIA_DE_USO.md)
+- Decisões e pendências: [`docs/DECISOES.md`](docs/DECISOES.md), [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md)
+- Blocos reutilizáveis RM Code: [`docs/PADROES_RMCODE.md`](docs/PADROES_RMCODE.md)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+> **Aviso:** o ambiente hospedado na Vercel (plano Hobby) é só de laboratório e demonstração. **Nenhum dado real** da Pontual deve entrar nele. Veja `docs/OPERACAO.md`.
+
+## Stack
+
+Next.js (App Router) · TypeScript estrito · Tailwind · shadcn/ui · PostgreSQL (Supabase) com Prisma · Auth.js v5 · Zod · Vitest · Playwright.
+
+## Como rodar
+
+Requisitos: Node 22 ou superior e npm. No Windows, use o PowerShell.
+
+```powershell
+npm install
+Copy-Item .env.example .env.local   # e preencha os valores (veja docs/OPERACAO.md)
+npm run db:deploy                   # aplica as migrações
+npm run seed                        # dados iniciais (idempotente)
+npm run storage:setup               # cria o bucket privado de anexos
+npm run dev                         # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+O seed cria o usuário `admin` com senha inicial `admin`; a troca é obrigatória no primeiro acesso.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> A senha do banco, se tiver `@`, `#`, `:` ou `/`, precisa estar **codificada** na URL (`encodeURIComponent`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Comandos
 
-## Learn More
+| Comando | O que faz |
+| --- | --- |
+| `npm run dev` | servidor de desenvolvimento |
+| `npm run build` / `npm start` | build e servidor de produção |
+| `npm run lint` | ESLint (zero avisos é a regra) |
+| `npm run typecheck` | TypeScript |
+| `npm test` | testes unitários (Vitest) |
+| `npm run test:integracao` | testes de integração com o banco real (bloqueio de login sob concorrência, RLS) |
+| `npm run test:e2e` | testes de ponta a ponta (Playwright; rode `npm run build` antes) |
+| `npm run db:deploy` | aplica migrações |
+| `npm run db:studio` | Prisma Studio |
+| `npm run seed` | dados iniciais |
+| `npm run storage:setup` | cria o bucket privado de anexos |
 
-To learn more about Next.js, take a look at the following resources:
+> **Windows:** rode `npm test` no **PowerShell** (ou no terminal do VS Code), com o drive em maiúsculo (`D:\...`). No Git Bash o Vitest falha por causa da caixa da letra do drive (veja `docs/APRENDIZADOS.md`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Testes de ponta a ponta
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+O E2E usa o banco configurado no `.env.local` e cria apenas dados de teste (usuários `e2e-*`, itens com prefixo "E2E "), removendo tudo no fim, inclusive os arquivos no Storage. Ele **nunca** altera o usuário `admin` e restaura a configuração da empresa que modificar.
 
-## Deploy on Vercel
+```powershell
+npm run build
+npm run test:e2e
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Estrutura
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/lib/*          blocos genéricos, sem conhecimento do negócio (auth, db, auditoria, storage, csv...)
+src/modules/*      domínio da Pontual (usuários, tarefas, catálogos, configurações...)
+src/app/(auth)     telas públicas (login, troca de senha)
+src/app/(app)      área logada
+src/app/api        health, cron, exportação, auth
+prisma/            schema, migrações, seed
+tests/{unit,e2e}   testes
+docs/              especificação, decisões, operação, guias
+```

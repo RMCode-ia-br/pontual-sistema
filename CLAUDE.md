@@ -6,6 +6,8 @@ Sistema de gestão (CRM + obras + financeiro + estoque) da **Pontual Soluções 
 
 ## Método
 - Uma fase por vez (seção 14 da spec). Ao fim: typecheck, lint, test, build → **revisão sênior (seção 0.6)** → relatório em `docs/revisoes/fase-N.md` → commit → **parar** e esperar "continuar".
+- **Commit e push ao concluir cada bloco da fase** (não só no fim), depois de verificado. Conventional Commits em português; só os arquivos do bloco; conferir antes que nenhum `.env*`, PDF ou `docs/referencias/` entra.
+- **Nunca editar arquivos com `Get-Content`/`Set-Content` do PowerShell 5.1** (corrompe acentos): usar Edit/Write/node. `tests/unit/encoding.test.ts` barra isso. Rodar o Vitest pelo PowerShell com `D:` maiúsculo.
 - Decidir com bom senso e registrar em `docs/DECISOES.md`. Dependências de pessoas vão para `docs/PENDENCIAS.md`.
 - Nunca inventar preços, fórmulas, alíquotas, margens ou prazos reais: campo vazio + aviso na interface + PENDENCIAS.
 - Nunca imprimir, logar ou commitar valores de `.env*`. Validar conexões mostrando só sucesso/falha e tipo do erro.
@@ -15,7 +17,7 @@ Sistema de gestão (CRM + obras + financeiro + estoque) da **Pontual Soluções 
 Next.js (App Router) + TypeScript estrito + Tailwind + shadcn/ui + lucide-react; PostgreSQL no Supabase (só banco e Storage) via Prisma; Auth.js v5 (Credentials, JWT 8 h); Zod; react-hook-form; TanStack Table; Recharts; dnd-kit; date-fns (America/Sao_Paulo); `@react-pdf/renderer`; Vitest; Playwright. Windows 11/PowerShell: scripts npm multiplataforma, usar `npm`.
 
 ## Comandos
-`npm run dev | build | start | lint | typecheck | test | test:e2e | format`
+`npm run dev | build | start | lint | typecheck | test | test:integracao | test:e2e | format`
 `npm run db:migrate | db:deploy | db:studio | seed | seed:demo` (ver `package.json`).
 
 ## Estrutura
@@ -42,7 +44,7 @@ R1 preço (manual/tabela/composição, divisor por dentro) · R3 numeração `NN
 Repo `RMCode-ia-br/pontual-sistema`; Vercel `rmcode1/pontual-sistema` (região `iad1`, igual ao banco `us-east-1`); Supabase plano gratuito (sem backup automático, pausa por inatividade). Variáveis: ver `.env.example`.
 
 ## Estado
-Fase 0 (Fundação) em andamento. Atualize esta seção ao fim de cada fase.
+Fase 0 (Fundação) concluída e revisada (`docs/revisoes/fase-0.md`); aguardando o "continuar" para a Fase 1 (Cadastros). Atualize esta seção ao fim de cada fase.
 
 ## Documentos
 `docs/ESPECIFICACAO.md` · `docs/DECISOES.md` · `docs/PENDENCIAS.md` · `docs/OPERACAO.md` · `docs/APRENDIZADOS.md` · `docs/PADROES_RMCODE.md` · `docs/revisoes/`
