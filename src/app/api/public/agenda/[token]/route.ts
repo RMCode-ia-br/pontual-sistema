@@ -46,7 +46,7 @@ export async function GET(_requisicao: NextRequest, contexto: { params: Promise<
     listarEventos({ inicio: limitesDoDia(somarDias(hoje, -DIAS_PARA_TRAS)).inicio, fim: limitesDoDia(somarDias(hoje, DIAS_PARA_FRENTE)).fim }),
   ]);
 
-  return new NextResponse(calendarioDaAgenda(eventos, `Agenda — ${nome}`), {
+  return new NextResponse(calendarioDaAgenda(eventos, `Agenda — ${nome}`, { semObservacoes: true }), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'inline; filename="agenda.ics"',

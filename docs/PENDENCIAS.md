@@ -73,3 +73,20 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **`npm audit`:** 7 avisos moderados continuam, todos na cadeia do `shadcn` (ferramenta de desenvolvimento, `deepmerge`); `read-excel-file` não trouxe nenhum.
 - [ ] Atalho de teclado para "Novo" (pendência da Fase 0) segue em aberto; a busca (Ctrl+K) já cobre clientes, fornecedores, produtos e funcionários.
 - [ ] **`seed:demo` não foi executado** (o banco é compartilhado): rodar em um banco de desenvolvimento com `ALLOW_DEMO_SEED=true` para ver os painéis com volume.
+
+## Surgidas na Fase 2 (comercial)
+- [ ] **Prazo "sem retorno" (7 dias) e follow-up (3 dias)** são padrões de configuração, não dados da Pontual: o Marcelo confirma em Configurações → Empresa ("Funil e acompanhamento").
+- [ ] **Faixas de porte** (médio/grande) ficam vazias; sem elas o porte é sempre manual (R10).
+- [ ] **Horário comercial e duração da visita** usam os padrões da spec; conferir com o Marcelo (inclui sábado até 12h).
+- [ ] **Férias coletivas e feriados de Macaé** precisam estar cadastrados em Configurações → Feriados para a agenda avisar (a de dezembro/Carnaval não vêm prontas).
+- [ ] **Importar medidas da visita para a proposta:** a consulta (`medidasParaProposta`) está pronta e testada; o botão entra com o editor de propostas (Fase 3).
+- [ ] **Tipologia nas medidas-rascunho** é texto livre com sugestões; vira vínculo com `Tipologia` na Fase 3.
+- [ ] **Follow-ups de avaliação (D+2) e de fim da garantia** dependem de obra concluída (Fase 4); notificações e lembrete de visita 24 h por cron (sino) são da Fase 8 (hoje: lista no painel + botão de WhatsApp).
+- [ ] **Relatório do funil** calcula em memória (até 20.000 projetos); passar para SQL agregado e medir desempenho na Fase 7.
+- [ ] **Feed .ics público sem limite de requisições** e com a URL (token) em logs de acesso; avaliar limite por IP e janela menor na Fase 8.
+- [ ] **Compromissos REALIZADO/CANCELADO ainda são editáveis** (horário, responsável); considerar travar quando existirem perfis.
+- [ ] **`ordem` das medidas-rascunho** pode repetir sob salvamentos simultâneos (só estético; desempate por criação).
+- [ ] **Ações de consulta do formulário** (endereços do cliente, busca de projetos) exigem sessão mas não `can()` nem checam cliente na lixeira (baixo impacto: só leitura de endereços).
+- [ ] **Compromissos que atravessam a meia-noite** aparecem só no dia do início nas grades.
+- [ ] **E2E interrompido à força pode deixar sessão "idle in transaction"** no Postgres e travar a limpeza dos testes (ver APRENDIZADOS); ideal: banco de testes separado.
+- [ ] Atalho de teclado para "Novo" segue em aberto; teste real do `.xlsx` e `seed:demo` em banco de desenvolvimento (o demo foi criado e limpo uma vez no banco compartilhado, sem restos).

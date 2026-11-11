@@ -173,6 +173,16 @@ test("o cartão mostra valor e temperatura; um segundo projeto convive no funil"
   await expect(cartao(page, PROJETO)).toHaveCount(0);
 });
 
+test("tarefa criada pela ficha do projeto fica ligada a ele e volta para a aba de tarefas", async ({ page }) => {
+  await page.goto(`/projetos/${idProjeto}?aba=tarefas`);
+  await page.getByRole("link", { name: "Nova tarefa" }).click();
+  await expect(page.getByText(/Projeto: P-\d{4}-\d{4,} · E2E Janelas e portas/)).toBeVisible();
+  await page.getByLabel("O que precisa ser feito?").fill("E2E Ligar para o cliente");
+  await page.getByRole("button", { name: "Adicionar tarefa" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projetos/${idProjeto}\\?aba=tarefas`));
+  await expect(page.getByText("E2E Ligar para o cliente")).toBeVisible();
+});
+
 test("enviar à lixeira tira o projeto das listas e dá para restaurar", async ({ page }) => {
   await page.goto("/funil");
   await page.goto(`/projetos?busca=${encodeURIComponent(OUTRO)}`);

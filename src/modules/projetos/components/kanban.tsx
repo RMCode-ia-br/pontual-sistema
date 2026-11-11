@@ -30,7 +30,6 @@ const DICA_DA_COLUNA: Partial<Record<StatusProjeto, string>> = {
 
 function Coluna({ coluna, cartoes, total, valor, filtrado, aoMover }: { coluna: StatusProjeto; cartoes: CartaoDoFunil[]; total: number; valor: number; filtrado: boolean; aoMover: (id: string, para: StatusProjeto) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: coluna });
-  const fechada = coluna === "APROVADO" || coluna === "PERDIDO";
   return (
     <section
       aria-labelledby={`coluna-${coluna}`}
@@ -56,7 +55,7 @@ function Coluna({ coluna, cartoes, total, valor, filtrado, aoMover }: { coluna: 
         ) : (
           cartoes.map((c) => <CartaoArrastavel key={c.id} cartao={c} aoMover={(para) => aoMover(c.id, para)} />)
         )}
-        {fechada && total > cartoes.length ? (
+        {total > cartoes.length ? (
           <Link href={`/projetos?status=${coluna}`} className="text-primary px-1 text-center text-xs hover:underline">
             Ver todos os {total} na lista
           </Link>

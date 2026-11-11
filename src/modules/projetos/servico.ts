@@ -49,8 +49,9 @@ export async function mudarFaseDoProjeto(
   }
 
   const perdendo = para === "PERDIDO";
-  const depois = await tx.projeto.update({
-    where: { id: projeto.id },
+  // Só muda se o projeto ainda está na fase que a tela/ação leu: dois cliques ou duas abas não duplicam histórico nem tarefa.
+  const mudou = await tx.projeto.updateMany({
+    where: { id: projeto.id, status: projeto.status, deletadoEm: null },
     data: {
       status: para,
       ultimaMovimentacaoEm: agora,
@@ -60,6 +61,10 @@ export async function mudarFaseDoProjeto(
       concorrente: perdendo ? (perda!.concorrente ?? null) : null,
       atualizadoPorId: usuario.id,
     },
+  });
+  if (mudou.count === 0) throw new ErroNegocio("Este projeto mudou de fase enquanto você decidia. Atualize a página e tente de novo.");
+  const depois = await tx.projeto.findUniqueOrThrow({
+    where: { id: projeto.id },
     select: { status: true, motivoPerdaId: true, motivoPerdaDetalhe: true, concorrente: true, perdidoEm: true },
   });
 
@@ -92,6 +97,11 @@ export async function mudarFaseDoProjeto(
       ],
       skipDuplicates: true,
     });
+  }
+
+  // Projeto perdido: o acompanhamento da proposta não faz mais sentido.
+  if (perdendo) {
+    await tx.tarefa.updateMany({ where: { projetoId: projeto.id, tipo: "FOLLOW_UP_PROPOSTA", status: "ABERTA", deletadoEm: null }, data: { status: "CANCELADA", atualizadoPorId: usuario.id } });
   }
 
   const complemento = perdendo ? ` Motivo: ${nomeDoMotivo}${perda?.concorrente ? ` (${perda.concorrente})` : ""}.` : "";

@@ -340,6 +340,7 @@ model Tarefa {
 
   @@index([responsavelId, status, vencimento])
   @@index([status, vencimento])
+  @@index([projetoId, status])
 }
 
 model Notificacao {

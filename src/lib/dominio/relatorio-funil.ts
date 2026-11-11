@@ -43,10 +43,16 @@ export type ResultadoDoFunil = {
 
 const percentual = (parte: number, base: number): number | null => (base === 0 ? null : Math.round((parte / base) * 1000) / 10);
 
+/**
+ * "Chegou à etapa" = passou por ela OU por qualquer etapa posterior (o funil permite pular fases). Assim a contagem
+ * nunca aumenta de uma etapa para a seguinte e a conversão nunca passa de 100%.
+ */
 function chegouA(linha: LinhaDoFunil, etapa: StatusProjeto): boolean {
-  if (etapa === "NOVO_LEAD") return true;
-  if (etapa === "APROVADO") return linha.fases.some((f) => FASES_APROVADAS.includes(f.para)) || FASES_APROVADAS.includes(linha.status);
-  return linha.fases.some((f) => f.para === etapa) || linha.status === etapa;
+  const indice = ETAPAS_DO_FUNIL.indexOf(etapa as (typeof ETAPAS_DO_FUNIL)[number]);
+  if (indice <= 0) return true;
+  // Etapas dali em diante; "aprovado" inclui execução e concluído (todos vêm depois de qualquer etapa do funil).
+  const alcancadas = new Set<StatusProjeto>([...ETAPAS_DO_FUNIL.slice(indice), ...FASES_APROVADAS]);
+  return linha.fases.some((x) => alcancadas.has(x.para)) || alcancadas.has(linha.status);
 }
 
 export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {

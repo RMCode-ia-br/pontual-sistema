@@ -143,6 +143,28 @@ describe("follow-up automático (R11)", () => {
   });
 });
 
+describe("concorrência e perda", () => {
+  it("dois movimentos simultâneos da mesma fase: um vence, o outro é recusado, sem histórico nem tarefa em dobro", async () => {
+    const projeto = await novoProjeto("Corrida", { status: "NEGOCIACAO" });
+    const mover = () => prisma.$transaction((tx) => mudarFaseDoProjeto(tx, { usuario, projeto: { ...projeto, status: "NEGOCIACAO" }, para: "PROPOSTA_ENVIADA" }));
+    const resultados = await Promise.allSettled([mover(), mover()]);
+    expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const recusado = resultados.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect(String(recusado.reason?.message)).toMatch(/mudou de fase/);
+    expect(await prisma.historicoFaseProjeto.count({ where: { projetoId: projeto.id } })).toBe(1);
+    expect(await prisma.tarefa.count({ where: { projetoId: projeto.id } })).toBe(1);
+  });
+
+  it("perder o projeto cancela o acompanhamento da proposta", async () => {
+    const projeto = await novoProjeto("Perde follow-up");
+    await prisma.$transaction((tx) => mudarFaseDoProjeto(tx, { usuario, projeto, para: "PROPOSTA_ENVIADA" }));
+    await prisma.$transaction((tx) => mudarFaseDoProjeto(tx, { usuario, projeto: { ...projeto, status: "PROPOSTA_ENVIADA" }, para: "PERDIDO", perda: { motivoPerdaId: motivoId } }));
+    const tarefas = await prisma.tarefa.findMany({ where: { projetoId: projeto.id } });
+    expect(tarefas).toHaveLength(1);
+    expect(tarefas[0].status).toBe("CANCELADA");
+  });
+});
+
 describe("integridade", () => {
   it("o banco recusa tarefa e interação de projeto inexistente (chave estrangeira)", async () => {
     await expect(prisma.tarefa.create({ data: { titulo: `${PREFIXO} órfã`, projetoId: "nao-existe" } })).rejects.toThrow();

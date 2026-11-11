@@ -81,7 +81,7 @@ export function AssinaturaDaAgenda({ feeds }: { feeds: FeedDaAgenda[] }) {
           </DialogHeader>
 
           <p className="text-muted-foreground text-sm">
-            Quem tem o link vê a agenda da empresa (tipo, cliente, local e horário; sem valores). Desligue o link quando não precisar mais.
+            Quem tem o link vê a agenda da empresa (tipo, cliente, local e horário; sem valores e sem as observações). Desligue o link quando não precisar mais.
           </p>
 
           {novoLink ? (

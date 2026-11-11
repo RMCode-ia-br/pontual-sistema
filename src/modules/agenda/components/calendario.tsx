@@ -123,8 +123,8 @@ export function GradeMes({ data, hoje, eventos, periodos, linkDoDia, linkNovo }:
   );
 }
 
-const PRIMEIRA_HORA = 7;
-const ULTIMA_HORA = 20;
+const HORA_INICIAL_PADRAO = 7;
+const HORA_FINAL_PADRAO = 20;
 const ALTURA_DA_HORA = 56; // px
 
 /**
@@ -132,6 +132,15 @@ const ALTURA_DA_HORA = 56; // px
  * Compromissos sobrepostos dividem a largura. Cada hora vazia é um link para agendar naquele horário.
  */
 export function GradeDeHoras({ dias, hoje, eventos, periodos, linkDoDia, linkNovo }: { dias: string[]; hoje: string; eventos: EventoDaAgenda[]; periodos: PeriodoDoCalendario[]; linkDoDia: (dia: string) => string; linkNovo: (dia: string, hora: string) => string }) {
+  // A grade cobre 7h–20h e se estende quando há compromisso fora disso (agendar fora do expediente é permitido).
+  let PRIMEIRA_HORA = HORA_INICIAL_PADRAO;
+  let ULTIMA_HORA = HORA_FINAL_PADRAO;
+  for (const e of eventos) {
+    if (!dias.includes(partesLocais(new Date(e.inicio)).data)) continue;
+    PRIMEIRA_HORA = Math.min(PRIMEIRA_HORA, Math.floor(partesLocais(new Date(e.inicio)).minutos / 60));
+    const fim = partesLocais(new Date(e.fim));
+    ULTIMA_HORA = fim.data === partesLocais(new Date(e.inicio)).data ? Math.max(ULTIMA_HORA, Math.ceil(fim.minutos / 60)) : Math.max(ULTIMA_HORA, 24);
+  }
   const horas = Array.from({ length: ULTIMA_HORA - PRIMEIRA_HORA }, (_, i) => PRIMEIRA_HORA + i);
   const altura = horas.length * ALTURA_DA_HORA;
   const colunas = dias.length;

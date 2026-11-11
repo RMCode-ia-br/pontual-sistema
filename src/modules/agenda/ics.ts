@@ -8,7 +8,7 @@ import { ROTULO_STATUS_EVENTO, ROTULO_TIPO_EVENTO } from "./schemas";
  * só o necessário para ir ao compromisso (tipo, cliente, projeto, local, responsável, observações) e NUNCA
  * telefone, valores ou dados financeiros.
  */
-export function eventoParaIcs(e: EventoDaAgenda): EventoIcs {
+export function eventoParaIcs(e: EventoDaAgenda, opcoes: { semObservacoes?: boolean } = {}): EventoIcs {
   const titulo = e.titulo || `${ROTULO_TIPO_EVENTO[e.tipo]}${e.clienteNome ? ` — ${e.clienteNome}` : ""}`;
   const descricao = [
     `Tipo: ${ROTULO_TIPO_EVENTO[e.tipo]}`,
@@ -17,7 +17,7 @@ export function eventoParaIcs(e: EventoDaAgenda): EventoIcs {
     e.clienteNome ? `Cliente: ${e.clienteNome}` : null,
     e.responsavelNome ? `Responsável: ${e.responsavelNome}` : null,
     e.equipeNome ? `Equipe: ${e.equipeNome}` : null,
-    e.observacoes ? `Observações: ${e.observacoes}` : null,
+    e.observacoes && !opcoes.semObservacoes ? `Observações: ${e.observacoes}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -38,6 +38,7 @@ export function eventoParaIcs(e: EventoDaAgenda): EventoIcs {
   };
 }
 
-export function calendarioDaAgenda(eventos: EventoDaAgenda[], nome: string): string {
-  return gerarCalendarioIcs({ idProduto: "-//RM Code//Gestao - Agenda//PT-BR", nome, eventos: eventos.map(eventoParaIcs) });
+/** `semObservacoes`: o feed público não leva texto livre das observações (só a exportação autenticada leva). */
+export function calendarioDaAgenda(eventos: EventoDaAgenda[], nome: string, opcoes: { semObservacoes?: boolean } = {}): string {
+  return gerarCalendarioIcs({ idProduto: "-//RM Code//Gestao - Agenda//PT-BR", nome, eventos: eventos.map((e) => eventoParaIcs(e, opcoes)) });
 }

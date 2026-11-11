@@ -4,7 +4,8 @@
  *
  * SÓ para desenvolvimento: recusa rodar com NODE_ENV=production ou sem ALLOW_DEMO_SEED=true, para nunca
  * misturar dados inventados com os reais. Tudo que cria é identificado ("[Demo]" no nome, "DEMO-" no
- * código) e a limpeza só apaga isso. Clientes, projetos e financeiro das fases seguintes entram depois.
+ * código) e a limpeza só apaga isso. Fase 2: projetos em todas as fases do funil (com histórico, perdas com motivo e
+ * visitas na agenda). Financeiro das fases seguintes entra depois.
  */
 import { config } from "dotenv";
 
@@ -24,10 +25,20 @@ const NOMES = ["Ana", "Bruno", "Carla", "Diego", "Elisa", "Fábio", "Gisele", "H
 const SOBRENOMES = ["Almeida", "Barbosa", "Cardoso", "Domingues", "Esteves", "Ferraz", "Gouveia", "Holanda", "Ibrahim", "Junqueira"];
 const ORIGENS = ["GOOGLE", "INDICACAO_CLIENTE", "INSTAGRAM", "WHATSAPP", "SITE", "PLACA_NA_OBRA"] as const;
 
+const FASES = ["NOVO_LEAD", "VISITA_AGENDADA", "ELABORANDO_PROPOSTA", "PROPOSTA_ENVIADA", "NEGOCIACAO", "PERDIDO"] as const;
+
 async function limpar() {
   const clientes = await prisma.cliente.findMany({ where: { nome: { startsWith: "[Demo] " } }, select: { id: true } });
   const ids = clientes.map((c) => c.id);
-  await prisma.interacao.deleteMany({ where: { clienteId: { in: ids } } });
+  const projetos = (await prisma.projeto.findMany({ where: { clienteId: { in: ids } }, select: { id: true } })).map((p) => p.id);
+  await prisma.medidaRascunho.deleteMany({ where: { projetoId: { in: projetos } } });
+  await prisma.eventoAgenda.deleteMany({ where: { OR: [{ projetoId: { in: projetos } }, { clienteId: { in: ids } }] } });
+  await prisma.tarefa.deleteMany({ where: { OR: [{ projetoId: { in: projetos } }, { clienteId: { in: ids } }] } });
+  await prisma.interacao.deleteMany({ where: { OR: [{ projetoId: { in: projetos } }, { clienteId: { in: ids } }] } });
+  await prisma.historicoFaseProjeto.deleteMany({ where: { projetoId: { in: projetos } } });
+  await prisma.projeto.deleteMany({ where: { id: { in: projetos } } });
+  // Devolve o contador de códigos ao maior que sobrou (a demonstração não deixa buracos na numeração real).
+  await prisma.$executeRaw`UPDATE "ContadorSequencia" SET "valor" = coalesce((SELECT max(substring("codigo" from 8)::int) FROM "Projeto" WHERE "codigo" LIKE 'P-' || substring("chave" from 9) || '-%'), 0) WHERE "chave" LIKE 'projeto:%'`;
   await prisma.enderecoCliente.deleteMany({ where: { clienteId: { in: ids } } });
   await prisma.contatoCliente.deleteMany({ where: { clienteId: { in: ids } } });
   await prisma.cliente.updateMany({ where: { id: { in: ids } }, data: { indicadoPorId: null } });
@@ -90,7 +101,49 @@ async function criar() {
       await prisma.historicoPreco.create({ data: { produtoId: produto.id, custoNovoCentavos: centavos, origem: "MANUAL", fornecedorId: fornecedores[i % fornecedores.length].id, observacao: "Demonstração" } });
     }
   }
-  console.log("Demonstração criada: 40 clientes, 4 fornecedores e 60 produtos (todos fictícios).");
+  await criarProjetosDeDemonstracao();
+  console.log("Demonstração criada: 40 clientes, 30 projetos com visitas, 4 fornecedores e 60 produtos (todos fictícios).");
+}
+
+async function criarProjetosDeDemonstracao() {
+  const clientes = await prisma.cliente.findMany({ where: { nome: { startsWith: "[Demo] " } }, orderBy: { nome: "asc" }, take: 30, select: { id: true, origem: true } });
+  const usuario = await prisma.usuario.findFirst({ where: { ativo: true, deletadoEm: null }, select: { id: true } });
+  const motivo = await prisma.motivoPerda.findFirst({ where: { ativo: true }, select: { id: true } });
+  const ano = new Date().getFullYear();
+
+  for (const [i, cliente] of clientes.entries()) {
+    const status = FASES[i % FASES.length];
+    const dias = (i * 5) % 70;
+    const criadoEm = new Date(Date.now() - (dias + 10) * 86_400_000);
+    const movidoEm = new Date(Date.now() - dias * 86_400_000);
+    await prisma.$transaction(async (tx) => {
+      const [{ valor }] = await tx.$queryRaw<{ valor: number }[]>`INSERT INTO "ContadorSequencia" ("chave", "valor", "atualizadoEm") VALUES (${`projeto:${ano}`}, 1, now()) ON CONFLICT ("chave") DO UPDATE SET "valor" = "ContadorSequencia"."valor" + 1 RETURNING "valor"`;
+      const projeto = await tx.projeto.create({
+        data: {
+          codigo: `P-${ano}-${String(valor).padStart(4, "0")}`,
+          titulo: `[Demo] Esquadrias — obra ${i + 1}`,
+          clienteId: cliente.id,
+          responsavelId: usuario?.id,
+          status,
+          origem: cliente.origem,
+          porte: (["PEQUENO", "MEDIO", "GRANDE"] as const)[i % 3],
+          temperatura: (["FRIA", "MORNA", "QUENTE"] as const)[i % 3],
+          valorEstimadoCentavos: 500_000 + i * 137_000,
+          criadoEm,
+          ultimaMovimentacaoEm: movidoEm,
+          ...(status === "PERDIDO" && motivo ? { motivoPerdaId: motivo.id, perdidoEm: movidoEm } : {}),
+        },
+        select: { id: true },
+      });
+      const caminho = FASES.slice(0, FASES.indexOf(status) + 1);
+      await tx.historicoFaseProjeto.createMany({ data: caminho.map((para, k) => ({ projetoId: projeto.id, de: k === 0 ? null : caminho[k - 1], para, criadoEm: new Date(criadoEm.getTime() + k * 2 * 86_400_000) })) });
+      if (status !== "NOVO_LEAD") {
+        const inicio = new Date(Date.now() + ((i % 9) - 3) * 86_400_000);
+        inicio.setUTCHours(13 + (i % 4), 0, 0, 0);
+        await tx.eventoAgenda.create({ data: { tipo: "VISITA_TECNICA", inicio, fim: new Date(inicio.getTime() + 3_600_000), projetoId: projeto.id, clienteId: cliente.id, responsavelId: usuario?.id, status: inicio < new Date() ? "REALIZADO" : "AGENDADO", realizadoEm: inicio < new Date() ? inicio : null, titulo: "[Demo] Visita técnica" } });
+      }
+    });
+  }
 }
 
 (process.argv.includes("--limpar") ? limpar() : criar())

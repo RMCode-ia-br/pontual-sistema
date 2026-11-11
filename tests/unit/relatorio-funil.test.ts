@@ -37,10 +37,18 @@ describe("funil comercial: indicadores", () => {
     const por = (etapa: string) => r.conversao.find((c) => c.etapa === etapa)!;
     expect(por("NOVO_LEAD")).toMatchObject({ chegaram: 4, percentualDoTotal: 100, percentualDaAnterior: null });
     expect(por("VISITA_AGENDADA")).toMatchObject({ chegaram: 2, percentualDaAnterior: 50 });
-    // "Elaborando proposta" foi pulada (0 chegaram): não há base para a conversão, e o sistema não inventa 100%.
-    expect(por("ELABORANDO_PROPOSTA")).toMatchObject({ chegaram: 0, percentualDaAnterior: 0 });
-    expect(por("PROPOSTA_ENVIADA")).toMatchObject({ chegaram: 1, percentualDaAnterior: null, percentualDoTotal: 25 });
+    // O projeto perdido passou direto de "Visita agendada" a "Proposta enviada": contou como tendo chegado a "Elaborando".
+    expect(por("ELABORANDO_PROPOSTA")).toMatchObject({ chegaram: 1, percentualDaAnterior: 50 });
+    expect(por("PROPOSTA_ENVIADA")).toMatchObject({ chegaram: 1, percentualDaAnterior: 100, percentualDoTotal: 25 });
     expect(por("NEGOCIACAO")).toMatchObject({ chegaram: 0, percentualDaAnterior: 0 });
+  });
+
+  it("pular fases nunca faz a conversão passar de 100%: quem foi direto a uma fase conta nas anteriores", () => {
+    const r = calcularFunil([1, 2, 3].map(() => linha({ status: "ELABORANDO_PROPOSTA", fases: [{ para: "ELABORANDO_PROPOSTA", em: d("2026-11-02") }] })));
+    const chegaram = r.conversao.map((c) => c.chegaram);
+    expect(chegaram).toEqual([3, 3, 3, 0, 0, 0]);
+    for (const c of r.conversao) expect(c.percentualDaAnterior === null || c.percentualDaAnterior <= 100).toBe(true);
+    expect(r.porOrigem[0].comVisita).toBe(3);
   });
 
   it("origem: leads, visitas, propostas, aprovados e perdidos por canal, do maior para o menor", () => {

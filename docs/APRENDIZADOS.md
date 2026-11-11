@@ -42,3 +42,13 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **Playwright:** rótulo com asterisco ("Nome *") não casa com `exact: true`; `getByLabel` também casa `aria-label` de botões e de `<form>`; campo `type=email` barra o envio no navegador (use `a@b` para testar a validação do servidor); modo `serial` pula o resto do arquivo depois da primeira falha.
 - **Ler `.xlsx` no navegador** exige a entrada `read-excel-file/universal`: a versão com Web Worker esbarra na CSP (`worker-src` cai em `script-src`).
 - **Heredocs longos no Bash com muitos arquivos** podem falhar no parse (`unexpected EOF`) e não criar nada: preferir a ferramenta Write por arquivo; `sed -i` com barra invertida na substituição perde as barras (usar Edit).
+
+## Fase 2 (2026-11-13) — funil, agenda e .ics
+- **`DIRECT_URL` em Session pooler** passou a funcionar (a RM Code corrigiu o `.env.local`): `prisma migrate deploy` direto. O SQL continua vindo de `prisma migrate diff --from-schema <schema anterior salvo do Git> --to-schema prisma/schema.prisma --script`; `prisma format` reescreve o alinhamento do schema inteiro (diff grande e inofensivo).
+- **Servidor de teste morto no meio de uma transação** (Playwright interrompido) deixa sessão `idle in transaction` no Postgres com travas em `TentativaLogin`: o `DELETE` da limpeza dos E2E estoura "statement timeout". Se acontecer, a sessão some sozinha ou precisa ser encerrada por quem administra o banco. Nunca interromper o Playwright à força.
+- **dnd-kit + Playwright:** o mouse do Playwright solta o cartão rápido demais; dar ~300 ms antes de `mouse.up()` e uns instantes depois. Origem e destino precisam estar visíveis (coordenadas fora da janela não funcionam).
+- **Nome acessível de região** com `aria-labelledby` inclui o contador que está no título ("Novo contato 1 projetos"): localizar com regex `^Novo contato`.
+- **Screenshot `fullPage`** de página com barra inferior `fixed` repete a barra no meio da imagem (artefato; não é defeito de layout). `waitForLoadState("networkidle")` evita capturar o esqueleto de carregamento.
+- **Valores de `Prisma.groupBy` com `where` aninhado** não aceitam dois filtros diferentes na mesma relação em `_count`; contar à parte.
+- **Rota pública com token:** buscar pelo **hash** (índice único) em vez de comparar o texto secreto elimina a comparação sensível a tempo; responder o mesmo 404 para malformado, inexistente, revogado e usuário inativo.
+- **`.ics`:** dobrar linha em 75 **octetos** (não caracteres), escapar `\ ; ,` e quebras de linha (inclusive `\r`: impede injetar propriedades), `SEQUENCE` crescente (segundos desde 1970) para o calendário atualizar em vez de duplicar; cancelado sai como `STATUS:CANCELLED`.

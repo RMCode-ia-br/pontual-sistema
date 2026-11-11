@@ -161,9 +161,13 @@ export async function editarEvento(_anterior: ResultadoAcao<{ id: string }> | nu
 
   const lido = eventoEditadoSchema.safeParse(formDataParaObjeto(formData));
   if (!lido.success) return falhaDeValidacao(lido.error);
-  const { id, ...dados } = lido.data;
+  const { id, ...dadosDoFormulario } = lido.data;
 
   return executar("agenda.editar", async () => {
+    // O "Local" vem preenchido pelo endereço anterior: se a pessoa só trocou o endereço, o local acompanha a troca.
+    const anterior = await prisma.eventoAgenda.findFirst({ where: { id, deletadoEm: null }, select: { local: true, enderecoId: true } });
+    const localAutomatico = !!anterior && dadosDoFormulario.local === (anterior.local ?? undefined) && dadosDoFormulario.enderecoId !== (anterior.enderecoId ?? undefined);
+    const dados = localAutomatico ? { ...dadosDoFormulario, local: undefined } : dadosDoFormulario;
     const { inicio, fim, projeto, clienteId, local } = await resolver(dados);
     await exigirConfirmacaoDeAvisos(dados, inicio, fim, id);
     const ip = extrairIp(await headers());

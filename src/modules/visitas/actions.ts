@@ -9,6 +9,7 @@ import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissoes";
+import { campoIdOpcional } from "@/lib/validadores/campos";
 
 import { dadosDaObraSchema, idSchema, medidaSchema } from "./schemas";
 
@@ -94,7 +95,8 @@ export async function salvarDadosDaObra(_anterior: ResultadoAcao | null, formDat
   const lido = dadosDaObraSchema.safeParse(formDataParaObjeto(formData));
   if (!lido.success) return falhaDeValidacao(lido.error);
   const d = lido.data;
-  const eventoId = String(formData.get("eventoId") ?? "");
+  const eventoIdLido = campoIdOpcional.safeParse(String(formData.get("eventoId") ?? ""));
+  const eventoId = eventoIdLido.success ? (eventoIdLido.data ?? "") : "";
 
   return executar("visitas.obra.salvar", async () => {
     const ip = extrairIp(await headers());

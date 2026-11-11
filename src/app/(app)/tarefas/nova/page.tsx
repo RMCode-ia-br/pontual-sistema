@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Nova tarefa" };
 export default async function PaginaNovaTarefa({ searchParams }: { searchParams: Promise<{ projeto?: string }> }) {
   const usuario = await exigirSessao();
   const { projeto: projetoId } = await searchParams;
-  const projeto = projetoId && /^[w-]{1,64}$/.test(projetoId) ? await prisma.projeto.findFirst({ where: { id: projetoId, deletadoEm: null }, select: { id: true, codigo: true, titulo: true } }) : null;
+  const projeto = projetoId && /^[\w-]{1,64}$/.test(projetoId) ? await prisma.projeto.findFirst({ where: { id: projetoId, deletadoEm: null }, select: { id: true, codigo: true, titulo: true } }) : null;
   const usuarios = await listarUsuariosAtivos();
 
   return (

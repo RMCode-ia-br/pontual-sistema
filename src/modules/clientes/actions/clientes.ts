@@ -189,6 +189,11 @@ export async function excluirClientes(idsBrutos: string[]): Promise<ResultadoAca
     const ip = extrairIp(await headers());
     const removidos = await prisma.$transaction(async (tx) => {
       const alvos = await tx.cliente.findMany({ where: { id: { in: ids.data }, deletadoEm: null }, select: campos });
+      // Projetos ativos e visitas futuras ficariam órfãos no funil e na agenda: tratar o projeto antes.
+      const comProjeto = await tx.projeto.findMany({ where: { clienteId: { in: alvos.map((a) => a.id) }, deletadoEm: null }, select: { cliente: { select: { nome: true } } }, take: 3 });
+      if (comProjeto.length > 0) {
+        throw new ErroNegocio(`Não dá para enviar à lixeira: ${comProjeto[0].cliente.nome} tem projetos ativos. Envie os projetos para a lixeira ou marque-os como perdidos primeiro.`);
+      }
       for (const antes of alvos) {
         await tx.cliente.update({ where: { id: antes.id }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
         await registrarAuditoria(tx, { usuario: sessao, entidade: "Cliente", entidadeId: antes.id, acao: "EXCLUIR", antes, ip });

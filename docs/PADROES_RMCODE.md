@@ -60,3 +60,14 @@ Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que 
 | Lixeira | `src/modules/lixeira` | listar e restaurar conferindo unicidade | Prisma |
 
 **Reaproveitar:** copie `src/lib/{csv,dominio,listas,validadores,formatadores}`, `src/components/lista` e `src/components/{confirmar-acao,acoes-do-cadastro,campo-mascarado}.tsx`; recrie `campos.ts`/`linhas.ts` da importação com os campos do projeto novo. **Da Pontual (não reutilizável):** tipos de cadastro, regras de reajuste por fornecedor, categorias e unidades.
+
+## Blocos da Fase 2 (comercial) — reutilizáveis
+| Bloco | Onde | O que entrega | Depende de |
+| --- | --- | --- | --- |
+| iCalendar | `src/lib/ics/index.ts` | gerador RFC 5545 (UTC, escape, dobra em octetos, alarme, STATUS/SEQUENCE) | nenhuma |
+| Tokens secretos | `src/lib/tokens/index.ts` | token de 256 bits, hash SHA-256, validação de formato (feed da agenda; chaves de API na Fase 8) | `node:crypto` |
+| Calendário e agenda (puro) | `src/lib/dominio/{calendario,agenda}.ts` | grade de mês/semana, colunas de eventos sobrepostos, conflito, expediente, horários livres, feriados/férias em "dia local" | `date-fns-tz` |
+| Contador sequencial | `ContadorSequencia` + `proximoCodigoDoProjeto` (`src/modules/projetos/servico.ts`) | número por ano sem repetição sob concorrência (UPSERT atômico na transação) | Prisma |
+| Kanban | `src/modules/projetos/components/{kanban,cartao-projeto}.tsx` | dnd-kit com mouse/toque longo, menu "Mover para…" acessível, movimento otimista com reversão | `@dnd-kit/core` |
+| Linha do tempo genérica | `src/modules/clientes/components/linha-do-tempo.tsx` | vínculo e ações por props (cliente ou projeto) | Prisma (`Interacao`) |
+**Da Pontual (não reutilizável):** fases do funil, motivos de perda, tipos de compromisso, textos dos modelos de WhatsApp.
