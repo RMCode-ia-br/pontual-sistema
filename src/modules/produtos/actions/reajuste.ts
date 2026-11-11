@@ -4,13 +4,11 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
 import { ErroNegocio, executar, falha, falhaDeValidacao, sucesso, type ResultadoAcao } from "@/lib/acoes";
-import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
-import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissoes";
 
-import { ErroDePrevia, montarPrevia, type Previa } from "../reajuste";
+import { aplicarReajusteNoBanco, ErroDePrevia, montarPrevia, type Previa } from "../reajuste";
 import { aplicarReajusteSchema, reajusteSchema } from "../schemas";
 
 /** Quantos itens a prévia leva para a tela (o resumo e a assinatura sempre valem para TODOS). */
@@ -53,77 +51,10 @@ export async function aplicarReajuste(entrada: unknown): Promise<ResultadoAcao<{
   const { assinatura, ...pedido } = dados.data;
 
   return executar("produtos.reajuste.aplicar", async () => {
-    let previa: Previa;
-    try {
-      previa = await montarPrevia(pedido);
-    } catch (erro) {
-      if (erro instanceof ErroDePrevia) throw new ErroNegocio(erro.message);
-      throw erro;
-    }
-    if (previa.assinatura !== assinatura) {
-      throw new ErroNegocio("Os produtos ou os custos mudaram desde a prévia. Veja a prévia de novo antes de aplicar.");
-    }
-    const alvos = previa.itens.filter((i) => i.custoNovoCentavos !== null && i.custoAtualCentavos !== null);
-    if (alvos.length === 0) throw new ErroNegocio("Nenhum produto seria reajustado.");
-
     const ip = extrairIp(await headers());
-    const observacao = `${previa.descricaoDaRegra} · ${previa.escopoRotulo}`;
-    const ids = alvos.map((i) => i.id);
-    const antes = alvos.map((i) => i.custoAtualCentavos as number);
-    const novos = alvos.map((i) => i.custoNovoCentavos as number);
-
-    await prisma.$transaction(
-      async (tx) => {
-        // Uma instrução só, com conferência do custo anterior: se alguém mexeu num produto entre a prévia e
-        // agora, a contagem não bate e a transação inteira volta atrás.
-        const alterados = await tx.$executeRaw`
-          UPDATE "Produto" AS p
-             SET "custoUnitarioCentavos" = v.novo,
-                 "custoAtualizadoEm" = now(),
-                 "atualizadoPorId" = ${sessao.id},
-                 "atualizadoEm" = now()
-            FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${antes}::int[]) AS antes, unnest(${novos}::int[]) AS novo) AS v
-           WHERE p.id = v.id AND p."custoUnitarioCentavos" = v.antes AND p."deletadoEm" IS NULL`;
-        if (alterados !== alvos.length) throw new ErroNegocio("Algum produto foi alterado enquanto o reajuste era aplicado. Nada foi gravado; veja a prévia de novo.");
-
-        await tx.historicoPreco.createMany({
-          data: alvos.map((i) => ({
-            produtoId: i.id,
-            custoAnteriorCentavos: i.custoAtualCentavos,
-            custoNovoCentavos: i.custoNovoCentavos as number,
-            origem: "REAJUSTE_LOTE" as const,
-            fornecedorId: i.fornecedorId,
-            usuarioId: sessao.id,
-            observacao,
-            criadoPorId: sessao.id,
-            atualizadoPorId: sessao.id,
-          })),
-        });
-
-        await registrarAuditoria(tx, {
-          usuario: sessao,
-          entidade: "Produto",
-          entidadeId: "reajuste-lote",
-          acao: "REAJUSTE_LOTE",
-          depois: {
-            escopo: pedido.escopo,
-            alvoId: pedido.alvoId,
-            regra: previa.descricaoDaRegra,
-            descricao: previa.escopoRotulo,
-            produtos: alvos.length,
-            ignorados: previa.ignorados,
-            somaAntesCentavos: previa.somaAntesCentavos,
-            somaDepoisCentavos: previa.somaDepoisCentavos,
-            produtoIds: ids.slice(0, 500),
-          },
-          ip,
-        });
-      },
-      { timeout: 30_000, maxWait: 10_000 },
-    );
-
+    const r = await aplicarReajusteNoBanco({ usuario: { id: sessao.id, nome: sessao.nome }, pedido, assinatura, ip });
     revalidatePath("/produtos");
     revalidatePath("/", "layout");
-    return sucesso({ afetados: alvos.length }, `${alvos.length} ${alvos.length === 1 ? "produto reajustado" : "produtos reajustados"} (${previa.descricaoDaRegra}).`);
+    return sucesso({ afetados: r.afetados }, `${r.afetados} ${r.afetados === 1 ? "produto reajustado" : "produtos reajustados"} (${r.descricaoDaRegra}).`);
   });
 }

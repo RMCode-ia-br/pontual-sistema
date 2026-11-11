@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { lerCsv } from "@/lib/csv/ler";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
+import { registrarInteracao } from "@/modules/interacoes/registrar";
 import { sugerirMapeamento } from "@/lib/dominio/mapeamento";
 import { analisarImportacao, type ModoDuplicadas, type PedidoDeImportacao } from "@/modules/importacao/analisar";
 import { aplicarImportacao, reverterLote } from "@/modules/importacao/aplicar";
@@ -132,10 +133,11 @@ describe("importar 300 produtos de exemplo (critério de aceite da Fase 1)", () 
     expect((await prisma.produto.findFirstOrThrow({ where: { codigo: `${PREFIXO}0003` } })).custoUnitarioCentavos).toBe(66600);
   });
 
-  it("desfazer o lote principal manda os 300 produtos para a lixeira e uma segunda vez é recusada", async () => {
+  it("desfazer o lote principal manda para a lixeira o que ficou como estava; o que foi atualizado depois fica e é contado", async () => {
     const r = await reverterLote({ usuario: USUARIO, loteId });
-    expect(r).toMatchObject({ removidos: 300, restaurados: 0 });
-    expect(await contarProdutos()).toBe(0);
+    // Os produtos 0001, 0002 e 0003 foram atualizados por outros lotes depois: não saem.
+    expect(r).toMatchObject({ removidos: 297, naoRemovidos: 3, restaurados: 0 });
+    expect(await contarProdutos()).toBe(3);
     // Nada foi apagado de verdade: o histórico de preço continua lá.
     expect(await prisma.produto.count({ where: { codigo: { startsWith: PREFIXO } } })).toBe(300);
     expect((await prisma.loteImportacao.findUniqueOrThrow({ where: { id: loteId } })).status).toBe("REVERTIDO");
@@ -144,7 +146,7 @@ describe("importar 300 produtos de exemplo (critério de aceite da Fase 1)", () 
 
   it("depois de desfeita, a mesma planilha pode ser importada de novo (os códigos ficaram livres)", async () => {
     const analise = await analisarImportacao(pedidoDeCsv("PRODUTOS", csv));
-    expect(analise.totais.novas).toBe(300);
+    expect(analise.totais.novas).toBe(297); // os 3 que ficaram continuam cadastrados (repetidos)
   });
 });
 
@@ -168,9 +170,12 @@ describe("importar clientes e fornecedores", () => {
     expect(arq).toMatchObject({ arquiteto: true, clienteFinal: false, origem: "INDICACAO_CLIENTE", telefone: "+5522977772222", loteImportacaoId: r.loteId });
     expect(arq.interacoes[0]?.texto).toMatch(/importação/);
 
+    // Alguém anota uma ligação no cliente importado: desfazer a importação não pode mandá-lo para a lixeira.
+    await registrarInteracao(prisma, { tipo: "LIGACAO", texto: "Liguei e pediu proposta.", clienteId: arq.id });
     const desfeito = await reverterLote({ usuario: USUARIO, loteId: r.loteId });
-    expect(desfeito.removidos).toBe(2);
-    expect(await prisma.cliente.count({ where: { nome: { startsWith: "Int Imp " }, deletadoEm: null } })).toBe(1); // só o que já existia
+    expect(desfeito).toMatchObject({ removidos: 1, naoRemovidos: 1 });
+    expect((await prisma.cliente.findUniqueOrThrow({ where: { id: arq.id } })).deletadoEm).toBeNull();
+    expect(await prisma.cliente.count({ where: { nome: { startsWith: "Int Imp " }, deletadoEm: null } })).toBe(2); // o que já existia + o que ganhou anotação
     await comConexao((c) => c.query(`DELETE FROM "Cliente" WHERE nome = 'Int Imp Já existe'`));
   });
 

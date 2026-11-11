@@ -45,7 +45,7 @@ Repo `RMCode-ia-br/pontual-sistema`; Vercel `rmcode1/pontual-sistema` (região `
 - **Migrações e seed saindo de rede IPv4:** `DIRECT_URL` precisa ser o **Session pooler** (porta 5432), não a conexão direta `db.<ref>.supabase.co` (só IPv6; não conecta daqui). `DATABASE_URL` ideal: Transaction pooler (6543, `?pgbouncer=true`). Ver `docs/DECISOES.md` (26).
 
 ## Estado
-Fase 0 (Fundação) concluída e revisada (`docs/revisoes/fase-0.md`); aguardando o "continuar" para a Fase 1 (Cadastros). Banco migrado para São Paulo em 2026-11-11 (migrações e RLS aplicadas, seed e bucket criados). Atualize esta seção ao fim de cada fase.
+Fases 0 (Fundação) e 1 (Cadastros) concluídas e revisadas (`docs/revisoes/fase-0.md` e `fase-1.md`); aguardando o "continuar" para a Fase 2 (Comercial: funil e agenda). A Fase 1 entregou clientes/parceiros, fornecedores, funcionários e equipes, produtos com histórico de preço e reajuste em lote, importação CSV/XLSX reversível, busca global, lixeira e os números de cadastros no painel. Migrações aplicadas no banco de São Paulo (`20261112000000_cadastros` e `20261112120000_unicidade_cnpj_cpf`). Atenção ao editar: Client Components nunca importam valores de `@/lib/acoes` (traz o Prisma); toda tabela nova precisa de RLS na migração. Atualize esta seção ao fim de cada fase.
 
 ## Documentos
 `docs/ESPECIFICACAO.md` · `docs/DECISOES.md` · `docs/PENDENCIAS.md` · `docs/OPERACAO.md` · `docs/APRENDIZADOS.md` · `docs/PADROES_RMCODE.md` · `docs/revisoes/`

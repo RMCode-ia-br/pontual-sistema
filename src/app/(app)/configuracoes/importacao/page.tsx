@@ -8,6 +8,9 @@ import { ImportacoesAnteriores } from "@/modules/importacao/components/importaco
 
 export const metadata: Metadata = { title: "Importação" };
 
+/** Importar/desfazer milhares de linhas leva mais que o padrão da hospedagem (as Server Actions herdam o limite desta página). */
+export const maxDuration = 60;
+
 export default async function PaginaImportacao() {
   await exigirSessao();
   const lotes = await listarLotes();

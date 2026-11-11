@@ -50,6 +50,7 @@ export function FormProduto({ produto, opcoes }: Props) {
   return (
     <form onSubmit={aoEnviar} onChange={() => setSujo(true)} className="grid gap-5">
       {produto ? <input type="hidden" name="id" value={produto.id} /> : null}
+      {produto ? <input type="hidden" name="custoOriginal" value={produto.custoUnitarioCentavos ?? ""} /> : null}
 
       <section aria-labelledby="sec-produto" className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
         <h2 id="sec-produto" className="font-medium sm:col-span-2">

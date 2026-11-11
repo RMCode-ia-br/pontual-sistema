@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
-import { ErroDePrevia, montarPrevia } from "@/modules/produtos/reajuste";
+import { aplicarReajusteNoBanco, ErroDePrevia, montarPrevia } from "@/modules/produtos/reajuste";
 
 import { comConexao } from "./banco-teste";
 
@@ -13,6 +13,7 @@ async function limpar() {
     await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (SELECT id FROM "Produto" WHERE codigo LIKE $1)`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Produto" WHERE codigo LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Fornecedor" WHERE "razaoSocial" LIKE 'Int Reajuste%'`);
+    await c.query(`DELETE FROM "LogAuditoria" WHERE "usuarioId" = 'int-reajuste-id'`);
   });
 }
 
@@ -118,5 +119,43 @@ describe("prévia do reajuste em lote (nada é gravado)", () => {
     await expect(montarPrevia(pedido({ valor: "0" }))).rejects.toThrow(/zero/);
     await expect(montarPrevia(pedido({ alvoId: "nao-existe" }))).rejects.toThrow(/fornecedor/i);
     await expect(montarPrevia(pedido({ escopo: "CATEGORIA", alvoId: "nao-existe" }))).rejects.toThrow(/categoria/i);
+  });
+});
+
+describe("aplicar o reajuste em lote", () => {
+  const usuario = { id: "int-reajuste-id", nome: "Reajuste de Integração" };
+
+  it("assinatura velha (um custo mudou depois da prévia) é recusada e nada é gravado", async () => {
+    const previa = await montarPrevia(pedido());
+    await prisma.produto.update({ where: { id: ids.A }, data: { custoUnitarioCentavos: 10001 } });
+    await expect(aplicarReajusteNoBanco({ usuario, pedido: pedido(), assinatura: previa.assinatura })).rejects.toThrow(/mudaram desde a prévia/);
+    expect((await prisma.produto.findUniqueOrThrow({ where: { id: ids.B } })).custoUnitarioCentavos).toBe(5);
+    expect(await prisma.historicoPreco.count({ where: { produtoId: { in: [ids.A, ids.B] } } })).toBe(0);
+    await prisma.produto.update({ where: { id: ids.A }, data: { custoUnitarioCentavos: 10000 } });
+  });
+
+  it("aplica: custos novos, um histórico por produto (origem lote, com o fornecedor) e auditoria do lote", async () => {
+    const previa = await montarPrevia(pedido());
+    const r = await aplicarReajusteNoBanco({ usuario, pedido: pedido(), assinatura: previa.assinatura });
+    expect(r).toMatchObject({ afetados: 2, descricaoDaRegra: "+10%" });
+    const a = await prisma.produto.findUniqueOrThrow({ where: { id: ids.A } });
+    const b = await prisma.produto.findUniqueOrThrow({ where: { id: ids.B } });
+    const sem = await prisma.produto.findUniqueOrThrow({ where: { id: ids.SEM } });
+    expect([a.custoUnitarioCentavos, b.custoUnitarioCentavos, sem.custoUnitarioCentavos]).toEqual([11000, 6, null]);
+    expect(a.custoAtualizadoEm).not.toBeNull();
+    const hist = await prisma.historicoPreco.findMany({ where: { produtoId: ids.A } });
+    expect(hist).toHaveLength(1);
+    expect(hist[0]).toMatchObject({ custoAnteriorCentavos: 10000, custoNovoCentavos: 11000, origem: "REAJUSTE_LOTE", fornecedorId, usuarioId: usuario.id });
+    expect(hist[0].observacao).toContain("+10%");
+    // O produto de outro fornecedor e o inativo não foram tocados.
+    expect((await prisma.produto.findUniqueOrThrow({ where: { id: ids.OUTRO } })).custoUnitarioCentavos).toBe(40000);
+    expect((await prisma.produto.findUniqueOrThrow({ where: { id: ids.OFF } })).custoUnitarioCentavos).toBe(20000);
+    expect(await prisma.logAuditoria.count({ where: { usuarioId: usuario.id, acao: "REAJUSTE_LOTE" } })).toBe(1);
+  });
+
+  it("aplicar duas vezes com a mesma prévia: a segunda é recusada (os custos já mudaram)", async () => {
+    const velha = await montarPrevia(pedido({ valor: "5" })); // prévia calculada sobre os custos atuais
+    await aplicarReajusteNoBanco({ usuario, pedido: pedido({ valor: "5" }), assinatura: velha.assinatura });
+    await expect(aplicarReajusteNoBanco({ usuario, pedido: pedido({ valor: "5" }), assinatura: velha.assinatura })).rejects.toThrow(/mudaram desde a prévia/);
   });
 });

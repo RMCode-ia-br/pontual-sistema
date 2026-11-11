@@ -154,7 +154,20 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
         const antes = await tx.produto.findFirst({ where: { id, deletadoEm: null }, select: campos });
         if (!antes) throw new ErroNegocio("Produto não encontrado.");
 
-        const novoCusto = v.custo ?? null;
+        // O formulário traz o custo que mostrava ao abrir. Se a pessoa não mexeu no campo, o custo do banco
+        // vale (um reajuste em lote aplicado no meio-tempo não pode ser desfeito por um formulário velho).
+        const original = v.custoOriginal === undefined || v.custoOriginal === "" ? null : Number(v.custoOriginal);
+        const digitado = v.custo ?? null;
+        const pessoaMexeuNoCusto = v.custoOriginal === undefined ? digitado !== antes.custoUnitarioCentavos : digitado !== original;
+        if (pessoaMexeuNoCusto) {
+          if (v.custoOriginal !== undefined && original !== antes.custoUnitarioCentavos) {
+            throw new ErroNegocio("O custo deste produto foi alterado por outra pessoa enquanto você editava. Recarregue a página e confira o valor.", { custo: "Mudou enquanto você editava. Recarregue a página." });
+          }
+          if (digitado === null && antes.custoUnitarioCentavos !== null) {
+            throw new ErroNegocio("Um custo já informado não pode ser apagado (o histórico de preço perderia o rastro). Informe o valor correto.", { custo: "Informe o valor correto; não dá para apagar." });
+          }
+        }
+        const novoCusto = pessoaMexeuNoCusto ? digitado : antes.custoUnitarioCentavos;
         const custoMudou = novoCusto !== antes.custoUnitarioCentavos;
         const depois = await tx.produto.update({
           where: { id },
@@ -167,8 +180,7 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
           },
           select: campos,
         });
-        // Toda mudança de custo (R13) grava o histórico NA MESMA transação. Apagar o custo não tem como
-        // entrar no histórico (o valor novo é obrigatório lá), então esse caso fica só na auditoria.
+        // Toda mudança de custo (R13) grava o histórico NA MESMA transação.
         if (custoMudou && novoCusto !== null) {
           await tx.historicoPreco.create({
             data: {

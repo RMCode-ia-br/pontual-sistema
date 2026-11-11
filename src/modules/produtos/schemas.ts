@@ -49,6 +49,8 @@ const produtoBase = z.object({
   estoqueMinimo: campoDecimalOpcional("Estoque mínimo", 1_000_000, 3),
   localizacao: campoTextoOpcional(120),
   observacoes: campoTextoOpcional(4000),
+  /** Custo (em centavos) que o formulário mostrava ao abrir. Serve para detectar se o custo mudou no banco enquanto se editava. */
+  custoOriginal: z.string().trim().max(12).optional(),
 });
 
 export const produtoSchema = produtoBase;

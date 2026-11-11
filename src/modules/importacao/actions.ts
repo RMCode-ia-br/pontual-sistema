@@ -125,6 +125,7 @@ export async function desfazerImportacao(loteId: string): Promise<ResultadoAcao<
     revalidatePath("/", "layout");
     const partes = [`${r.removidos} ${r.removidos === 1 ? "registro enviado" : "registros enviados"} para a lixeira`];
     if (r.restaurados > 0) partes.push(`${r.restaurados} ${r.restaurados === 1 ? "restaurado" : "restaurados"} ao valor anterior`);
+    if (r.naoRemovidos > 0) partes.push(`${r.naoRemovidos} ${r.naoRemovidos === 1 ? "ficou" : "ficaram"} porque já foram alterados ou usados depois`);
     if (r.naoRestaurados > 0) partes.push(`${r.naoRestaurados} não restaurados porque já foram alterados depois`);
     return sucesso(r, `Importação desfeita: ${partes.join("; ")}.`);
   });

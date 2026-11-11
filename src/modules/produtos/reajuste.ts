@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { ErroNegocio } from "@/lib/acoes";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/db";
 import { calcularReajuste, descreverRegra, validarRegra, type RegraReajuste } from "@/lib/dominio/reajuste";
 
@@ -99,4 +101,83 @@ export async function montarPrevia(entrada: EntradaDeReajuste): Promise<Previa> 
     somaDepoisCentavos: aplicaveis.reduce((s, i) => s + (i.custoNovoCentavos ?? 0), 0),
     assinatura,
   };
+}
+
+/**
+ * Aplica o reajuste (núcleo testável, sem sessão): recalcula, confere a assinatura da prévia e grava tudo numa
+ * transação: custo (um UPDATE que confere o custo anterior), histórico por produto e auditoria do lote.
+ */
+export async function aplicarReajusteNoBanco(entrada: {
+  usuario: { id: string; nome: string };
+  pedido: EntradaDeReajuste;
+  assinatura: string;
+  ip?: string | null;
+}): Promise<{ afetados: number; descricaoDaRegra: string }> {
+  const { usuario, pedido, assinatura, ip } = entrada;
+  let previa: Previa;
+  try {
+    previa = await montarPrevia(pedido);
+  } catch (erro) {
+    if (erro instanceof ErroDePrevia) throw new ErroNegocio(erro.message);
+    throw erro;
+  }
+  if (previa.assinatura !== assinatura) throw new ErroNegocio("Os produtos ou os custos mudaram desde a prévia. Veja a prévia de novo antes de aplicar.");
+  const alvos = previa.itens.filter((i) => i.custoNovoCentavos !== null && i.custoAtualCentavos !== null);
+  if (alvos.length === 0) throw new ErroNegocio("Nenhum produto seria reajustado.");
+
+  const observacao = `${previa.descricaoDaRegra} · ${previa.escopoRotulo}`;
+  const ids = alvos.map((i) => i.id);
+  const antes = alvos.map((i) => i.custoAtualCentavos as number);
+  const novos = alvos.map((i) => i.custoNovoCentavos as number);
+
+  await prisma.$transaction(
+    async (tx) => {
+      // Uma instrução só, com conferência do custo anterior: se alguém mexeu num produto entre a prévia e
+      // agora, a contagem não bate e a transação inteira volta atrás.
+      const alterados = await tx.$executeRaw`
+        UPDATE "Produto" AS p
+           SET "custoUnitarioCentavos" = v.novo,
+               "custoAtualizadoEm" = now(),
+               "atualizadoPorId" = ${usuario.id},
+               "atualizadoEm" = now()
+          FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${antes}::int[]) AS antes, unnest(${novos}::int[]) AS novo) AS v
+         WHERE p.id = v.id AND p."custoUnitarioCentavos" = v.antes AND p."deletadoEm" IS NULL`;
+      if (alterados !== alvos.length) throw new ErroNegocio("Algum produto foi alterado enquanto o reajuste era aplicado. Nada foi gravado; veja a prévia de novo.");
+
+      await tx.historicoPreco.createMany({
+        data: alvos.map((i) => ({
+          produtoId: i.id,
+          custoAnteriorCentavos: i.custoAtualCentavos,
+          custoNovoCentavos: i.custoNovoCentavos as number,
+          origem: "REAJUSTE_LOTE" as const,
+          fornecedorId: i.fornecedorId,
+          usuarioId: usuario.id,
+          observacao,
+          criadoPorId: usuario.id,
+          atualizadoPorId: usuario.id,
+        })),
+      });
+
+      await registrarAuditoria(tx, {
+        usuario,
+        entidade: "Produto",
+        entidadeId: "reajuste-lote",
+        acao: "REAJUSTE_LOTE",
+        depois: {
+          escopo: pedido.escopo,
+          alvoId: pedido.alvoId,
+          regra: previa.descricaoDaRegra,
+          descricao: previa.escopoRotulo,
+          produtos: alvos.length,
+          ignorados: previa.ignorados,
+          somaAntesCentavos: previa.somaAntesCentavos,
+          somaDepoisCentavos: previa.somaDepoisCentavos,
+          produtoIds: ids.slice(0, 500),
+        },
+        ip,
+      });
+    },
+    { timeout: 30_000, maxWait: 10_000 },
+  );
+  return { afetados: alvos.length, descricaoDaRegra: previa.descricaoDaRegra };
 }

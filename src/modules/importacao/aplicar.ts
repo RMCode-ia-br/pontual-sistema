@@ -154,10 +154,15 @@ export async function aplicarImportacao(entrada: { usuario: Usuario; pedido: Ped
         itens.push(...registros.map((r) => ({ entidadeId: r.id, acao: "CRIADO" as const })));
 
         // Atualizações de produtos que já existem (modo "atualizar"): cada uma guarda o antes e o depois.
+        // Os produtos vêm numa consulta só e o histórico de preço é gravado em lote (não uma ida ao banco por linha).
+        const existentes = new Map(
+          (await tx.produto.findMany({ where: { id: { in: atualizar.flatMap((l) => (l.idExistente ? [l.idExistente] : [])) }, deletadoEm: null } })).map((p) => [p.id, p]),
+        );
+        const historicos: Prisma.HistoricoPrecoCreateManyInput[] = [];
         for (const l of atualizar) {
           if (!l.idExistente) continue;
           const patch = montarPatch(l.dados as ProdutoImportado, new Set(l.presentes));
-          const atual = await tx.produto.findFirst({ where: { id: l.idExistente, deletadoEm: null } });
+          const atual = existentes.get(l.idExistente);
           if (!atual) continue;
           const antes: Record<string, unknown> = {};
           const depois: Record<string, unknown> = {};
@@ -189,22 +194,21 @@ export async function aplicarImportacao(entrada: { usuario: Usuario; pedido: Ped
             data: { ...(patch as Prisma.ProdutoUncheckedUpdateInput), ...(custoMudou ? { custoAtualizadoEm: new Date() } : {}), atualizadoPorId: usuario.id, loteImportacaoId: lote.id },
           });
           if (custoMudou && patch.custoUnitarioCentavos !== null && patch.custoUnitarioCentavos !== undefined) {
-            await tx.historicoPreco.create({
-              data: {
-                produtoId: atual.id,
-                custoAnteriorCentavos: atual.custoUnitarioCentavos,
-                custoNovoCentavos: patch.custoUnitarioCentavos,
-                origem: "IMPORTACAO",
-                fornecedorId: patch.fornecedorPrincipalId ?? atual.fornecedorPrincipalId,
-                usuarioId: usuario.id,
-                observacao: "Atualização por importação",
-                ...meta,
-              },
+            historicos.push({
+              produtoId: atual.id,
+              custoAnteriorCentavos: atual.custoUnitarioCentavos,
+              custoNovoCentavos: patch.custoUnitarioCentavos,
+              origem: "IMPORTACAO",
+              fornecedorId: patch.fornecedorPrincipalId ?? atual.fornecedorPrincipalId,
+              usuarioId: usuario.id,
+              observacao: "Atualização por importação",
+              ...meta,
             });
           }
           itens.push({ entidadeId: atual.id, acao: "ATUALIZADO", antes: { antes, depois } as Prisma.InputJsonValue });
           atualizados++;
         }
+        for (const bloco of emBlocos(historicos)) await tx.historicoPreco.createMany({ data: bloco });
       }
 
       for (const bloco of emBlocos(itens)) {
@@ -231,7 +235,7 @@ export async function aplicarImportacao(entrada: { usuario: Usuario; pedido: Ped
   );
 }
 
-export type ResultadoDaReversao = { removidos: number; restaurados: number; naoRestaurados: number };
+export type ResultadoDaReversao = { removidos: number; restaurados: number; naoRestaurados: number; naoRemovidos: number };
 
 /** Desfaz um lote: o que ele criou vai para a lixeira; o que ele atualizou volta ao valor anterior (se ninguém mexeu depois). */
 export async function reverterLote(entrada: { usuario: Usuario; loteId: string; ip?: string | null }): Promise<ResultadoDaReversao> {
@@ -245,17 +249,28 @@ export async function reverterLote(entrada: { usuario: Usuario; loteId: string; 
       const agora = new Date();
       const criadosIds = lote.itens.filter((i) => i.acao === "CRIADO").map((i) => i.entidadeId);
       const marca = { deletadoEm: agora, atualizadoPorId: usuario.id };
+      // Só vai para a lixeira o que continua como a importação deixou: sem edição depois do lote e, no caso de
+      // clientes, sem anotações nem tarefas. O que foi mexido (ou vinculado) depois fica, e é contado.
+      const ate = lote.atualizadoEm;
       let removidos = 0;
+      let aindaAtivos = 0;
       for (const bloco of emBlocos(criadosIds, 1000)) {
-        const where = { id: { in: bloco }, deletadoEm: null };
+        const ativos = { id: { in: bloco }, deletadoEm: null };
+        const intactos = { ...ativos, atualizadoEm: { lte: ate } };
+        aindaAtivos +=
+          lote.tipo === "CLIENTES" ? await tx.cliente.count({ where: ativos }) : lote.tipo === "FORNECEDORES" ? await tx.fornecedor.count({ where: ativos }) : await tx.produto.count({ where: ativos });
         const r =
           lote.tipo === "CLIENTES"
-            ? await tx.cliente.updateMany({ where, data: marca })
+            ? await tx.cliente.updateMany({
+                where: { ...intactos, interacoes: { none: { deletadoEm: null, tipo: { not: "SISTEMA" } } }, tarefas: { none: { deletadoEm: null } } },
+                data: marca,
+              })
             : lote.tipo === "FORNECEDORES"
-              ? await tx.fornecedor.updateMany({ where, data: marca })
-              : await tx.produto.updateMany({ where, data: marca });
+              ? await tx.fornecedor.updateMany({ where: intactos, data: marca })
+              : await tx.produto.updateMany({ where: intactos, data: marca });
         removidos += r.count;
       }
+      const naoRemovidos = aindaAtivos - removidos;
 
       let restaurados = 0;
       let naoRestaurados = 0;
@@ -320,10 +335,10 @@ export async function reverterLote(entrada: { usuario: Usuario; loteId: string; 
         entidadeId: lote.id,
         acao: "REVERTER",
         antes: { status: lote.status },
-        depois: { status: "REVERTIDO", removidos, restaurados, naoRestaurados },
+        depois: { status: "REVERTIDO", removidos, naoRemovidos, restaurados, naoRestaurados },
         ip,
       });
-      return { removidos, restaurados, naoRestaurados };
+      return { removidos, restaurados, naoRestaurados, naoRemovidos };
     },
     { timeout: 120_000, maxWait: 15_000 },
   );

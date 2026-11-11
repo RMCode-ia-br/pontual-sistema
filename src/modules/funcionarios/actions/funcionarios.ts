@@ -47,7 +47,10 @@ async function conferirUsuario(usuarioId: string | undefined, funcionarioId?: st
     select: { id: true, funcionario: { select: { id: true, deletadoEm: true } } },
   });
   if (!usuario) throw new ErroNegocio("O usuário escolhido não está disponível.", { usuarioId: "Escolha um usuário ativo." });
-  if (usuario.funcionario && usuario.funcionario.id !== funcionarioId) throw new ErroNegocio(MENSAGEM_VINCULO, { usuarioId: MENSAGEM_VINCULO });
+  if (usuario.funcionario && usuario.funcionario.id !== funcionarioId) {
+    const aviso = usuario.funcionario.deletadoEm ? "Esse usuário ainda está vinculado a um funcionário que está na lixeira. Restaure-o (e tire o vínculo) antes de usar este usuário." : MENSAGEM_VINCULO;
+    throw new ErroNegocio(aviso, { usuarioId: aviso });
+  }
 }
 
 async function conferirCpf(cpf: string | undefined, exceto?: string) {
