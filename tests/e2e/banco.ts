@@ -222,3 +222,24 @@ export async function alterarCustoDiretoNoBanco(codigo: string, centavos: number
 export async function lerCustoNoBanco(codigo: string): Promise<number | null> {
   return comConexao(async (c) => (await c.query<{ v: number | null }>(`SELECT "custoUnitarioCentavos" AS v FROM "Produto" WHERE codigo = $1`, [codigo])).rows[0]?.v ?? null);
 }
+
+// ---- Fase 2: endereço da obra de um projeto de teste (a tela de visita grava o condomínio nele) ----
+
+/** Cria um endereço para o cliente do projeto de teste e o define como endereço da obra. Devolve o id do endereço. */
+export async function vincularEnderecoDeObra(tituloProjeto: string): Promise<string> {
+  return comConexao(async (c) => {
+    const p = await c.query<{ id: string; clienteId: string }>(`SELECT id, "clienteId" FROM "Projeto" WHERE titulo = $1 AND "deletadoEm" IS NULL`, [tituloProjeto]);
+    if (!p.rows[0]) throw new Error("projeto de teste não encontrado");
+    const enderecoId = randomUUID();
+    await c.query(
+      `INSERT INTO "EnderecoCliente" (id, "clienteId", tipo, apelido, logradouro, numero, cidade, uf, "atualizadoEm") VALUES ($1, $2, 'OBRA', 'E2E Obra', 'Rua E2E', '10', 'Búzios', 'RJ', now())`,
+      [enderecoId, p.rows[0].clienteId],
+    );
+    await c.query(`UPDATE "Projeto" SET "enderecoObraId" = $1 WHERE id = $2`, [enderecoId, p.rows[0].id]);
+    return enderecoId;
+  });
+}
+
+export async function lerEndereco(enderecoId: string): Promise<{ condominio: boolean; condominioNome: string | null; exigeAprovacaoFachada: boolean; fachadaAprovada: boolean; sindicoTelefone: string | null }> {
+  return comConexao(async (c) => (await c.query(`SELECT condominio, "condominioNome", "exigeAprovacaoFachada", "fachadaAprovada", "sindicoTelefone" FROM "EnderecoCliente" WHERE id = $1`, [enderecoId])).rows[0]);
+}

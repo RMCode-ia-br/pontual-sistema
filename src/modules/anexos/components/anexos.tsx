@@ -92,9 +92,11 @@ type Props = {
   entidadeId: string;
   anexos: AnexoItem[];
   titulo?: string;
+  /** Modo foto (celular): abre a câmera traseira e só aceita imagem. */
+  camera?: boolean;
 };
 
-export function Anexos({ entidadeTipo, entidadeId, anexos, titulo = "Anexos" }: Props) {
+export function Anexos({ entidadeTipo, entidadeId, anexos, titulo = "Anexos", camera = false }: Props) {
   const router = useRouter();
   const entrada = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
@@ -149,7 +151,7 @@ export function Anexos({ entidadeTipo, entidadeId, anexos, titulo = "Anexos" }: 
         </h2>
         <Button type="button" variant="outline" onClick={() => entrada.current?.click()} disabled={enviando}>
           {enviando ? <Loader2 className="animate-spin" aria-hidden /> : <Upload aria-hidden />}
-          {enviando ? "Enviando..." : "Enviar arquivo"}
+          {enviando ? "Enviando..." : camera ? "Tirar foto" : "Enviar arquivo"}
         </Button>
         <input
           ref={entrada}
@@ -158,7 +160,8 @@ export function Anexos({ entidadeTipo, entidadeId, anexos, titulo = "Anexos" }: 
           className="sr-only"
           tabIndex={-1}
           aria-label="Escolher arquivos para enviar"
-          accept={Object.keys(TIPOS_PERMITIDOS).join(",")}
+          accept={camera ? "image/*" : Object.keys(TIPOS_PERMITIDOS).join(",")}
+          capture={camera ? "environment" : undefined}
           onChange={aoEscolher}
           data-testid="entrada-anexo"
         />

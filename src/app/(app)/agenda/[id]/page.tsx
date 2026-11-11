@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Ruler } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -53,6 +53,11 @@ export default async function PaginaEvento({ params }: { params: Promise<{ id: s
         acoes={
           <>
             <AcoesDoEvento id={evento.id} status={evento.status} tipoVisita={evento.tipo === "VISITA_TECNICA"} />
+            {evento.projetoId ? (
+              <Link href={`/agenda/${evento.id}/visita`} className={buttonVariants({ variant: "outline" })}>
+                <Ruler aria-hidden /> Medidas e fotos
+              </Link>
+            ) : null}
             <a href={`/api/agenda/exportar?id=${evento.id}`} className={buttonVariants({ variant: "outline" })}>
               <Download aria-hidden /> .ics
             </a>
