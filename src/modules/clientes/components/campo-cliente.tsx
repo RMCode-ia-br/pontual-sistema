@@ -15,7 +15,8 @@ type Props = {
   inicial?: { id: string; nome: string } | null;
   /** Não deixa escolher o próprio cadastro. */
   exceto?: string;
-  aoMudar?: () => void;
+  /** Chamado quando a escolha muda (com o cliente escolhido, ou null ao limpar). */
+  aoMudar?: (escolhido: { id: string; nome: string } | null) => void;
 };
 
 /**
@@ -60,7 +61,7 @@ export function CampoCliente({ id, name, inicial = null, exceto, aoMudar }: Prop
           aria-label="Tirar a indicação"
           onClick={() => {
             setEscolhido(null);
-            aoMudar?.();
+            aoMudar?.(null);
           }}
         >
           <X aria-hidden />
@@ -94,7 +95,7 @@ export function CampoCliente({ id, name, inicial = null, exceto, aoMudar }: Prop
                   setEscolhido(o);
                   setTexto("");
                   setResultado(null);
-                  aoMudar?.();
+                  aoMudar?.(o);
                 }}
               >
                 {o.nome}

@@ -1,5 +1,5 @@
 /** Cadastros que vão para a lixeira (exclusão lógica) e podem ser restaurados. */
-export const TIPOS_DA_LIXEIRA = ["clientes", "fornecedores", "funcionarios", "produtos", "equipes"] as const;
+export const TIPOS_DA_LIXEIRA = ["clientes", "fornecedores", "funcionarios", "produtos", "equipes", "projetos"] as const;
 export type TipoDaLixeira = (typeof TIPOS_DA_LIXEIRA)[number];
 
 export const ROTULO_LIXEIRA: Record<TipoDaLixeira, string> = {
@@ -8,6 +8,7 @@ export const ROTULO_LIXEIRA: Record<TipoDaLixeira, string> = {
   funcionarios: "Funcionários",
   produtos: "Produtos",
   equipes: "Equipes",
+  projetos: "Projetos",
 };
 
 export const ENTIDADE_AUDITORIA: Record<TipoDaLixeira, string> = {
@@ -16,6 +17,7 @@ export const ENTIDADE_AUDITORIA: Record<TipoDaLixeira, string> = {
   funcionarios: "Funcionario",
   produtos: "Produto",
   equipes: "Equipe",
+  projetos: "Projeto",
 };
 
 export function lerTipoDaLixeira(valor: string | undefined): TipoDaLixeira {

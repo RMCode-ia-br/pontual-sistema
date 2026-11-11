@@ -33,6 +33,7 @@ const ROTAS_PUBLICAS: Record<string, string> = {
   "app/api/health/route.ts": "verificação de saúde, não expõe dados",
   "app/api/cron/diario/route.ts": "protegida por CRON_SECRET (comparação em tempo constante)",
   "app/icons/[arquivo]/route.tsx": "ícones do PWA, públicos por natureza",
+  "app/api/public/agenda/[token]/route.ts": "feed .ics assinável: token de 256 bits só com hash no banco, revogável, 404 uniforme, sem dados financeiros",
 };
 
 function funcoesExportadas(texto: string): { nome: string; corpo: string }[] {

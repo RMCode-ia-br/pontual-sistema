@@ -8,6 +8,29 @@ import { FUSO_PADRAO, inputParaData, instanteDeDataHoraLocal } from "../formatad
 
 export type Intervalo = { inicio: Date; fim: Date };
 
+export type TipoDeEvento = "VISITA_TECNICA" | "MEDICAO_EXATA" | "MEDICAO_VIDROS" | "INSTALACAO" | "ENTREGA" | "ASSISTENCIA" | "REUNIAO";
+
+/**
+ * A que o compromisso precisa estar ligado: tudo que é do ciclo de uma obra exige o projeto; assistência pode
+ * ser só do cliente (o chamado completo chega na Fase 4); reunião pode não ter vínculo nenhum.
+ */
+export function vinculoExigido(tipo: TipoDeEvento): "projeto" | "cliente_ou_projeto" | "nenhum" {
+  if (tipo === "REUNIAO") return "nenhum";
+  if (tipo === "ASSISTENCIA") return "cliente_ou_projeto";
+  return "projeto";
+}
+
+export type SituacaoDoEvento = "AGENDADO" | "CONFIRMADO" | "REALIZADO" | "REMARCADO" | "CANCELADO" | "NAO_COMPARECEU";
+
+/** Situações em que o compromisso ainda vai acontecer (aceita confirmar, realizar, cancelar...). */
+export const SITUACOES_EM_ABERTO: readonly SituacaoDoEvento[] = ["AGENDADO", "CONFIRMADO", "REMARCADO"];
+
+/** Só compromissos em aberto mudam de situação; o resto é histórico (para refazer, agende de novo). */
+export function podeMudarSituacao(de: SituacaoDoEvento, para: SituacaoDoEvento): boolean {
+  if (!SITUACOES_EM_ABERTO.includes(de)) return false;
+  return para !== de && para !== "AGENDADO" && para !== "REMARCADO";
+}
+
 /** Horário comercial configurado (HH:mm; vazio/nulo = sem expediente naquele dia). */
 export type ConfigExpediente = {
   horarioSemanaInicio: string | null;

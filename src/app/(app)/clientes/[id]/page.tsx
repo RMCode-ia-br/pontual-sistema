@@ -13,6 +13,7 @@ import { formatarCnpj, formatarCpf } from "@/lib/validadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
 import { excluirClientes, inativarClientes, reativarClientes } from "@/modules/clientes/actions/clientes";
+import { excluirInteracaoDoCliente, registrarInteracaoDoCliente } from "@/modules/clientes/actions/interacoes";
 import { BotoesDeContato } from "@/modules/clientes/components/botoes-de-contato";
 import { FormCliente } from "@/modules/clientes/components/form-cliente";
 import { LinhaDoTempo } from "@/modules/clientes/components/linha-do-tempo";
@@ -21,6 +22,8 @@ import { SecaoEnderecos } from "@/modules/clientes/components/secao-enderecos";
 import { listarContatos, listarEnderecos, listarInteracoes, listarMensagensProntas, obterCliente, ROTULO_MARCACAO } from "@/modules/clientes/queries";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
+import { ProjetosDoCliente } from "@/modules/projetos/components/projetos-do-cliente";
+import { contarProjetosDoCliente, listarProjetosDoCliente } from "@/modules/projetos/queries";
 
 export const metadata: Metadata = { title: "Cliente" };
 
@@ -28,6 +31,7 @@ const ABAS = [
   { valor: "dados", titulo: "Dados" },
   { valor: "enderecos", titulo: "Endereços" },
   { valor: "contatos", titulo: "Contatos" },
+  { valor: "projetos", titulo: "Projetos" },
   { valor: "anexos", titulo: "Arquivos" },
   { valor: "linha-do-tempo", titulo: "Linha do tempo" },
 ] as const;
@@ -48,7 +52,7 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
     linkAvaliacao: empresa?.linkAvaliacaoGoogle ?? undefined,
   });
 
-  const contagem: Record<string, number | undefined> = { enderecos: cliente.qtdEnderecos, contatos: cliente.qtdContatos };
+  const contagem: Record<string, number | undefined> = { enderecos: cliente.qtdEnderecos, contatos: cliente.qtdContatos, projetos: await contarProjetosDoCliente(cliente.id) };
   const documento = cliente.cpfCnpj ? (cliente.tipoPessoa === "PF" ? formatarCpf(cliente.cpfCnpj) : formatarCnpj(cliente.cpfCnpj)) : null;
   const descricao = [
     cliente.tipoPessoa === "PF" ? "Pessoa física" : "Pessoa jurídica",
@@ -161,6 +165,11 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
           <SecaoContatos clienteId={cliente.id} contatos={await listarContatos(cliente.id)} />
         </div>
       ) : null}
+      {aba === "projetos" ? (
+        <div className="max-w-3xl">
+          <ProjetosDoCliente clienteId={cliente.id} projetos={await listarProjetosDoCliente(cliente.id)} />
+        </div>
+      ) : null}
       {aba === "anexos" ? (
         <div className="max-w-3xl">
           <Anexos entidadeTipo="Cliente" entidadeId={cliente.id} anexos={await listarAnexos("Cliente", cliente.id)} titulo="Arquivos do cliente" />
@@ -168,7 +177,7 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       ) : null}
       {aba === "linha-do-tempo" ? (
         <div className="max-w-3xl">
-          <LinhaDoTempo clienteId={cliente.id} itens={await listarInteracoes(cliente.id)} />
+          <LinhaDoTempo vinculo={{ campo: "clienteId", id: cliente.id }} itens={await listarInteracoes(cliente.id)} registrar={registrarInteracaoDoCliente} excluir={excluirInteracaoDoCliente} />
         </div>
       ) : null}
     </>

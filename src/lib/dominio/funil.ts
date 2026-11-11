@@ -19,6 +19,19 @@ export type StatusProjeto =
   | "PERDIDO"
   | "CANCELADO";
 
+export const TODOS_OS_STATUS = [
+  "NOVO_LEAD",
+  "VISITA_AGENDADA",
+  "ELABORANDO_PROPOSTA",
+  "PROPOSTA_ENVIADA",
+  "NEGOCIACAO",
+  "APROVADO",
+  "EM_EXECUCAO",
+  "CONCLUIDO",
+  "PERDIDO",
+  "CANCELADO",
+] as const satisfies readonly StatusProjeto[];
+
 /** Fases em que o projeto ainda está sendo vendido (o Kanban comercial). */
 export const FASES_ABERTAS = ["NOVO_LEAD", "VISITA_AGENDADA", "ELABORANDO_PROPOSTA", "PROPOSTA_ENVIADA", "NEGOCIACAO"] as const satisfies readonly StatusProjeto[];
 

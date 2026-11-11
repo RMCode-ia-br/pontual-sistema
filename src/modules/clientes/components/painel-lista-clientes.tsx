@@ -38,6 +38,8 @@ const COLUNAS_PARCEIROS: ColunaLista[] = [
   { id: "contato", rotulo: "Contato" },
   { id: "marcacoes", rotulo: "Tipo de cadastro" },
   { id: "indicados", rotulo: "Clientes indicados" },
+  { id: "projetos", rotulo: "Projetos" },
+  { id: "fechados", rotulo: "Fechados" },
   { id: "criadoEm", rotulo: "Cadastrado em", ordenavel: "criadoEm", escondidaPorPadrao: true },
 ];
 
@@ -55,6 +57,8 @@ function paraLinha(c: ClienteDaLista, parceiros: boolean): LinhaLista {
       documento,
       origem: c.origem ? (ROTULO_ORIGEM[c.origem as keyof typeof ROTULO_ORIGEM] ?? c.origem) : null,
       indicados: parceiros ? String(c.indicados) : null,
+      projetos: parceiros ? String(c.projetosDoParceiro) : null,
+      fechados: parceiros ? String(c.fechadosDoParceiro) : null,
       criadoEm: formatarData(c.criadoEm),
     },
   };

@@ -113,6 +113,10 @@ export type ClienteDaLista = {
   criadoEm: string;
   /** Quantos clientes este indicou (só na visão de parceiros). */
   indicados: number;
+  /** Projetos em que este cadastro é o arquiteto ou a construtora (visão de parceiros). */
+  projetosDoParceiro: number;
+  /** Desses, quantos já foram aprovados (aprovado, em execução ou concluído). */
+  fechadosDoParceiro: number;
 };
 
 const selecaoDaLista = {
@@ -131,7 +135,16 @@ const selecaoDaLista = {
   origem: true,
   ativo: true,
   criadoEm: true,
-  _count: { select: { indicados: { where: { deletadoEm: null } } } },
+  _count: {
+    select: {
+      indicados: { where: { deletadoEm: null } },
+      projetosComoArquiteto: { where: { deletadoEm: null } },
+      projetosComoConstrutora: { where: { deletadoEm: null } },
+    },
+  },
+  // Fechados: contados à parte porque o Prisma não aceita dois filtros diferentes na mesma relação.
+  projetosComoArquiteto: { where: { deletadoEm: null, status: { in: ["APROVADO", "EM_EXECUCAO", "CONCLUIDO"] } }, select: { id: true } },
+  projetosComoConstrutora: { where: { deletadoEm: null, status: { in: ["APROVADO", "EM_EXECUCAO", "CONCLUIDO"] } }, select: { id: true } },
 } satisfies Prisma.ClienteSelect;
 
 type LinhaBruta = Prisma.ClienteGetPayload<{ select: typeof selecaoDaLista }>;
@@ -151,6 +164,8 @@ function paraLista(c: LinhaBruta): ClienteDaLista {
     ativo: c.ativo,
     criadoEm: c.criadoEm.toISOString(),
     indicados: c._count.indicados,
+    projetosDoParceiro: c._count.projetosComoArquiteto + c._count.projetosComoConstrutora,
+    fechadosDoParceiro: new Set([...c.projetosComoArquiteto, ...c.projetosComoConstrutora].map((p) => p.id)).size,
   };
 }
 
@@ -257,8 +272,13 @@ export type InteracaoItem = {
 };
 
 export async function listarInteracoes(clienteId: string, limite = 100): Promise<InteracaoItem[]> {
+  return listarInteracoesDoVinculo({ clienteId }, limite);
+}
+
+/** Linha do tempo de um cliente OU de um projeto (as do projeto também aparecem na do cliente). */
+export async function listarInteracoesDoVinculo(vinculo: { clienteId: string } | { projetoId: string }, limite = 100): Promise<InteracaoItem[]> {
   const itens = await prisma.interacao.findMany({
-    where: { clienteId, deletadoEm: null },
+    where: { ...vinculo, deletadoEm: null },
     orderBy: { criadoEm: "desc" },
     take: limite,
   });

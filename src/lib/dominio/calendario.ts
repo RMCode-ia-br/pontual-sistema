@@ -48,3 +48,36 @@ export function mesVizinho(dataLocal: string, delta: number): string {
 export function mesmoMes(a: string, b: string): boolean {
   return a.slice(0, 7) === b.slice(0, 7);
 }
+
+/**
+ * Distribui compromissos de um dia em colunas lado a lado quando se sobrepõem (grade de semana/dia).
+ * Cada item recebe `coluna` (0-based) e `colunas` (quantas colunas o grupo de itens sobrepostos ocupa).
+ */
+export function distribuirEmColunas<T extends { inicioMin: number; fimMin: number }>(itens: T[]): (T & { coluna: number; colunas: number })[] {
+  const ordenados = [...itens].sort((a, b) => a.inicioMin - b.inicioMin || b.fimMin - a.fimMin);
+  const resultado: (T & { coluna: number; colunas: number })[] = [];
+  let grupo: (T & { coluna: number; colunas: number })[] = [];
+  let fimDasColunas: number[] = [];
+
+  const fecharGrupo = () => {
+    for (const item of grupo) item.colunas = fimDasColunas.length;
+    resultado.push(...grupo);
+    grupo = [];
+    fimDasColunas = [];
+  };
+
+  for (const item of ordenados) {
+    // Começou depois que todas as colunas do grupo terminaram: é outro grupo.
+    if (grupo.length > 0 && item.inicioMin >= Math.max(...fimDasColunas)) fecharGrupo();
+    let coluna = fimDasColunas.findIndex((fim) => fim <= item.inicioMin);
+    if (coluna === -1) {
+      coluna = fimDasColunas.length;
+      fimDasColunas.push(item.fimMin);
+    } else {
+      fimDasColunas[coluna] = item.fimMin;
+    }
+    grupo.push({ ...item, coluna, colunas: 1 });
+  }
+  if (grupo.length > 0) fecharGrupo();
+  return resultado;
+}

@@ -4,14 +4,14 @@ import Link from "next/link";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { cn } from "@/lib/utils";
-import { restaurarClientes, restaurarEquipes, restaurarFornecedores, restaurarFuncionarios, restaurarProdutos } from "@/modules/lixeira/actions";
+import { restaurarClientes, restaurarEquipes, restaurarFornecedores, restaurarFuncionarios, restaurarProdutos, restaurarProjetos } from "@/modules/lixeira/actions";
 import { ListaDaLixeira } from "@/modules/lixeira/components/lista-da-lixeira";
 import { contarLixeira, listarLixeira } from "@/modules/lixeira/queries";
 import { lerTipoDaLixeira, ROTULO_LIXEIRA, TIPOS_DA_LIXEIRA } from "@/modules/lixeira/tipos";
 
 export const metadata: Metadata = { title: "Lixeira" };
 
-const RESTAURAR = { clientes: restaurarClientes, fornecedores: restaurarFornecedores, funcionarios: restaurarFuncionarios, produtos: restaurarProdutos, equipes: restaurarEquipes };
+const RESTAURAR = { clientes: restaurarClientes, fornecedores: restaurarFornecedores, funcionarios: restaurarFuncionarios, produtos: restaurarProdutos, equipes: restaurarEquipes, projetos: restaurarProjetos };
 
 export default async function PaginaLixeira({ searchParams }: { searchParams: Promise<{ tipo?: string }> }) {
   await exigirSessao();

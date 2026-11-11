@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 export async function entrarComo(page: Page, login: string, senha: string) {
   await page.goto("/login");
@@ -40,4 +40,15 @@ export async function aguardarAvisosSumirem(page: Page) {
 /** Mensagem de erro do formulário atual (o Next também tem um role="alert" para anunciar rotas). */
 export function alertaDeFormulario(page: Page) {
   return page.locator("form, [role='dialog']").getByRole("alert");
+}
+
+/**
+ * Captura de tela para a revisão visual (só com CAPTURAS=1). Salva em test-results/capturas/<projeto>-<nome>.png,
+ * pasta que não vai para o Git.
+ */
+export async function capturar(page: Page, nome: string) {
+  if (!process.env.CAPTURAS) return;
+  await page.waitForLoadState("networkidle");
+  const projeto = test.info().project.name;
+  await page.screenshot({ path: `test-results/capturas/${projeto}-${nome}.png`, fullPage: true });
 }

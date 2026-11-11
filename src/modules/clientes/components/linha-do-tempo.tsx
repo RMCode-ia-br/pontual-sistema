@@ -9,21 +9,30 @@ import { ConfirmarAcao } from "@/components/confirmar-acao";
 import { AreaTexto, Campo, Selecao, ariaDoCampo } from "@/components/formulario";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Button } from "@/components/ui/button";
+import type { ResultadoAcao } from "@/lib/acoes";
 import { formatarDataHora } from "@/lib/formatadores";
 import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 
-import { excluirInteracaoDoCliente, registrarInteracaoDoCliente } from "../actions/interacoes";
 import type { InteracaoItem } from "../queries";
 import { ROTULO_INTERACAO, TIPOS_INTERACAO_MANUAL } from "../schemas";
 
 const ICONES = { NOTA: StickyNote, LIGACAO: Phone, WHATSAPP: MessageCircle, VISITA: Users, EMAIL: Mail, SISTEMA: Bot } as const;
 
-export function LinhaDoTempo({ clienteId, itens }: { clienteId: string; itens: InteracaoItem[] }) {
+type Props = {
+  /** A quem a linha do tempo pertence: o registro novo leva este vínculo (`clienteId` ou `projetoId`). */
+  vinculo: { campo: "clienteId" | "projetoId"; id: string };
+  itens: InteracaoItem[];
+  registrar: (anterior: ResultadoAcao | null, formData: FormData) => Promise<ResultadoAcao>;
+  excluir: (id: string) => Promise<ResultadoAcao>;
+};
+
+/** Linha do tempo de um cliente ou de um projeto: anotações, ligações, mensagens e eventos do sistema. */
+export function LinhaDoTempo({ vinculo, itens, registrar, excluir }: Props) {
   const router = useRouter();
   const [versao, setVersao] = useState(0);
   const [excluindo, setExcluindo] = useState<InteracaoItem | null>(null);
   const [pendente, iniciar] = useTransition();
-  const { estado, pendente: salvando, aoEnviar } = useAcaoDeFormulario(registrarInteracaoDoCliente.bind(null, null), (r) => {
+  const { estado, pendente: salvando, aoEnviar } = useAcaoDeFormulario(registrar.bind(null, null), (r) => {
     if (r.ok) {
       toast.success(r.mensagem ?? "Registrado.");
       setVersao((v) => v + 1); // limpa o formulário para o próximo registro
@@ -36,7 +45,7 @@ export function LinhaDoTempo({ clienteId, itens }: { clienteId: string; itens: I
     const alvo = excluindo;
     if (!alvo) return;
     iniciar(async () => {
-      const r = await excluirInteracaoDoCliente(alvo.id);
+      const r = await excluir(alvo.id);
       setExcluindo(null);
       if (r.ok) {
         toast.success(r.mensagem ?? "Removido.");
@@ -52,7 +61,7 @@ export function LinhaDoTempo({ clienteId, itens }: { clienteId: string; itens: I
       </h2>
 
       <form key={versao} onSubmit={aoEnviar} className="grid gap-3 rounded-xl border p-4 sm:grid-cols-[12rem_1fr]" aria-label="Novo registro na linha do tempo">
-        <input type="hidden" name="clienteId" value={clienteId} />
+        <input type="hidden" name={vinculo.campo} value={vinculo.id} />
         <Campo id="tipo-interacao" rotulo="O que aconteceu" erro={erros.tipo}>
           <Selecao id="tipo-interacao" name="tipo" defaultValue="NOTA" {...ariaDoCampo("tipo-interacao", erros.tipo)}>
             {TIPOS_INTERACAO_MANUAL.map((t) => (

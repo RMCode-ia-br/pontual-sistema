@@ -103,6 +103,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
               <span className="hidden sm:inline">Novo</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => router.push("/projetos/novo")}>Novo projeto</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/clientes/novo")}>Novo cliente</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/fornecedores/novo")}>Novo fornecedor</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/tarefas/nova")}>Nova tarefa</DropdownMenuItem>
@@ -150,7 +151,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
       {/* Barra inferior (celular) */}
       <nav
         aria-label="Atalhos"
-        className="bg-background fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="bg-background fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {MENU_CELULAR.map((item) => {
           const Icone = item.icone;

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, FileText, HardHat, Package, Search, Truck, User, Users } from "lucide-react";
+import { CheckSquare, FileText, FolderKanban, HardHat, Package, Search, Truck, User, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -13,7 +13,7 @@ import { paginasDisponiveis } from "./menu";
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
-const VAZIO: ResultadoBusca = { clientes: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
+const VAZIO: ResultadoBusca = { clientes: [], projetos: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
 
 export function BuscaGlobal() {
   const router = useRouter();
@@ -80,7 +80,7 @@ export function BuscaGlobal() {
       <Dialog open={aberta} onOpenChange={setAberta}>
         <DialogHeader className="sr-only">
           <DialogTitle>Busca global</DialogTitle>
-          <DialogDescription>Procure páginas, clientes, fornecedores, produtos, funcionários, tarefas e usuários.</DialogDescription>
+          <DialogDescription>Procure páginas, clientes, projetos, fornecedores, produtos, funcionários, tarefas e usuários.</DialogDescription>
         </DialogHeader>
         <DialogContent className="top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0" showCloseButton={false}>
           <Comando shouldFilter={false}>
@@ -103,6 +103,18 @@ export function BuscaGlobal() {
                     <CommandItem key={c.id} value={`cliente-${c.id}`} onSelect={() => ir(`/clientes/${c.id}`)}>
                       <Users aria-hidden /> {c.nome}
                       {c.detalhe ? <span className="text-muted-foreground ml-auto text-xs">{c.detalhe}</span> : null}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+              {visivel.projetos.length > 0 ? (
+                <CommandGroup heading="Projetos">
+                  {visivel.projetos.map((p) => (
+                    <CommandItem key={p.id} value={`projeto-${p.id}`} onSelect={() => ir(`/projetos/${p.id}`)}>
+                      <FolderKanban aria-hidden /> {p.titulo}
+                      <span className="text-muted-foreground ml-auto text-xs">
+                        {p.codigo} · {p.cliente}
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

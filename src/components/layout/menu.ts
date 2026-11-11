@@ -2,6 +2,9 @@ import {
   BarChart3,
   BookOpen,
   Briefcase,
+  CalendarDays,
+  CheckSquare,
+  FolderKanban,
   HardHat,
   HelpCircle,
   LayoutDashboard,
@@ -33,10 +36,10 @@ export const MENU: GrupoMenu[] = [
     titulo: "Comercial",
     icone: Briefcase,
     itens: [
-      { titulo: "Funil", fase: 2 },
-      { titulo: "Projetos", fase: 2 },
+      { titulo: "Funil", href: "/funil" },
+      { titulo: "Projetos", href: "/projetos" },
       { titulo: "Propostas", fase: 3 },
-      { titulo: "Agenda", fase: 2 },
+      { titulo: "Agenda", href: "/agenda" },
       { titulo: "Tarefas", href: "/tarefas" },
     ],
   },
@@ -113,8 +116,9 @@ export const MENU: GrupoMenu[] = [
 /** Itens fixos da barra inferior no celular (o resto fica em "Mais"). */
 export const MENU_CELULAR = [
   { titulo: "Painel", href: "/", icone: LayoutDashboard },
-  { titulo: "Tarefas", href: "/tarefas", icone: Briefcase },
-  { titulo: "Ajustes", href: "/configuracoes/empresa", icone: Settings },
+  { titulo: "Funil", href: "/funil", icone: FolderKanban },
+  { titulo: "Agenda", href: "/agenda", icone: CalendarDays },
+  { titulo: "Tarefas", href: "/tarefas", icone: CheckSquare },
 ] as const;
 
 export function rotaAtiva(caminhoAtual: string, href: string): boolean {

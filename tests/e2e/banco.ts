@@ -51,6 +51,23 @@ async function limpar(c: Client): Promise<void> {
     await c.query(`DELETE FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
   }
 
+  // Fase 2 (comercial): projetos, visitas e medidas dos testes (título/nome "E2E "), filhos antes dos pais.
+  const projetosE2E = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
+  const eventosE2E = `SELECT id FROM "EventoAgenda" WHERE titulo LIKE 'E2E %' OR "projetoId" IN (${projetosE2E}) OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
+  await c.query(`DELETE FROM "MedidaRascunho" WHERE "projetoId" IN (${projetosE2E}) OR "eventoId" IN (${eventosE2E})`);
+  await c.query(`DELETE FROM "EventoAgenda" WHERE id IN (${eventosE2E})`);
+  await c.query(`DELETE FROM "Interacao" WHERE "projetoId" IN (${projetosE2E})`);
+  await c.query(`DELETE FROM "Tarefa" WHERE "projetoId" IN (${projetosE2E})`);
+  await c.query(`DELETE FROM "HistoricoFaseProjeto" WHERE "projetoId" IN (${projetosE2E})`);
+  await c.query(`DELETE FROM "Projeto" WHERE id IN (${projetosE2E})`);
+  // Devolve o contador de códigos ao maior que sobrou: os testes não deixam buracos na numeração.
+  await c.query(
+    `UPDATE "ContadorSequencia" k
+        SET "valor" = coalesce((SELECT max(substring(p."codigo" from 8)::int) FROM "Projeto" p WHERE p."codigo" LIKE 'P-' || substring(k."chave" from 9) || '-%'), 0)
+      WHERE k."chave" LIKE 'projeto:%'`,
+  );
+  if (ids.length > 0) await c.query(`DELETE FROM "FeedAgenda" WHERE "usuarioId" = ANY($1)`, [ids]);
+
   // Cadastros da Fase 1: tudo que os testes criam tem nome começando com "E2E " (filhos antes dos pais).
   await c.query(`DELETE FROM "Interacao" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`);
   await c.query(`DELETE FROM "Tarefa" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`);

@@ -9,6 +9,7 @@ import { somenteDigitos } from "@/lib/validadores";
 
 export type ResultadoBusca = {
   clientes: { id: string; nome: string; detalhe: string | null }[];
+  projetos: { id: string; codigo: string; titulo: string; cliente: string }[];
   fornecedores: { id: string; nome: string }[];
   produtos: { id: string; codigo: string; descricao: string }[];
   funcionarios: { id: string; nome: string; cargo: string | null }[];
@@ -23,25 +24,32 @@ const POR_GRUPO = 5;
 /**
  * Busca global (Ctrl+K), sem diferenciar acentos nem maiúsculas. Usa exatamente as expressões dos
  * índices trigram (`f_unaccent(lower(...))`), então continua rápida com milhares de cadastros.
- * Cadastros na lixeira nunca aparecem. Projetos e propostas entram nas Fases 2 e 3.
+ * Cadastros na lixeira nunca aparecem. Propostas entram na Fase 3.
  */
 export async function buscaGlobal(termo: string): Promise<ResultadoBusca> {
   await exigirSessao();
   const parse = termoSchema.safeParse(termo);
-  const vazio: ResultadoBusca = { clientes: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
+  const vazio: ResultadoBusca = { clientes: [], projetos: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
   if (!parse.success) return vazio;
 
   const texto = padraoLike(parse.data.toLowerCase());
   const digitos = somenteDigitos(parse.data);
   const porDigitos = digitos.length >= 3 ? `%${digitos}%` : null;
 
-  const [clientes, fornecedores, produtos, funcionarios, tarefas, usuarios] = await Promise.all([
+  const [clientes, projetos, fornecedores, produtos, funcionarios, tarefas, usuarios] = await Promise.all([
     prisma.$queryRaw<{ id: string; nome: string; telefone: string | null; email: string | null }[]>`
       SELECT id, nome, coalesce(whatsapp, telefone) AS telefone, email FROM "Cliente"
        WHERE "deletadoEm" IS NULL
          AND ( public.f_unaccent(lower("nome" || ' ' || coalesce("nomeFantasia", ''))) LIKE public.f_unaccent(${texto})
             OR (${porDigitos}::text IS NOT NULL AND ("cpfCnpj" LIKE ${porDigitos} OR "telefone" LIKE ${porDigitos} OR "whatsapp" LIKE ${porDigitos})) )
        ORDER BY nome LIMIT ${POR_GRUPO}`,
+    prisma.$queryRaw<{ id: string; codigo: string; titulo: string; cliente: string }[]>`
+      SELECT p.id, p.codigo, p.titulo, c.nome AS cliente FROM "Projeto" p
+        JOIN "Cliente" c ON c.id = p."clienteId"
+       WHERE p."deletadoEm" IS NULL
+         AND ( public.f_unaccent(lower(p."codigo" || ' ' || p."titulo")) LIKE public.f_unaccent(${texto})
+            OR public.f_unaccent(lower(c."nome" || ' ' || coalesce(c."nomeFantasia", ''))) LIKE public.f_unaccent(${texto}) )
+       ORDER BY p."criadoEm" DESC LIMIT ${POR_GRUPO}`,
     prisma.$queryRaw<{ id: string; razaoSocial: string }[]>`
       SELECT id, "razaoSocial" FROM "Fornecedor"
        WHERE "deletadoEm" IS NULL
@@ -68,6 +76,7 @@ export async function buscaGlobal(termo: string): Promise<ResultadoBusca> {
 
   return {
     clientes: clientes.map((c) => ({ id: c.id, nome: c.nome, detalhe: c.telefone ?? c.email })),
+    projetos,
     fornecedores: fornecedores.map((f) => ({ id: f.id, nome: f.razaoSocial })),
     produtos,
     funcionarios,

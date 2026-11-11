@@ -11,11 +11,13 @@ import {
   minutosDoHorario,
   partesLocais,
   periodosQueCobrem,
+  podeMudarSituacao,
   sobrepoe,
+  vinculoExigido,
   type ConfigExpediente,
   type EventoOcupando,
 } from "@/lib/dominio/agenda";
-import { diasDaSemana, gradeDoMes, inicioDaSemana, mesVizinho, mesmoMes, somarDias } from "@/lib/dominio/calendario";
+import { diasDaSemana, distribuirEmColunas, gradeDoMes, inicioDaSemana, mesVizinho, mesmoMes, somarDias } from "@/lib/dominio/calendario";
 import { dataLocalDoInstante, inputDataHoraParaInstante, instanteDeDataHoraLocal, instanteParaInputDataHora } from "@/lib/formatadores";
 
 const cfg: ConfigExpediente = { horarioSemanaInicio: "08:00", horarioSemanaFim: "18:00", horarioSabadoInicio: "08:00", horarioSabadoFim: "12:00" };
@@ -167,6 +169,26 @@ describe("horários livres", () => {
   });
 });
 
+describe("vínculo e situação do compromisso", () => {
+  it("o que é do ciclo da obra exige projeto; assistência, cliente ou projeto; reunião, nada", () => {
+    for (const t of ["VISITA_TECNICA", "MEDICAO_EXATA", "MEDICAO_VIDROS", "INSTALACAO", "ENTREGA"] as const) expect(vinculoExigido(t)).toBe("projeto");
+    expect(vinculoExigido("ASSISTENCIA")).toBe("cliente_ou_projeto");
+    expect(vinculoExigido("REUNIAO")).toBe("nenhum");
+  });
+
+  it("só compromisso em aberto muda de situação, e nunca volta a 'agendado' ou 'remarcado' por esse caminho", () => {
+    expect(podeMudarSituacao("AGENDADO", "CONFIRMADO")).toBe(true);
+    expect(podeMudarSituacao("CONFIRMADO", "REALIZADO")).toBe(true);
+    expect(podeMudarSituacao("REMARCADO", "CANCELADO")).toBe(true);
+    expect(podeMudarSituacao("AGENDADO", "NAO_COMPARECEU")).toBe(true);
+    expect(podeMudarSituacao("AGENDADO", "AGENDADO")).toBe(false);
+    expect(podeMudarSituacao("CONFIRMADO", "CONFIRMADO")).toBe(false);
+    expect(podeMudarSituacao("CONFIRMADO", "AGENDADO")).toBe(false);
+    expect(podeMudarSituacao("AGENDADO", "REMARCADO")).toBe(false);
+    for (const encerrado of ["REALIZADO", "CANCELADO", "NAO_COMPARECEU"] as const) expect(podeMudarSituacao(encerrado, "CONFIRMADO")).toBe(false);
+  });
+});
+
 describe("avisos de calendário", () => {
   const periodos = [
     { data: new Date("2026-11-20T00:00:00Z"), dataFim: null, tipo: "FERIADO" as const, nome: "Consciência Negra" },
@@ -193,6 +215,36 @@ describe("avisos de calendário", () => {
 
   it("dia comum no expediente: nenhum aviso", () => {
     expect(avisosDoAgendamento(intervalo("09:00", "10:00"), cfg, periodos)).toEqual([]);
+  });
+});
+
+describe("grade de semana: compromissos sobrepostos", () => {
+  const item = (id: string, inicioMin: number, fimMin: number) => ({ id, inicioMin, fimMin });
+  const por = (r: ReturnType<typeof distribuirEmColunas<ReturnType<typeof item>>>, id: string) => r.find((x) => x.id === id)!;
+
+  it("compromissos separados ficam sozinhos, em uma coluna", () => {
+    const r = distribuirEmColunas([item("a", 480, 540), item("b", 540, 600), item("c", 700, 760)]);
+    expect(r.every((x) => x.coluna === 0 && x.colunas === 1)).toBe(true);
+  });
+
+  it("dois que se cruzam dividem a largura em duas colunas", () => {
+    const r = distribuirEmColunas([item("a", 480, 600), item("b", 540, 660)]);
+    expect(por(r, "a")).toMatchObject({ coluna: 0, colunas: 2 });
+    expect(por(r, "b")).toMatchObject({ coluna: 1, colunas: 2 });
+  });
+
+  it("reaproveita a coluna livre e não afeta o grupo seguinte", () => {
+    const r = distribuirEmColunas([item("a", 480, 600), item("b", 500, 560), item("c", 570, 620), item("d", 700, 760)]);
+    expect(por(r, "a")).toMatchObject({ coluna: 0, colunas: 2 });
+    expect(por(r, "b")).toMatchObject({ coluna: 1, colunas: 2 });
+    expect(por(r, "c")).toMatchObject({ coluna: 1, colunas: 2 }); // reaproveita a coluna 1, que já terminou
+    expect(por(r, "d")).toMatchObject({ coluna: 0, colunas: 1 });
+  });
+
+  it("lista vazia e itens fora de ordem funcionam", () => {
+    expect(distribuirEmColunas([])).toEqual([]);
+    const r = distribuirEmColunas([item("b", 540, 660), item("a", 480, 600)]);
+    expect(por(r, "a").coluna).toBe(0);
   });
 });
 

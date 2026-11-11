@@ -53,6 +53,15 @@ export async function restaurarDaLixeira(entrada: { usuario: Usuario; tipo: Tipo
           continue;
         }
         await tx.produto.update({ where: { id }, data: limpar as Prisma.ProdutoUncheckedUpdateInput });
+      } else if (tipo === "projetos") {
+        // O cliente do projeto precisa estar ativo no sistema: não se restaura um projeto de cliente que está na lixeira.
+        const x = await tx.projeto.findFirst({ where: { id, deletadoEm: { not: null } }, select: { codigo: true, titulo: true, cliente: { select: { deletadoEm: true } } } });
+        if (!x) continue;
+        if (x.cliente.deletadoEm) {
+          conflitos.push(`${x.titulo} (${x.codigo}): o cliente está na lixeira; restaure o cliente primeiro.`);
+          continue;
+        }
+        await tx.projeto.update({ where: { id }, data: limpar });
       } else {
         const x = await tx.equipe.findFirst({ where: { id, deletadoEm: { not: null } }, select: { nome: true } });
         if (!x) continue;

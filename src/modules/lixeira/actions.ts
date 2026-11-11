@@ -21,6 +21,7 @@ const CAMINHOS: Record<TipoDaLixeira, string[]> = {
   funcionarios: ["/funcionarios", "/funcionarios/equipes"],
   produtos: ["/produtos"],
   equipes: ["/funcionarios/equipes", "/funcionarios"],
+  projetos: ["/projetos", "/funil"],
 };
 
 async function restaurar(tipo: TipoDaLixeira, idsBrutos: string[]): Promise<ResultadoAcao> {
@@ -58,4 +59,8 @@ export async function restaurarProdutos(ids: string[]): Promise<ResultadoAcao> {
 
 export async function restaurarEquipes(ids: string[]): Promise<ResultadoAcao> {
   return restaurar("equipes", ids);
+}
+
+export async function restaurarProjetos(ids: string[]): Promise<ResultadoAcao> {
+  return restaurar("projetos", ids);
 }

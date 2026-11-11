@@ -26,6 +26,9 @@ export async function listarLixeira(tipo: TipoDaLixeira): Promise<ItemDaLixeira[
   } else if (tipo === "produtos") {
     const r = await prisma.produto.findMany({ where, orderBy, take: LIMITE, select: { id: true, codigo: true, descricao: true, deletadoEm: true, atualizadoPorId: true } });
     brutos = r.map((x) => ({ id: x.id, titulo: x.descricao, detalhe: x.codigo, deletadoEm: x.deletadoEm, atualizadoPorId: x.atualizadoPorId }));
+  } else if (tipo === "projetos") {
+    const r = await prisma.projeto.findMany({ where, orderBy, take: LIMITE, select: { id: true, codigo: true, titulo: true, deletadoEm: true, atualizadoPorId: true } });
+    brutos = r.map((x) => ({ id: x.id, titulo: x.titulo, detalhe: x.codigo, deletadoEm: x.deletadoEm, atualizadoPorId: x.atualizadoPorId }));
   } else {
     const r = await prisma.equipe.findMany({ where, orderBy, take: LIMITE, select: { id: true, nome: true, descricao: true, deletadoEm: true, atualizadoPorId: true } });
     brutos = r.map((x) => ({ id: x.id, titulo: x.nome, detalhe: x.descricao, deletadoEm: x.deletadoEm, atualizadoPorId: x.atualizadoPorId }));
@@ -45,12 +48,13 @@ export async function listarLixeira(tipo: TipoDaLixeira): Promise<ItemDaLixeira[
 
 export async function contarLixeira(): Promise<Record<TipoDaLixeira, number>> {
   const where = { deletadoEm: { not: null } } as const;
-  const [clientes, fornecedores, funcionarios, produtos, equipes] = await Promise.all([
+  const [clientes, fornecedores, funcionarios, produtos, equipes, projetos] = await Promise.all([
     prisma.cliente.count({ where }),
     prisma.fornecedor.count({ where }),
     prisma.funcionario.count({ where }),
     prisma.produto.count({ where }),
     prisma.equipe.count({ where }),
+    prisma.projeto.count({ where }),
   ]);
-  return { clientes, fornecedores, funcionarios, produtos, equipes };
+  return { clientes, fornecedores, funcionarios, produtos, equipes, projetos };
 }
