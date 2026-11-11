@@ -51,7 +51,7 @@ export type ConteudoProposta = {
   exibirValorPorItem: boolean;
   descricoesMaiusculas: boolean;
   opcoes: OpcaoConteudo[];
-  prazo: { modo: "NENHUM" | "TOTAL" | "POR_ETAPA"; totalMinDias: number | null; totalMaxDias: number | null; materialDias: number | null; execucaoDias: number | null; vidrosDias: number | null };
+  prazo: { modo: "NENHUM" | "TOTAL" | "POR_ETAPA"; totalMinDias: number | null; totalMaxDias: number | null; materialDias: number | null; execucaoDias: number | null; vidrosDias: number | null; tipoDias: "UTEIS" | "CORRIDOS" };
   validade: { texto: string | null; ate: string | null; encerradaPorReajuste: boolean };
   pagamento: { condicaoNome: string | null; textoLivre: string | null; dadosPagamento: string | null; parcelas: ParcelaConteudo[] };
   notas: string[];

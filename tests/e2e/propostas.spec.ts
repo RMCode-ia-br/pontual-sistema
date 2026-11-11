@@ -195,3 +195,25 @@ test("ciclo: enviar congela, nova revisão compara, aprovar gera parcelas e leva
   await expect(page.getByText("Aprovado", { exact: true }).first()).toBeVisible();
   await semRolagemHorizontal(page);
 });
+
+test("PDFs: a proposta e a folha de produção abrem; sem sessão são recusados", async ({ page, browser }) => {
+  await page.goto(`/propostas/${idProposta}`);
+  const pdf = await page.request.get(`/api/propostas/${idProposta}/pdf`);
+  expect(pdf.status()).toBe(200);
+  expect(pdf.headers()["content-type"]).toContain("application/pdf");
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+  expect(pdf.headers()["content-disposition"]).toMatch(/proposta-[0-9]{4}-[0-9]{2}.pdf/);
+
+  const producao = await page.request.get(`/api/propostas/${idProposta}/producao`);
+  expect(producao.status()).toBe(200);
+  expect((await producao.body()).subarray(0, 5).toString()).toBe("%PDF-");
+
+  expect((await page.request.get("/api/propostas/inexistente123/pdf")).status()).toBe(404);
+  expect((await page.request.get("/api/propostas/x%20y/pdf")).status()).toBeGreaterThanOrEqual(400);
+
+  // Sem sessão (contexto novo, sem cookies): 401 ou redirecionamento ao login, nunca o arquivo.
+  const anonimo = await browser.newContext({ baseURL: "http://localhost:3100", extraHTTPHeaders: { "x-forwarded-for": ipFalso(93) } });
+  const r = await anonimo.request.get(`/api/propostas/${idProposta}/pdf`, { maxRedirects: 0 });
+  expect([307, 308, 401]).toContain(r.status());
+  await anonimo.close();
+});

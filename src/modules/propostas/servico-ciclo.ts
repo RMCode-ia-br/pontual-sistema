@@ -97,7 +97,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
         totais: { itensCentavos: t.itensCentavos, descontoCentavos: t.descontoCentavos, acrescimoNotaCentavos: t.acrescimoNotaCentavos, totalCentavos: t.totalCentavos, areaM2: t.areaM2 },
       };
     }),
-    prazo: { modo: p.modoPrazo, totalMinDias: p.prazoTotalMinDias, totalMaxDias: p.prazoTotalMaxDias, materialDias: p.prazoMaterialDias, execucaoDias: p.prazoExecucaoDias, vidrosDias: p.prazoVidrosDias },
+    prazo: { modo: p.modoPrazo, totalMinDias: p.prazoTotalMinDias, totalMaxDias: p.prazoTotalMaxDias, materialDias: p.prazoMaterialDias, execucaoDias: p.prazoExecucaoDias, vidrosDias: p.prazoVidrosDias, tipoDias: empresa?.tipoDias ?? "UTEIS" },
     validade: { texto: p.validadeTexto, ate: dia(p.validadeAte), encerradaPorReajuste: p.validadeEncerradaPorReajuste },
     pagamento: {
       condicaoNome: p.condicao?.nome ?? null,
