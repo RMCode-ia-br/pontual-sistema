@@ -38,7 +38,7 @@ export const MENU: GrupoMenu[] = [
     itens: [
       { titulo: "Funil", href: "/funil" },
       { titulo: "Projetos", href: "/projetos" },
-      { titulo: "Propostas", fase: 3 },
+      { titulo: "Propostas", href: "/propostas" },
       { titulo: "Agenda", href: "/agenda" },
       { titulo: "Tarefas", href: "/tarefas" },
     ],

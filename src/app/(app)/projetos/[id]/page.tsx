@@ -26,6 +26,8 @@ import { ControleDoProjeto } from "@/modules/projetos/components/controle-do-pro
 import { FormProjeto } from "@/modules/projetos/components/form-projeto";
 import { ResumoDoProjeto } from "@/modules/projetos/components/resumo-do-projeto";
 import { listarMotivosPerda, obterProjeto } from "@/modules/projetos/queries";
+import { listarPropostasDoProjeto } from "@/modules/propostas/queries";
+import { TabelaPropostas } from "@/modules/propostas/components/tabela-propostas";
 import { ListaTarefas } from "@/modules/tarefas/components/lista-tarefas";
 import { listarTarefas } from "@/modules/tarefas/queries";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
@@ -150,13 +152,7 @@ export default async function PaginaProjeto({ params, searchParams }: { params: 
           <EventosDoProjeto projetoId={projeto.id} eventos={await listarEventosDoProjeto(projeto.id)} />
         </div>
       ) : null}
-      {aba === "propostas" ? (
-        <EstadoVazio
-          icone={FileText}
-          titulo="As propostas chegam na próxima fase"
-          descricao="Aqui vão aparecer as propostas deste projeto, com opções, itens, PDF e aprovação. Por enquanto, acompanhe o projeto pelo funil."
-        />
-      ) : null}
+      {aba === "propostas" ? <PropostasDoProjeto projetoId={projeto.id} /> : null}
       {aba === "anexos" ? (
         <div className="max-w-3xl">
           <Anexos entidadeTipo="Projeto" entidadeId={projeto.id} anexos={await listarAnexos("Projeto", projeto.id)} titulo="Arquivos e fotos do projeto" />
@@ -173,5 +169,23 @@ export default async function PaginaProjeto({ params, searchParams }: { params: 
         </div>
       ) : null}
     </>
+  );
+}
+
+async function PropostasDoProjeto({ projetoId }: { projetoId: string }) {
+  const propostas = await listarPropostasDoProjeto(projetoId);
+  return (
+    <div className="grid gap-4">
+      <div>
+        <Link href={`/propostas/nova?projeto=${projetoId}`} className={buttonVariants()}>
+          <Plus aria-hidden /> Nova proposta
+        </Link>
+      </div>
+      {propostas.length === 0 ? (
+        <EstadoVazio icone={FileText} titulo="Nenhuma proposta neste projeto" descricao="Crie a proposta: ela já nasce com o cliente, o endereço da obra e os textos padrão, e você importa as medidas da visita." />
+      ) : (
+        <TabelaPropostas propostas={propostas} mostrarProjeto={false} />
+      )}
+    </div>
   );
 }

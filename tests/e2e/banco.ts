@@ -61,6 +61,16 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "GrupoProposta" WHERE "propostaId" IN (${propostasE2E})`);
   await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (${propostasE2E})`);
   await c.query(`DELETE FROM "Proposta" WHERE id IN (${propostasE2E})`);
+  // Os testes consomem números da fila de propostas: devolve o contador ao que sobrou (nunca deixa o número real avançado).
+  // Se não sobrou nenhuma proposta e o contador está na faixa inicial (2000 a 2500), volta a 2000; com propostas, vai a (maior + 1).
+  await c.query(
+    `UPDATE "ConfiguracaoEmpresa"
+        SET "proximoNumeroProposta" = COALESCE((SELECT max("numeroSequencial") + 1 FROM "Proposta"), 2000)
+      WHERE id = 'singleton'
+        AND "proximoNumeroProposta" IS NOT NULL
+        AND "proximoNumeroProposta" > COALESCE((SELECT max("numeroSequencial") + 1 FROM "Proposta"), 2000)
+        AND "proximoNumeroProposta" <= COALESCE((SELECT max("numeroSequencial") + 1 FROM "Proposta"), 2000) + 500`,
+  );
   await c.query(`DELETE FROM "TabelaPreco" WHERE "tipologiaId" IN (SELECT id FROM "Tipologia" WHERE nome LIKE 'E2E %')`);
   await c.query(`DELETE FROM "ComposicaoInsumo" WHERE "tipologiaId" IN (SELECT id FROM "Tipologia" WHERE nome LIKE 'E2E %')`);
   await c.query(`DELETE FROM "ComposicaoMaoDeObra" WHERE "tipologiaId" IN (SELECT id FROM "Tipologia" WHERE nome LIKE 'E2E %')`);
