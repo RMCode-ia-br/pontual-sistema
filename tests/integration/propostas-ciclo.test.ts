@@ -273,3 +273,57 @@ describe("conteúdo de impressão", () => {
     expect(c.opcoes[0].secoes[0].itens.map((i) => i.numero)).toEqual([1, 2, 3]);
   });
 });
+
+describe("regressões da revisão sênior", () => {
+  it("A1: aprovar uma revisão impede aprovar a outra do mesmo número e a outra sai de vigor", async () => {
+    const m = await montar("Revisões aprovadas");
+    await prisma.$transaction((tx) => enviarProposta(tx, { usuario, propostaId: m.propostaId }));
+    const rev = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "REVISAO" }));
+    const revOpcao = (await prisma.opcaoProposta.findFirstOrThrow({ where: { propostaId: rev.id } })).id;
+
+    await aprovar(m.propostaId, m.opcaoId);
+    // A revisão em rascunho foi substituída e não pode mais ser aprovada.
+    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: rev.id } })).status).toBe("SUBSTITUIDA");
+    await expect(aprovar(rev.id, revOpcao)).rejects.toThrow();
+    // Valor fechado e parcelas não duplicam.
+    expect((await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId } })).valorFechadoCentavos).toBe(1983000);
+    expect(await prisma.contaReceber.count({ where: { projetoId: m.projetoId } })).toBe(3);
+  });
+
+  it("A1: revisão aprovada primeiro (rascunho direto) substitui a original enviada", async () => {
+    const m = await montar("Revisão primeiro");
+    await prisma.$transaction((tx) => enviarProposta(tx, { usuario, propostaId: m.propostaId }));
+    const rev = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "REVISAO" }));
+    const revOpcao = (await prisma.opcaoProposta.findFirstOrThrow({ where: { propostaId: rev.id } })).id;
+    await aprovar(rev.id, revOpcao);
+    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: m.propostaId } })).status).toBe("SUBSTITUIDA");
+    await expect(aprovar(m.propostaId, m.opcaoId)).rejects.toThrow();
+    expect(await prisma.contaReceber.count({ where: { projetoId: m.projetoId } })).toBe(3);
+  });
+
+  it("A2: excluir o rascunho de uma revisão não impede criar outra revisão", async () => {
+    const m = await montar("Revisão excluída");
+    await prisma.$transaction((tx) => enviarProposta(tx, { usuario, propostaId: m.propostaId }));
+    const r1 = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "REVISAO" }));
+    await prisma.proposta.update({ where: { id: r1.id }, data: { deletadoEm: new Date() } });
+    const r2 = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "REVISAO" }));
+    expect(r2.revisao).toBe(2);
+  });
+
+  it("A3: o contador editado para trás nunca gera número já emitido", async () => {
+    const m = await montar("Contador");
+    const numeroEmitido = Number(m.numero.slice(0, 4));
+    // Simula alguém salvando Configurações com o contador antigo.
+    await comConexao((c) => c.query(`UPDATE "ConfiguracaoEmpresa" SET "proximoNumeroProposta" = $1 WHERE id = 'singleton'`, [numeroEmitido - 1]));
+    const novo = await prisma.$transaction((tx) => reservarNumeroDeProposta(tx));
+    expect(novo.sequencial).toBeGreaterThan(numeroEmitido);
+  });
+
+  it("M1: aprovar proposta enviada usa o valor CONGELADO, mesmo que os itens mudem depois", async () => {
+    const m = await montar("Valor congelado");
+    await prisma.$transaction((tx) => enviarProposta(tx, { usuario, propostaId: m.propostaId }));
+    await prisma.itemProposta.updateMany({ where: { propostaId: m.propostaId }, data: { precoTotalCentavos: 1 } });
+    const r = await aprovar(m.propostaId, m.opcaoId);
+    expect(r.valorAprovadoCentavos).toBe(1983000);
+  });
+});

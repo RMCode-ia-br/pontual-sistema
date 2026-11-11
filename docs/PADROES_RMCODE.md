@@ -71,3 +71,15 @@ Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que 
 | Kanban | `src/modules/projetos/components/{kanban,cartao-projeto}.tsx` | dnd-kit com mouse/toque longo, menu "Mover para…" acessível, movimento otimista com reversão | `@dnd-kit/core` |
 | Linha do tempo genérica | `src/modules/clientes/components/linha-do-tempo.tsx` | vínculo e ações por props (cliente ou projeto) | Prisma (`Interacao`) |
 **Da Pontual (não reutilizável):** fases do funil, motivos de perda, tipos de compromisso, textos dos modelos de WhatsApp.
+
+## Blocos da Fase 3 (propostas) — reutilizáveis
+| Bloco | Onde | O que entrega | Depende de |
+| --- | --- | --- | --- |
+| Interpretador de fórmulas seguro | `src/lib/dominio/formulas.ts` | parser de descida recursiva (sem `eval`): variáveis, operadores, funções fechadas, `se` preguiçoso, limites de tamanho/profundidade/nós | nenhuma |
+| Dinheiro e totais | `src/lib/dominio/{preco,parcelas}.ts` | centavos com BigInt, pontos-base, markup, acréscimo, totais por opção, parcelas com a última absorvendo a diferença | nenhuma |
+| Numeração com trava | `src/modules/propostas/servico.ts` (`reservarNumeroDeProposta`) + `numeracao-proposta.ts` | número sequencial sem repetição sob concorrência (`FOR UPDATE`) e sem colidir com o já emitido | Prisma |
+| Ciclo de documento congelável | `src/modules/propostas/servico-ciclo.ts`, `src/lib/dominio/ciclo-proposta.ts` | rascunho → enviado (snapshot) → aprovado/recusado, revisões, aprovação transacional idempotente | Prisma |
+| PDF de documento | `src/modules/propostas/pdf/*`, `src/app/api/propostas/[id]/*` | `@react-pdf/renderer` (A4, rodapé fixo, itens sem quebrar, aviso de rascunho), rota autenticada e auditada | `@react-pdf/renderer` |
+| Desenho esquemático | `src/lib/dominio/desenho.ts` + `src/components/desenho-esquadria.tsx` | formas puras renderizadas em SVG e no PDF | nenhuma |
+| Editor com cálculo no servidor | `src/modules/propostas/components/*` | formulário grande em estado local, prévia de preço por ação do servidor, painel de totais | Server Actions |
+**Da Pontual (não reutilizável):** tipologias e templates de descrição, tabela de preços por linha/acabamento/vidro, modelos de condição de pagamento, regra do acréscimo da nota fiscal.

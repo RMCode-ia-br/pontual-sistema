@@ -9,7 +9,7 @@ import { AreaTexto, Selecao } from "@/components/formulario";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { gerarDescricao } from "@/lib/dominio/descricao-item";
+import { gerarDescricao, valoresDoTemplate } from "@/lib/dominio/descricao-item";
 import type { TipoDesenho } from "@/lib/dominio/desenho";
 import { areaM2, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
@@ -101,15 +101,7 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
     const fa = inteiro(faces);
     const r = gerarDescricao(
       tipologia.templateDescricao,
-      {
-        FOLHAS: f ? String(f).padStart(2, "0") : "",
-        LINHA: nome(opcoes.linhas, linhaId) ?? "",
-        COR: nome(opcoes.tiposVidro, tipoVidroId) ?? "",
-        MM: espessura,
-        ACABAMENTO: nome(opcoes.acabamentos, acabamentoId) ?? "",
-        FACES: fa ? `${String(fa).padStart(2, "0")} ${fa === 1 ? "FACE" : "FACES"}` : "",
-        TORRES_CM: torres,
-      },
+      valoresDoTemplate({ folhas: f, faces: fa, torresCm: inteiro(torres), linha: nome(opcoes.linhas, linhaId), tipoVidro: nome(opcoes.tiposVidro, tipoVidroId), espessuraMm: inteiro(espessura), acabamento: nome(opcoes.acabamentos, acabamentoId) }),
       medidasLidas.lidas,
     );
     return { texto: descricoesMaiusculas ? r.texto.toUpperCase() : r.texto, faltando: r.faltando };

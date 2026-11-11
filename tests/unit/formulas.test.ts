@@ -28,6 +28,12 @@ describe("avaliarFormula", () => {
     expect(avaliarFormula("round(sqrt(16))", V)).toBe(4);
   });
 
+  it("se() é preguiçoso: o ramo não escolhido não roda (sem divisão por zero)", () => {
+    expect(avaliarFormula("se(F > 0; L / F; 0)", { ...V, F: 0 })).toBe(0);
+    expect(avaliarFormula("se(F > 0; L / F; 0)", { ...V, F: 2 })).toBe(1000);
+    expect(validarFormula("se(F > 0; L / F; 0)").ok).toBe(true);
+  });
+
   it("condicional se(condição; então; senão)", () => {
     expect(avaliarFormula("se(F > 2; 4; 2)", V)).toBe(2);
     expect(avaliarFormula("se(F >= 2; 4; 2)", V)).toBe(4);

@@ -9,7 +9,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
-import { gerarDescricao } from "@/lib/dominio/descricao-item";
+import { gerarDescricao, valoresDoTemplate } from "@/lib/dominio/descricao-item";
 import { normalizarCabecalho } from "@/lib/dominio/mapeamento";
 import { MAXIMO_CENTAVOS } from "@/lib/dominio/preco";
 import { mover } from "@/lib/dominio/estrutura-proposta";
@@ -351,6 +351,16 @@ export async function duplicarOpcao(entrada: { propostaId: string; opcaoId: stri
       const nova = await tx.opcaoProposta.create({ data: { propostaId: proposta.id, nome: v.nome, ordem, descontoCentavos: origem.descontoCentavos, criadoPorId: sessao.id, atualizadoPorId: sessao.id }, select: { id: true } });
       const itens = await tx.itemProposta.findMany({ where: { opcaoId: origem.id, deletadoEm: null }, orderBy: { ordem: "asc" }, include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } } } });
       let avisos = 0;
+      // Nomes do catálogo e modelos das tipologias, para REGERAR a descrição dos itens copiados (o texto leva linha,
+      // vidro e espessura: copiar sem regerar imprimiria "LINHA SUPREMA" numa opção Gold).
+      const [linhasCat, acabCat, vidrosCat, tipologiasCat, cabecalho] = await Promise.all([
+        tx.linhaAluminio.findMany({ select: { id: true, nome: true } }),
+        tx.acabamentoAluminio.findMany({ select: { id: true, nome: true } }),
+        tx.tipoVidro.findMany({ select: { id: true, nome: true } }),
+        tx.tipologia.findMany({ where: { id: { in: [...new Set(itens.flatMap((x) => (x.tipologiaId ? [x.tipologiaId] : [])))] } }, select: { id: true, templateDescricao: true } }),
+        tx.proposta.findUniqueOrThrow({ where: { id: proposta.id }, select: { descricoesMaiusculas: true } }),
+      ]);
+      const nomeDe = (lista: { id: string; nome: string }[], id: string | null) => (id ? (lista.find((x) => x.id === id)?.nome ?? null) : null);
       for (const i of itens) {
         const trocas = {
           linhaId: v.linhaId ?? i.linhaId,
@@ -364,6 +374,22 @@ export async function duplicarOpcao(entrada: { propostaId: string; opcaoId: stri
         let custo = i.custoEstimadoCentavos;
         let aviso = i.avisoPreco;
         let cobranca = i.cobranca;
+        let descricao = i.descricao;
+        if (mudou) {
+          const modelo = i.tipologiaId ? tipologiasCat.find((t) => t.id === i.tipologiaId)?.templateDescricao : null;
+          if (!i.descricaoEditada && modelo) {
+            const g = gerarDescricao(
+              modelo,
+              valoresDoTemplate({ folhas: i.folhas, faces: i.faces, torresCm: i.torresCm, linha: nomeDe(linhasCat, trocas.linhaId), tipoVidro: nomeDe(vidrosCat, trocas.tipoVidroId), espessuraMm: trocas.espessuraVidroMm, acabamento: nomeDe(acabCat, trocas.acabamentoId) }),
+              i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade })),
+            );
+            descricao = cabecalho.descricoesMaiusculas ? g.texto.toUpperCase() : g.texto;
+          } else {
+            // Descrição editada à mão (ou item livre): não dá para regerar; avisa para conferir.
+            avisos++;
+            aviso = `Revisar a descrição: ela foi escrita à mão e ainda cita a combinação anterior.${aviso ? ` ${aviso}` : ""}`;
+          }
+        }
         if (mudou && i.modoPreco !== "MANUAL") {
           const calc = await calcularPrecoDoItem(tx, {
             modoPreco: i.modoPreco,
@@ -400,7 +426,7 @@ export async function duplicarOpcao(entrada: { propostaId: string; opcaoId: stri
             folhas: i.folhas,
             faces: i.faces,
             torresCm: i.torresCm,
-            descricao: i.descricao,
+            descricao,
             descricaoEditada: i.descricaoEditada,
             local: i.local,
             observacoes: i.observacoes,
@@ -545,7 +571,6 @@ export async function importarMedidasDaVisita(propostaIdBruto: string, opcaoIdBr
             tipologiaId: tipologia?.id ?? null,
             descricao,
             local: m.ambiente,
-            observacoes: m.observacao,
             modoPreco: "MANUAL",
             valorManualCentavos: null,
             precoTotalCentavos: 0,

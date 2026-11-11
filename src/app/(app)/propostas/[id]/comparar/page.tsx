@@ -15,7 +15,7 @@ import { construirConteudo } from "@/modules/propostas/servico-ciclo";
 export const metadata: Metadata = { title: "Comparar revisões" };
 
 async function conteudoDe(id: string): Promise<ConteudoProposta | null> {
-  const p = await prisma.proposta.findFirst({ where: { id, deletadoEm: null }, select: { status: true, snapshot: true } });
+  const p = await prisma.proposta.findFirst({ where: { id, deletadoEm: null, projeto: { deletadoEm: null } }, select: { status: true, snapshot: true } });
   if (!p) return null;
   // Enviada: o que foi congelado. Rascunho: o estado atual.
   if (p.status !== "RASCUNHO" && p.snapshot) return p.snapshot as unknown as ConteudoProposta;

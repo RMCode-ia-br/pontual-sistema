@@ -1364,7 +1364,7 @@ model Proposta {
   comNotaFiscal       Boolean @default(false)
   /// Acréscimo aplicado (pontos-base), copiado de Configurações ao criar e editável.
   acrescimoNotaPb     Int     @default(500)
-  /// Comissões: começam em zero e são editáveis (entram no divisor da composição).
+  /// Comissões: começam em zero e são editáveis; só informativas (não alteram o preço).
   comissaoArquitetoPb Int     @default(0)
   comissaoIndicacaoPb Int     @default(0)
   /// Markup SOBRE O CUSTO desta proposta (pontos-base: 80% = 8000); vazio = o da categoria da tipologia/Configurações.

@@ -37,9 +37,9 @@ export async function conteudoParaPdf(propostaId: string): Promise<{ conteudo: C
   return { conteudo, status: p.status, opcaoAprovadaId: p.opcaoAprovadaId };
 }
 
-export async function gerarPdfDaProposta(conteudo: ConteudoProposta): Promise<Buffer> {
+export async function gerarPdfDaProposta(conteudo: ConteudoProposta, aviso: string | null = null): Promise<Buffer> {
   const logo = await carregarLogo(conteudo.empresa.logoCaminho);
-  return renderToBuffer(<PropostaPdf c={conteudo} logo={logo} />);
+  return renderToBuffer(<PropostaPdf c={conteudo} logo={logo} aviso={aviso} />);
 }
 
 export async function gerarPdfDeProducao(conteudo: ConteudoProposta, opcaoId: string | null): Promise<Buffer> {

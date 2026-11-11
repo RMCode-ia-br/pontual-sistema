@@ -98,6 +98,7 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
           status={status}
           revisaoAnteriorId={proposta.revisaoDeId}
           validadeEncerrada={proposta.validadeEncerradaPorReajuste}
+          vencida={!!vencida}
           opcoes={proposta.opcoes.map((o) => ({ id: o.id, nome: o.nome, totalFormatado: formatarMoeda(totais.find((t) => t.opcaoId === o.id)?.totalCentavos ?? 0) }))}
           condicaoSemParcelas={proposta.parcelas.length === 0}
           qtdParcelas={proposta.parcelas.length}

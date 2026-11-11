@@ -225,6 +225,8 @@ function executar(no: No, v: ValoresFormula): number {
     case "unario":
       return no.op === "-" ? -executar(no.arg, v) : executar(no.arg, v);
     case "chamada": {
+      // `se` é preguiçoso: o ramo não escolhido não roda (permite se(F>0; X/F; 0) sem dividir por zero).
+      if (no.nome === "se") return executar(executar(no.args[0], v) !== 0 ? no.args[1] : no.args[2], v);
       const def = FUNCOES[no.nome];
       return def.fn(...no.args.map((a) => executar(a, v)));
     }

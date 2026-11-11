@@ -67,7 +67,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Produtos e custos reais:** nenhum foi cadastrado por mim. Importar a planilha de fornecedores (ou cadastrar) quando houver; até lá o sistema mostra "sem custo".
 - [ ] **Salário e custo por hora** de funcionários são visíveis a todos os usuários (já era dívida; agora há aviso na tela e a exportação os omite). Restringir quando existirem perfis.
 - [ ] **Parceiros:** projetos indicados, fechamentos e valor entram na Fase 2 (dependem de `Projeto`). O relatório "sem contato há 12 meses" passa a usar projetos também.
-- [ ] **Importação da tabela de preços** (spec 7.12) fica para a Fase 3, quando a entidade existir.
+- [x] **Importação da tabela de preços** (spec 7.12): feita na Fase 3 (aba "Tabela de preços" da tipologia, CSV/XLSX, tudo ou nada).
 - [ ] **Limite de 2.000 linhas por planilha** e 5 MB por envio: confirmar com o Marcelo se bastam (a lista de produtos tem ~300 itens).
 - [ ] **Teste com um `.xlsx` real** (exportado do Excel da Pontual): os testes automáticos usam CSV; a leitura de XLSX usa `read-excel-file` e precisa ser conferida com uma planilha de verdade.
 - [ ] **`npm audit`:** 7 avisos moderados continuam, todos na cadeia do `shadcn` (ferramenta de desenvolvimento, `deepmerge`); `read-excel-file` não trouxe nenhum.
@@ -79,7 +79,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Faixas de porte** (médio/grande) ficam vazias; sem elas o porte é sempre manual (R10).
 - [ ] **Horário comercial e duração da visita** usam os padrões da spec; conferir com o Marcelo (inclui sábado até 12h).
 - [ ] **Férias coletivas e feriados de Macaé** precisam estar cadastrados em Configurações → Feriados para a agenda avisar (a de dezembro/Carnaval não vêm prontas).
-- [ ] **Importar medidas da visita para a proposta:** a consulta (`medidasParaProposta`) está pronta e testada; o botão entra com o editor de propostas (Fase 3).
+- [x] **Importar medidas da visita para a proposta:** feito na Fase 3 (botão no editor).
 - [ ] **Tipologia nas medidas-rascunho** é texto livre com sugestões; vira vínculo com `Tipologia` na Fase 3.
 - [ ] **Follow-ups de avaliação (D+2) e de fim da garantia** dependem de obra concluída (Fase 4); notificações e lembrete de visita 24 h por cron (sino) são da Fase 8 (hoje: lista no painel + botão de WhatsApp).
 - [ ] **Relatório do funil** calcula em memória (até 20.000 projetos); passar para SQL agregado e medir desempenho na Fase 7.
@@ -99,3 +99,17 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Textos das tipologias sem template no Apêndice B** (porta de giro, fechamento de sacada, portão, pergolado, espelho) estão marcados "revisar texto".
 - [ ] **Fixture 1127-26:** os 22 valores originais estão no PDF (fora do repositório); o teste usa valores de teste que reproduzem o total de R$ 89.725,00. Trocar pelos reais quando o PDF estiver disponível.
 - [ ] **Mapa gatilho → etapa** (entrega do material = fabricação concluída; entrega e instalação = instalação de vidros concluída) segue para confirmação; as parcelas por gatilho ficam "aguardando" até a Fase 4.
+
+## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)
+Corrigidos na fase: aprovação de duas revisões do mesmo número, revisão após excluir rascunho, contador de propostas regredindo, descrição não regerada ao duplicar opção, validade encerrada fora do PDF, importação de visita sem confirmação, `se()` não preguiçoso, aviso no PDF de rascunho (ver `docs/revisoes/fase-3.md`).
+- [ ] **Lista/filtro de propostas "vencidas"** (validade) e notificação por cron (Fase 8); hoje só o selo na ficha.
+- [ ] **Aviso de preço velho** quando muda fórmula/mão de obra/categoria de markup da tipologia, a tabela de preços ou o markup de Configurações depois de o item ser calculado (hoje só custo de produto, R13).
+- [ ] **Desconto maior que o subtotal** é cortado sem aviso na tela; **parcela em data fixa anterior à aprovação** nasce já vencida.
+- [ ] **Busca da lista de propostas** usa `contains` (não ignora acentos); a busca global (Ctrl+K) já ignora.
+- [ ] **Teste do PDF só confere estrutura** (cabeçalho do arquivo, páginas); a conferência de layout foi visual (capturas). Considerar teste de texto extraído.
+- [ ] **`seed:demo` ainda não cria propostas** de demonstração (as telas ficam vazias até alguém criar).
+- [ ] **Geração de PDF na Vercel** (`@react-pdf/renderer` em função serverless de `gru1`): tempo de partida a frio e limite de tamanho não foram medidos; testar no deploy de demonstração.
+- [ ] **`npm audit`**: 12 avisos, todos em ferramentas de desenvolvimento (`shadcn`, `typescript-eslint`/`minimatch`); o pacote de PDF não trouxe nenhum.
+- [ ] **Configuração de desenho por item** (`desenhoConfig`, ex.: sentido de abertura) existe no banco, sem tela.
+- [ ] **Anexo do aceite** sem vínculo ao campo `aceiteAnexoId` (hoje é a lista geral de arquivos da proposta).
+- [ ] **Fixture 1127-26** usa valores de teste que reproduzem o total real (R$ 89.725,00); trocar pelos 22 valores do PDF quando disponível.

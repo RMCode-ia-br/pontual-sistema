@@ -6,7 +6,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { problemasParaEnviar } from "@/lib/dominio/ciclo-proposta";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
 import { gerarParcelas } from "@/lib/dominio/parcelas";
-import { calcularTotais, quantidadeTotal } from "@/lib/dominio/preco";
+import { calcularTotais, MAXIMO_CENTAVOS, quantidadeTotal } from "@/lib/dominio/preco";
 import { chaveFollowUp, vencimentoAcompanharProposta } from "@/lib/dominio/followup";
 import { formatarMoeda, hojeCalendario } from "@/lib/formatadores";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
@@ -146,6 +146,7 @@ async function congelar(tx: Tx, propostaId: string, usuario: Usuario, agora: Dat
 export async function enviarProposta(tx: Tx, entrada: { usuario: Usuario; propostaId: string; ip?: string | null; agora?: Date }) {
   const { usuario, propostaId, ip } = entrada;
   const agora = entrada.agora ?? new Date();
+  await tx.$queryRaw`SELECT "id" FROM "Proposta" WHERE "id" = ${propostaId} FOR UPDATE`;
   const antes = await tx.proposta.findFirst({
     where: { id: propostaId, deletadoEm: null, projeto: { deletadoEm: null } },
     select: { id: true, numero: true, revisao: true, revisaoDeId: true, status: true, projeto: { select: { id: true, codigo: true, titulo: true, clienteId: true, status: true, responsavelId: true } } },
@@ -213,6 +214,7 @@ export type EntradaAprovacao = {
 export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const { usuario, propostaId, ip } = e;
   const agora = e.agora ?? new Date();
+  await tx.$queryRaw`SELECT "id" FROM "Proposta" WHERE "id" = ${propostaId} FOR UPDATE`;
   const p = await tx.proposta.findFirst({
     where: { id: propostaId, deletadoEm: null, projeto: { deletadoEm: null } },
     include: {
@@ -226,16 +228,24 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
     throw new ErroNegocio(p.status === "APROVADA" ? "Esta proposta já foi aprovada." : "Só propostas em rascunho ou enviadas podem ser aprovadas. Se foi substituída, aprove a revisão vigente.");
   }
   if (p.projeto.status === "CANCELADO") throw new ErroNegocio("O projeto está cancelado.");
+  // Serializa as aprovações do mesmo projeto (a soma do valor fechado precisa enxergar a anterior).
+  await tx.$queryRaw`SELECT "id" FROM "Projeto" WHERE "id" = ${p.projeto.id} FOR UPDATE`;
+  // Revisões do mesmo número são alternativas, nunca somam: se uma já foi aprovada, as outras não podem ser.
+  const irma = await tx.proposta.count({ where: { numero: p.numero, id: { not: propostaId }, status: "APROVADA", deletadoEm: null } });
+  if (irma > 0) throw new ErroNegocio(`Outra revisão da proposta ${p.numero} já foi aprovada.`);
   if (!p.opcoes.some((o) => o.id === e.opcaoId)) throw new ErroNegocio("A opção aprovada não pertence a esta proposta.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(e.aceitaEm) || Number.isNaN(Date.parse(`${e.aceitaEm}T00:00:00Z`))) throw new ErroNegocio("Informe uma data de aceite válida.");
 
   // Rascunho aprovado direto: congela antes (a proposta aprovada sempre tem snapshot).
   if (p.status === "RASCUNHO") await congelar(tx, propostaId, usuario, agora);
 
-  const conteudo = await construirConteudo(tx, propostaId);
-  const opcao = conteudo.opcoes.find((o) => o.id === e.opcaoId)!;
+  // Proposta já enviada: vale o que foi CONGELADO (o que o cliente recebeu), não o estado ao vivo.
+  const conteudo = p.status !== "RASCUNHO" && p.snapshot ? (p.snapshot as unknown as ConteudoProposta) : await construirConteudo(tx, propostaId);
+  const opcao = conteudo.opcoes.find((o) => o.id === e.opcaoId);
+  if (!opcao) throw new ErroNegocio("A opção aprovada não pertence a esta proposta.");
   const valorAprovado = opcao.totais.totalCentavos;
   if (valorAprovado <= 0) throw new ErroNegocio("A opção escolhida está sem valor.");
+  if (valorAprovado > MAXIMO_CENTAVOS) throw new ErroNegocio("O valor da proposta passa do máximo aceito (R$ 21.474.836,47).");
 
   const marcou = await tx.proposta.updateMany({
     where: { id: propostaId, status: { in: ["ENVIADA", "EXPIRADA"] }, deletadoEm: null },
@@ -250,6 +260,9 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
     },
   });
   if (marcou.count === 0) throw new ErroNegocio("Esta proposta mudou enquanto você decidia. Atualize a página.");
+
+  // As outras revisões do mesmo número (rascunho ou enviadas) saem de vigor.
+  await tx.proposta.updateMany({ where: { numero: p.numero, id: { not: propostaId }, status: { in: ["RASCUNHO", "ENVIADA", "EXPIRADA"] }, deletadoEm: null }, data: { status: "SUBSTITUIDA", atualizadoPorId: usuario.id } });
 
   // Projeto: valor fechado = soma das propostas aprovadas ("partes" diferentes somam).
   const soma = await tx.proposta.aggregate({ where: { projetoId: p.projeto.id, status: "APROVADA", deletadoEm: null }, _sum: { valorAprovadoCentavos: true } });
@@ -372,7 +385,8 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
   let ano = o.ano;
   let revisao = 0;
   if (modo === "REVISAO") {
-    const maior = await tx.proposta.aggregate({ where: { numero: o.numero, deletadoEm: null }, _max: { revisao: true } });
+    // Inclui as excluídas: o índice único (número + revisão) vale para elas também.
+    const maior = await tx.proposta.aggregate({ where: { numero: o.numero }, _max: { revisao: true } });
     revisao = (maior._max.revisao ?? o.revisao) + 1;
   } else {
     const novo = await reservarNumeroDeProposta(tx, entrada.agora);

@@ -28,13 +28,25 @@ export async function reservarNumeroDeProposta(tx: Db, agora: Date = new Date())
       FROM "ConfiguracaoEmpresa" WHERE "id" = 'singleton' FOR UPDATE`;
   if (linhas.length === 0) throw new ErroNegocio("As configurações da empresa não foram encontradas. Rode o seed.");
   const ano = anoEmSaoPaulo(agora);
-  const { sequencial, novoProximo } = proximoNumero({ proximo: linhas[0].proximo, anoDoContador: linhas[0].ano, anoAtual: ano, reiniciaPorAno: linhas[0].reinicia });
+  let { sequencial, novoProximo } = proximoNumero({ proximo: linhas[0].proximo, anoDoContador: linhas[0].ano, anoAtual: ano, reiniciaPorAno: linhas[0].reinicia });
+  // Proteção: o contador (editável em Configurações) nunca pode voltar para um número que já foi emitido (inclusive
+  // de proposta excluída: a unicidade do banco vale para elas também). Com reinício por ano, só conta o ano.
+  const emitido = linhas[0].reinicia
+    ? await tx.$queryRaw<{ maior: number | null }[]>`SELECT max("numeroSequencial") AS maior FROM "Proposta" WHERE "ano" = ${ano}`
+    : await tx.$queryRaw<{ maior: number | null }[]>`SELECT max("numeroSequencial") AS maior FROM "Proposta"`;
+  const maior = emitido[0]?.maior ?? 0;
+  if (maior >= sequencial) {
+    sequencial = maior + 1;
+    novoProximo = sequencial + 1;
+  }
   await tx.$executeRaw`UPDATE "ConfiguracaoEmpresa" SET "proximoNumeroProposta" = ${novoProximo}, "anoNumeracaoProposta" = ${ano} WHERE "id" = 'singleton'`;
   return { numero: formatarNumeroProposta(sequencial, ano), sequencial, ano };
 }
 
 /** Só rascunho é editável; proposta enviada pede nova revisão (R4). Devolve o que as ações precisam. */
 export async function exigirRascunho(db: Db, propostaId: string) {
+  // Trava a linha: edição e envio/aprovação da mesma proposta nunca andam juntos (o snapshot não fica velho).
+  await db.$queryRaw`SELECT "id" FROM "Proposta" WHERE "id" = ${propostaId} FOR UPDATE`;
   const p = await db.proposta.findFirst({
     where: { id: propostaId, deletadoEm: null },
     select: { id: true, status: true, projetoId: true, numero: true, revisao: true, comNotaFiscal: true, acrescimoNotaPb: true, markupPb: true, projeto: { select: { clienteId: true, deletadoEm: true } } },

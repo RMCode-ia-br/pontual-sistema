@@ -151,9 +151,11 @@ export async function encerrarValidadePorReajuste(propostaIdBruto: string): Prom
   return executar("propostas.validade", async () => {
     const ip = extrairIp(await headers());
     const projetoId = await prisma.$transaction(async (tx) => {
-      const p = await tx.proposta.findFirst({ where: { id: id.data, deletadoEm: null, status: { in: ["RASCUNHO", "ENVIADA"] } }, select: { id: true, numero: true, projetoId: true } });
+      const p = await tx.proposta.findFirst({ where: { id: id.data, deletadoEm: null, status: { in: ["RASCUNHO", "ENVIADA"] } }, select: { id: true, numero: true, projetoId: true, snapshot: true } });
       if (!p) throw new ErroNegocio("Proposta não encontrada ou já decidida.");
-      await tx.proposta.update({ where: { id: p.id }, data: { validadeEncerradaPorReajuste: true, atualizadoPorId: sessao.id } });
+      // O PDF de proposta enviada lê o conteúdo congelado: a marca precisa entrar nele também.
+      const snapshot = p.snapshot && typeof p.snapshot === "object" ? { ...(p.snapshot as Record<string, unknown>), validade: { ...((p.snapshot as { validade?: Record<string, unknown> }).validade ?? {}), encerradaPorReajuste: true } } : undefined;
+      await tx.proposta.update({ where: { id: p.id }, data: { validadeEncerradaPorReajuste: true, ...(snapshot ? { snapshot: snapshot as never } : {}), atualizadoPorId: sessao.id } });
       await registrarAuditoria(tx, { usuario: sessao, entidade: "Proposta", entidadeId: p.id, acao: "VALIDADE_ENCERRADA_REAJUSTE", depois: { validadeEncerradaPorReajuste: true }, ip });
       return p.projetoId;
     });

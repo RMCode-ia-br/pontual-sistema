@@ -52,3 +52,16 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **Valores de `Prisma.groupBy` com `where` aninhado** não aceitam dois filtros diferentes na mesma relação em `_count`; contar à parte.
 - **Rota pública com token:** buscar pelo **hash** (índice único) em vez de comparar o texto secreto elimina a comparação sensível a tempo; responder o mesmo 404 para malformado, inexistente, revogado e usuário inativo.
 - **`.ics`:** dobrar linha em 75 **octetos** (não caracteres), escapar `\ ; ,` e quebras de linha (inclusive `\r`: impede injetar propriedades), `SEQUENCE` crescente (segundos desde 1970) para o calendário atualizar em vez de duplicar; cancelado sai como `STATUS:CANCELLED`.
+
+## Fase 3 (2026-11-14) — propostas, fórmulas, PDF
+- **Ver o PDF de verdade:** sem `pdftoppm`, abrir o arquivo num Chromium **com janela** (`playwright-core`, `headless: false`, `#toolbar=0&view=FitH`) e tirar um screenshot; o modo headless não mostra o visualizador. Foi assim que apareceu o defeito de layout (descrição invadindo desenho e valor).
+- **Layout no `@react-pdf`:** texto longo só quebra linha dentro de um container com largura definida: usar `flex: 1` na coluna da descrição e `width` fixa + `flexShrink: 0` nas colunas do desenho e do valor; `alignItems: "flex-start"` na linha.
+- **`toLocaleString("pt-BR", { style: "currency" })` põe espaço inseparável (U+00A0) depois de "R$"**: testes de texto precisam normalizar.
+- **`Prisma.$queryRaw ... FOR UPDATE`** dentro de `$transaction` é o jeito de travar uma linha (contador de numeração, proposta, projeto). Sem trava, duas aprovações simultâneas liam o mesmo estado; com ela, uma vence e a outra recebe erro de negócio (teste de integração com 3 aprovações simultâneas).
+- **Índice único cheio + exclusão lógica:** o número de revisão e o número da proposta precisam considerar as linhas excluídas, senão a próxima criação bate no índice e não há saída para o usuário.
+- **Mudança de nome de coluna sem perder dados:** `ALTER TABLE ... RENAME COLUMN` escrito à mão na migração (o `migrate diff` proporia apagar e criar). Migração já aplicada nunca é editada: o ajuste vai numa migração nova.
+- **`react-hooks/set-state-in-effect`** (React 19): valor derivado de outros estados deve ser calculado no render (descrição gerada, prévia visível), não copiado para estado num `useEffect`.
+- **E2E consome números reais da fila de propostas:** a limpeza dos testes devolve `proximoNumeroProposta` ao que sobrou; sem isso o número de produção avançava a cada rodada.
+- **`AUTH_SECRET` vazio no `.env.local`** derruba o login no E2E (`MissingSecret`): passar um segredo aleatório só no processo (`$env:AUTH_SECRET`), sem tocar no arquivo.
+- **Regex em scripts gerados por heredoc/`node -e`:** as barras invertidas (`\d`, `\?`) somem; para testes, preferir classes (`[0-9]`) e a ferramenta Edit para a linha. Os arquivos do repositório estão em CRLF: scripts de edição precisam normalizar e devolver CRLF.
+- **Subagente revisor** achou 4 problemas altos que os testes não pegavam (concorrência entre revisões, contador editável, índice com excluídas, descrição copiada): vale rodar sempre, com o diff e a spec, antes de fechar a fase.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aplicarPlural, formatarMedidas, gerarDescricao, variaveisDoTemplate } from "@/lib/dominio/descricao-item";
+import { aplicarPlural, formatarMedidas, gerarDescricao, valoresDoTemplate, variaveisDoTemplate } from "@/lib/dominio/descricao-item";
 import { formatarNumeroProposta, lerNumeroProposta, proximoNumero } from "@/lib/dominio/numeracao-proposta";
 import {
   acrescimoSobre,
@@ -340,5 +340,23 @@ describe("descrição com plural", () => {
   });
   it("variáveis desconhecidas do template são apontadas", () => {
     expect(variaveisDoTemplate("{LINHA} {XYZ} {MM}")).toEqual({ validas: ["LINHA", "MM"], desconhecidas: ["XYZ"] });
+  });
+});
+
+describe("valoresDoTemplate (descrição regerada ao duplicar opção)", () => {
+  const modelo = "JANELA(S) COM {FOLHAS} FOLHAS LINHA {LINHA}, VIDRO {COR} DE {MM}MM, ACABAMENTO {ACABAMENTO}, MED. {MEDIDAS}";
+  const medidas = [{ larguraMm: 2000, alturaMm: 1200, quantidade: 1 }];
+  const base = { folhas: 2, faces: null, torresCm: null, linha: "Suprema", tipoVidro: "Incolor", espessuraMm: 8, acabamento: "Branco" };
+  it("troca de linha e vidro muda o texto", () => {
+    expect(gerarDescricao(modelo, valoresDoTemplate(base), medidas).texto).toBe("JANELA COM 02 FOLHAS LINHA Suprema, VIDRO Incolor DE 8MM, ACABAMENTO Branco, MED. 2000 X 1200");
+    const gold = gerarDescricao(modelo, valoresDoTemplate({ ...base, linha: "Gold", tipoVidro: "Fumê", espessuraMm: 10 }), medidas).texto;
+    expect(gold).toContain("LINHA Gold");
+    expect(gold).toContain("VIDRO Fumê DE 10MM");
+    expect(gold).not.toContain("Suprema");
+  });
+  it("faces trazem a palavra no singular e no plural; vazio fica em branco", () => {
+    expect(valoresDoTemplate({ ...base, faces: 1 }).FACES).toBe("01 FACE");
+    expect(valoresDoTemplate({ ...base, faces: 2 }).FACES).toBe("02 FACES");
+    expect(valoresDoTemplate({ ...base, folhas: null, linha: null }).FOLHAS).toBe("");
   });
 });

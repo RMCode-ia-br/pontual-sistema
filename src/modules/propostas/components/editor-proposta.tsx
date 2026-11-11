@@ -91,6 +91,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
   const [dialogoItem, setDialogoItem] = useState<{ item: ItemSer | null; grupoId: string | null } | null>(null);
   const [removendoItem, setRemovendoItem] = useState<ItemSer | null>(null);
   const [removendoOpcao, setRemovendoOpcao] = useState(false);
+  const [confirmandoImportar, setConfirmandoImportar] = useState(false);
   const [novoGrupo, setNovoGrupo] = useState("");
   const [nomeOpcao, setNomeOpcao] = useState(opcaoAtual?.nome ?? "");
   const [descontoOpcao, setDescontoOpcao] = useState(opcaoAtual?.descontoCentavos ? centavosParaCampo(opcaoAtual.descontoCentavos) : "");
@@ -296,7 +297,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
                 <Plus aria-hidden /> Adicionar item
               </Button>
               {temMedidasDaVisita ? (
-                <Button type="button" variant="outline" disabled={pendente} onClick={() => chamar(() => importarMedidasDaVisita(proposta.id, opcaoAtual.id))}>
+                <Button type="button" variant="outline" disabled={pendente} onClick={() => (secoes.length > 0 ? setConfirmandoImportar(true) : chamar(() => importarMedidasDaVisita(proposta.id, opcaoAtual.id)))}>
                   <FileInput aria-hidden /> Importar medidas da visita
                 </Button>
               ) : null}
@@ -480,6 +481,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
         aoSalvar={() => router.refresh()}
       />
       <ConfirmarAcao aberto={!!removendoItem} aoFechar={() => setRemovendoItem(null)} titulo="Remover este item?" descricao="O item sai da proposta e os totais são recalculados." botao="Remover" pendente={pendente} aoConfirmar={() => removendoItem && chamar(() => removerItem(proposta.id, removendoItem.id), () => setRemovendoItem(null))} />
+      <ConfirmarAcao aberto={confirmandoImportar} aoFechar={() => setConfirmandoImportar(false)} titulo="Importar as medidas da visita?" descricao="Esta opção já tem itens. A importação cria um item novo para CADA medida da visita (sem valor); se você já importou, os itens ficarão repetidos." botao="Importar mesmo assim" pendente={pendente} aoConfirmar={() => opcaoAtual && chamar(() => importarMedidasDaVisita(proposta.id, opcaoAtual.id), () => setConfirmandoImportar(false))} />
       <ConfirmarAcao aberto={removendoOpcao} aoFechar={() => setRemovendoOpcao(false)} titulo="Remover esta opção?" descricao="Todos os itens desta opção saem da proposta." botao="Remover opção" pendente={pendente} aoConfirmar={() => opcaoAtual && chamar(() => removerOpcao(proposta.id, opcaoAtual.id), () => { setRemovendoOpcao(false); setOpcaoAtiva(proposta.opcoes.find((o) => o.id !== opcaoAtual.id)?.id ?? ""); })} />
     </div>
   );

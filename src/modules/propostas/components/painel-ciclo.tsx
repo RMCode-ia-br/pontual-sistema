@@ -21,6 +21,8 @@ type Props = {
   status: StatusProposta;
   revisaoAnteriorId: string | null;
   validadeEncerrada: boolean;
+  /** Enviada com data limite já vencida (aprovar ainda é possível, mas o preço pode ter mudado). */
+  vencida: boolean;
   opcoes: { id: string; nome: string; totalFormatado: string }[];
   condicaoSemParcelas: boolean;
   qtdParcelas: number;
@@ -40,7 +42,7 @@ const FORMAS = [
 export function PainelCiclo(p: Props) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
-  const [dialogo, setDialogo] = useState<"enviar" | "aprovar" | "recusar" | "cancelar" | "revisao" | null>(null);
+  const [dialogo, setDialogo] = useState<"enviar" | "aprovar" | "recusar" | "cancelar" | "revisao" | "validade" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [opcaoId, setOpcaoId] = useState(p.opcoes[0]?.id ?? "");
   const [forma, setForma] = useState<(typeof FORMAS)[number]["v"]>("WHATSAPP");
@@ -130,7 +132,7 @@ export function PainelCiclo(p: Props) {
           </Link>
         ) : null}
         {enviada && !p.validadeEncerrada ? (
-          <Button type="button" variant="ghost" onClick={() => rodar(() => encerrarValidadePorReajuste(p.propostaId))}>
+          <Button type="button" variant="ghost" onClick={() => setDialogo("validade")}>
             Encerrar validade por reajuste
           </Button>
         ) : null}
@@ -146,6 +148,7 @@ export function PainelCiclo(p: Props) {
         aoConfirmar={() => rodar(() => marcarComoEnviada(p.propostaId))}
       />
       <ConfirmarAcao aberto={dialogo === "revisao"} aoFechar={fechar} titulo="Criar uma nova revisão?" descricao="A revisão usa o mesmo número (Rev. 1, 2…) e começa como rascunho, copiada desta. A atual só sai de vigor quando a nova for enviada." botao="Criar revisão" pendente={pendente} aoConfirmar={() => rodar(() => criarRevisao(p.propostaId), (d) => d && router.push(`/propostas/${(d as { id: string }).id}`))} />
+      <ConfirmarAcao aberto={dialogo === "validade"} aoFechar={fechar} titulo="Encerrar a validade por reajuste?" descricao="A proposta passa a dizer, no PDF, que a validade foi encerrada por reajuste de fornecedor. Isso não pode ser desfeito: para valores novos, crie uma revisão." botao="Encerrar validade" pendente={pendente} aoConfirmar={() => rodar(() => encerrarValidadePorReajuste(p.propostaId))} />
       <ConfirmarAcao aberto={dialogo === "cancelar"} aoFechar={fechar} titulo={`Cancelar a proposta ${p.numero}?`} descricao="Ela deixa de poder ser aprovada. O histórico fica guardado." botao="Cancelar proposta" pendente={pendente} aoConfirmar={() => rodar(() => cancelarProposta(p.propostaId))} />
 
       <Dialog open={dialogo === "aprovar"} onOpenChange={(a) => !a && fechar()}>
@@ -192,6 +195,7 @@ export function PainelCiclo(p: Props) {
               Observação (opcional)
               <AreaTexto value={observacao} rows={2} maxLength={1000} onChange={(e) => setObservacao(e.target.value)} aria-label="Observação do aceite" />
             </label>
+            {p.vencida || p.validadeEncerrada ? <p role="status" className="text-xs text-amber-700 dark:text-amber-400">A validade desta proposta {p.validadeEncerrada ? "foi encerrada por reajuste" : "já venceu"}: confirme com o cliente que o valor continua valendo.</p> : null}
             <p className="text-muted-foreground text-xs">Outras propostas do mesmo projeto não são recusadas sozinhas (podem ser “partes” diferentes).</p>
             {erro ? <p role="alert" className="text-destructive text-sm">{erro}</p> : null}
           </div>

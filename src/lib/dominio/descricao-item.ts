@@ -11,6 +11,27 @@ import { quantidadeTotal } from "./preco";
 export const VARIAVEIS_TEMPLATE = ["FOLHAS", "LINHA", "COR", "MM", "ACABAMENTO", "FACES", "TORRES_CM", "MEDIDAS", "L", "A"] as const;
 export type VariavelTemplate = (typeof VARIAVEIS_TEMPLATE)[number];
 
+/** Valores das variáveis do template a partir das escolhas do item (mesma regra na tela e no servidor). */
+export function valoresDoTemplate(e: {
+  folhas: number | null;
+  faces: number | null;
+  torresCm: number | null;
+  linha: string | null;
+  tipoVidro: string | null;
+  espessuraMm: number | null;
+  acabamento: string | null;
+}): ValoresTemplate {
+  return {
+    FOLHAS: e.folhas ? String(e.folhas).padStart(2, "0") : "",
+    LINHA: e.linha ?? "",
+    COR: e.tipoVidro ?? "",
+    MM: e.espessuraMm ?? "",
+    ACABAMENTO: e.acabamento ?? "",
+    FACES: e.faces ? `${String(e.faces).padStart(2, "0")} ${e.faces === 1 ? "FACE" : "FACES"}` : "",
+    TORRES_CM: e.torresCm ?? "",
+  };
+}
+
 export function aplicarPlural(texto: string, quantidade: number): string {
   const plural = quantidade !== 1;
   return texto.replace(/([\p{L}]+)\((IS|ES|ÕES|S)\)/gu, (_t, palavra: string, sufixo: string) => {

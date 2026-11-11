@@ -15,7 +15,7 @@ const azulClaro = "#eff6ff";
  * totais com a nota fiscal em linha separada, notas importantes, termos comerciais, assinatura e rodapé em todas as páginas.
  * Nunca mostra custo, markup nem comissões (o conteúdo nem os contém).
  */
-export function PropostaPdf({ c, logo }: { c: ConteudoProposta; logo: LogoPdf }) {
+export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null }) {
   const cor = corDaMarca(c.empresa.corPrimaria);
   const maiusculas = (t: string) => (c.descricoesMaiusculas ? t.toUpperCase() : t);
   const nomeEmpresa = c.empresa.nomeFantasia ?? "";
@@ -25,6 +25,11 @@ export function PropostaPdf({ c, logo }: { c: ConteudoProposta; logo: LogoPdf })
     <Document title={`Proposta ${c.numero}`} author={nomeEmpresa} subject="Proposta comercial">
       <Page size="A4" style={{ paddingTop: 36, paddingBottom: 56, paddingHorizontal: 36, fontFamily: "Helvetica", fontSize: 9, color: "#111827" }}>
         <Rodape cor={cor} texto={textoDoRodape({ ...c.empresa })} />
+        {aviso ? (
+          <Text fixed style={{ position: "absolute", top: 14, left: 36, right: 36, fontSize: 8, fontFamily: "Helvetica-Bold", color: "#b91c1c", textAlign: "center" }}>
+            {aviso}
+          </Text>
+        ) : null}
 
         {/* Cabeçalho */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>

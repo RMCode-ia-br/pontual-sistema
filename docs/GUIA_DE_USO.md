@@ -120,3 +120,14 @@ Se aparecer “Algo deu errado”, toque em **Tentar de novo**. Se continuar, **
 
 - **Ctrl+K** (ou o botão Buscar) acha clientes, fornecedores, produtos, funcionários, tarefas e páginas.
 - **Cadastros → Lixeira:** tudo que foi removido fica guardado e pode voltar. Se o código de um produto (ou o CNPJ/CPF) já foi usado por outro cadastro, o sistema explica por que não dá para restaurar.
+
+## 18. Propostas (do orçamento à aprovação)
+1. **Antes da primeira proposta:** em **Cadastros → Tipologias e preços** confira as tipologias (janela, porta, box, guarda-corpo…) e, se for usar preço por tabela ou composição, cadastre os preços e os custos. Em **Configurações → Condições de pagamento** estão os modelos (50/25/25, 50/50, à vista, cartão, a combinar). Em **Configurações → Empresa** ficam o markup (80%), o markup do guarda-corpo e do vidro temperado (100%) e o acréscimo da nota fiscal (5%).
+2. **Criar:** abra o projeto → aba **Propostas** → **Nova proposta**. Ela já nasce com o cliente, o endereço da obra e os textos padrão, e recebe o próximo número (começa em 2000-26).
+3. **Itens:** **Adicionar item** → escolha a tipologia, a linha, o vidro e informe as medidas (largura × altura × quantidade; um item pode ter várias medidas com o mesmo valor). A descrição técnica sai sozinha (e pode ser editada). O preço pode ser **valor manual** (o mais usado), **tabela** ou **composição** (custo × (1 + markup)). Se o projeto teve visita, use **Importar medidas da visita**.
+4. **Opções e seções:** use opções para alternativas (ex.: Linha Suprema × Linha Gold; **Duplicar** copia e recalcula) e seções para agrupar (ex.: PARTE SUPERIOR).
+5. **Com ou sem nota fiscal:** marque **Esta venda é COM nota fiscal** só quando o cliente pedir. O acréscimo aparece em linha separada. O total é sempre calculado: nunca é digitado.
+6. **Pagamento, prazo e validade:** escolha o modelo de pagamento (dá para ajustar as parcelas nesta proposta), o prazo (total ou por etapas) e a validade. **Salvar proposta** sempre.
+7. **Enviar:** **Ver / baixar PDF**, mande pelo WhatsApp ou e-mail (anexe o PDF) e depois **Marcar como enviada**. A proposta é congelada; para mudar algo, crie uma **Nova revisão** (mesmo número, Rev. 1…). **Comparar com a revisão anterior** mostra o que mudou.
+8. **Decidir:** **Aprovar** (informe como o cliente aceitou) gera as parcelas a receber, leva o projeto para Aprovado e cria as tarefas de medição exata (e do condomínio, se for prédio). **Recusar** pede o motivo.
+9. **Para a fábrica:** **Folha de produção** é um PDF só com medidas e desenhos, sem valores.
