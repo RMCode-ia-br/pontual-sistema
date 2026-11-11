@@ -1,0 +1,56 @@
+name: Backup do banco (criptografado)
+
+# Segredos necessários no repositório (Settings > Secrets and variables > Actions):
+#   BACKUP_DATABASE_URL  string do Session pooler (porta 5432), com a senha codificada na URL
+#   BACKUP_PASSPHRASE    senha de criptografia do dump (guarde-a em local seguro: sem ela não há restauração)
+# O dump contém dados pessoais: o artefato só é gerado criptografado.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Instalar cliente PostgreSQL 17 (compatível com o servidor)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Verificar segredos
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$BACKUP_DATABASE_URL" || { echo "::error::Segredo BACKUP_DATABASE_URL ausente"; exit 1; }
+          test -n "$BACKUP_PASSPHRASE" || { echo "::error::Segredo BACKUP_PASSPHRASE ausente"; exit 1; }
+
+      - name: Gerar dump, compactar e criptografar
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          DATA=$(date -u +%Y%m%d-%H%M)
+          /usr/lib/postgresql/17/bin/pg_dump --no-owner --no-privileges --format=custom --compress=9 \
+            --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime --exclude-schema=vault \
+            "$BACKUP_DATABASE_URL" -f "pontual-$DATA.dump"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE \
+            -in "pontual-$DATA.dump" -out "pontual-$DATA.dump.enc"
+          rm "pontual-$DATA.dump"
+          test -s "pontual-$DATA.dump.enc"
+          echo "ARQUIVO=pontual-$DATA.dump.enc" >> "$GITHUB_ENV"
+
+      - name: Guardar artefato (retenção de 30 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-pontual
+          path: pontual-*.dump.enc
+          retention-days: 30
+          if-no-files-found: error

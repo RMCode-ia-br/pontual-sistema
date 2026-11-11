@@ -1,0 +1,399 @@
+// Pontual Gestão — schema da Fase 0 (Fundação).
+// Convenções (docs/ESPECIFICACAO.md, seção 4): nomes em português sem acento, dinheiro em
+// centavos (Int), medidas em mm, exclusão lógica (deletadoEm) e colunas de auditoria.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===================== Enums =====================
+
+enum PapelUsuario {
+  ADMIN
+}
+
+enum TipoDias {
+  UTEIS
+  CORRIDOS
+}
+
+enum TipoFeriado {
+  FERIADO
+  FERIAS_COLETIVA_FORNECEDORES
+  OUTRO
+}
+
+enum TipoInteracao {
+  LIGACAO
+  WHATSAPP
+  VISITA
+  EMAIL
+  NOTA
+  SISTEMA
+}
+
+enum StatusTarefa {
+  ABERTA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum MomentoFoto {
+  ANTES
+  DURANTE
+  DEPOIS
+}
+
+enum TipoCategoriaFinanceira {
+  RECEITA
+  DESPESA
+}
+
+enum CategoriaModeloTexto {
+  PROPOSTA_NOTAS
+  PROPOSTA_TERMOS
+  WHATSAPP
+  OUTRO
+}
+
+// ===================== Sistema =====================
+
+model Usuario {
+  id                String       @id @default(cuid())
+  nome              String
+  /// Sempre gravado em minúsculas (login não diferencia maiúsculas).
+  login             String       @unique
+  /// Opcional; único quando preenchido. Sempre em minúsculas.
+  email             String?      @unique
+  senhaHash         String
+  ativo             Boolean      @default(true)
+  papel             PapelUsuario @default(ADMIN)
+  precisaTrocarSenha Boolean     @default(true)
+  /// Incrementada ao trocar/redefinir senha ou desativar: invalida sessões antigas.
+  versaoSessao      Int          @default(1)
+  ultimoLoginEm     DateTime?
+
+  criadoEm          DateTime     @default(now())
+  atualizadoEm      DateTime     @updatedAt
+  criadoPorId       String?
+  atualizadoPorId   String?
+  deletadoEm        DateTime?
+
+  @@index([ativo])
+}
+
+model TentativaLogin {
+  id            String   @id @default(cuid())
+  /// Login ou e-mail digitado, em minúsculas.
+  identificador String
+  ip            String
+  sucesso       Boolean
+  criadoEm      DateTime @default(now())
+
+  @@index([identificador, criadoEm])
+  @@index([ip, criadoEm])
+}
+
+model ConfiguracaoEmpresa {
+  /// Singleton: sempre "singleton".
+  id                             String      @id @default("singleton")
+  razaoSocial                    String?
+  nomeFantasia                   String?
+  cnpj                           String?
+  endereco                       String?
+  cidade                         String?
+  uf                             String?
+  cep                            String?
+  telefone                       String?
+  whatsapp                       String?
+  emailContato                   String?
+  emailPropostas                 String?
+  siteUrl                        String?
+  instagramUrl                   String?
+  googlePerfilUrl                String?
+  /// Link direto para escrever avaliação (diferente do link de compartilhamento do perfil).
+  linkAvaliacaoGoogle            String?
+  logoCaminho                    String?
+  corPrimaria                    String?
+
+  // Horário comercial (HH:mm); vazio = sem expediente naquele dia.
+  horarioSemanaInicio            String?     @default("08:00")
+  horarioSemanaFim               String?     @default("18:00")
+  horarioSabadoInicio            String?     @default("08:00")
+  horarioSabadoFim               String?     @default("12:00")
+  visitaDuracaoMin               Int         @default(60)
+
+  // Parâmetros de negócio. Alíquota e margens ficam VAZIAS até o gestor definir.
+  aliquotaImpostoPercentual      Decimal?    @db.Decimal(5, 2)
+  margemPadraoPercentual         Decimal?    @db.Decimal(5, 2)
+  margemMinimaAlertaPercentual   Decimal?    @db.Decimal(5, 2)
+  metaFaturamentoMensalCentavos  Int         @default(30000000)
+  capacidadeProducaoM2Mes        Int         @default(300)
+  garantiaRegulagemDias          Int         @default(90)
+  retalhoMinimoMm                Int?
+  custoMaoDeObraPorM2Centavos    Int?
+  tipoDias                       TipoDias    @default(UTEIS)
+  diasFollowUpProposta           Int         @default(3)
+  diasAlertaPrazoAmarelo         Int         @default(3)
+  limiteSimplesCentavos          Int         @default(480000000)
+
+  // Propostas
+  proximoNumeroProposta          Int?
+  reiniciaNumeracaoPorAno        Boolean     @default(false)
+  consultorNome                  String?
+  consultorCargo                 String?
+  dadosPagamento                 String?
+  pdfExibirValorPorItem          Boolean     @default(true)
+  pdfDescricoesMaiusculas        Boolean     @default(true)
+
+  criadoEm                       DateTime    @default(now())
+  atualizadoEm                   DateTime    @updatedAt
+  criadoPorId                    String?
+  atualizadoPorId                String?
+}
+
+model Feriado {
+  id              String      @id @default(cuid())
+  data            DateTime    @db.Date
+  nome            String
+  tipo            TipoFeriado @default(FERIADO)
+  /// Fim do período, para férias coletivas (vazio = só um dia).
+  dataFim         DateTime?   @db.Date
+  ativo           Boolean     @default(true)
+
+  criadoEm        DateTime    @default(now())
+  atualizadoEm    DateTime    @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([data, nome])
+  @@index([data])
+}
+
+model LogAuditoria {
+  id        String   @id @default(cuid())
+  criadoEm  DateTime @default(now())
+  usuarioId String?
+  /// Nome do usuário no momento da ação (preserva o histórico se o usuário for removido).
+  usuarioNome String?
+  entidade  String
+  entidadeId String
+  /// CRIAR, ATUALIZAR, EXCLUIR, RESTAURAR, LOGIN, etc.
+  acao      String
+  antes     Json?
+  depois    Json?
+  ip        String?
+
+  @@index([entidade, entidadeId])
+  @@index([usuarioId, criadoEm])
+  @@index([criadoEm])
+}
+
+model Anexo {
+  id              String       @id @default(cuid())
+  entidadeTipo    String
+  entidadeId      String
+  categoria       String?
+  nome            String
+  /// Caminho do objeto no bucket privado do Storage.
+  caminho         String       @unique
+  mime            String
+  tamanhoBytes    Int
+  descricao       String?
+  momento         MomentoFoto?
+  usarNoPortfolio Boolean      @default(true)
+
+  criadoEm        DateTime     @default(now())
+  atualizadoEm    DateTime     @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([entidadeTipo, entidadeId])
+}
+
+model Interacao {
+  id              String        @id @default(cuid())
+  tipo            TipoInteracao
+  texto           String
+  // Sem FK por ora: Cliente (Fase 1) e Projeto (Fase 2) ainda não existem. Ver docs/DECISOES.md.
+  clienteId       String?
+  projetoId       String?
+
+  criadoEm        DateTime      @default(now())
+  atualizadoEm    DateTime      @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([clienteId, criadoEm])
+  @@index([projetoId, criadoEm])
+}
+
+model Tarefa {
+  id              String       @id @default(cuid())
+  titulo          String
+  descricao       String?
+  tipo            String?
+  responsavelId   String?
+  vencimento      DateTime?    @db.Date
+  status          StatusTarefa @default(ABERTA)
+  concluidaEm     DateTime?
+  clienteId       String?
+  projetoId       String?
+  /// Evita duplicar tarefas automáticas (ex.: "follow-up:proposta:123").
+  chaveUnica      String?      @unique
+
+  criadoEm        DateTime     @default(now())
+  atualizadoEm    DateTime     @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([responsavelId, status, vencimento])
+  @@index([status, vencimento])
+}
+
+model Notificacao {
+  id         String   @id @default(cuid())
+  /// Vazio = para todos os usuários.
+  usuarioId  String?
+  tipo       String
+  titulo     String
+  texto      String?
+  link       String?
+  lida       Boolean  @default(false)
+  /// Idempotência das notificações geradas pelo cron.
+  chaveUnica String?  @unique
+  criadoEm   DateTime @default(now())
+
+  @@index([usuarioId, lida, criadoEm])
+}
+
+model ModeloTexto {
+  id              String               @id @default(cuid())
+  chave           String               @unique
+  titulo          String
+  categoria       CategoriaModeloTexto @default(OUTRO)
+  conteudo        String
+  ativo           Boolean              @default(true)
+  ordem           Int                  @default(0)
+
+  criadoEm        DateTime             @default(now())
+  atualizadoEm    DateTime             @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+// ===================== Catálogos editáveis =====================
+
+model LinhaAluminio {
+  id              String    @id @default(cuid())
+  nome            String    @unique
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model AcabamentoAluminio {
+  id              String    @id @default(cuid())
+  nome            String    @unique
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model TipoVidro {
+  id              String    @id @default(cuid())
+  nome            String    @unique
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model EspessuraVidro {
+  id              String    @id @default(cuid())
+  /// Espessura em milímetros (ex.: 6, 8, 10).
+  mm              Int       @unique
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model CategoriaProduto {
+  id              String    @id @default(cuid())
+  nome            String    @unique
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model MotivoPerda {
+  id              String    @id @default(cuid())
+  nome            String    @unique
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model MotivoBloqueio {
+  id              String    @id @default(cuid())
+  nome            String    @unique
+  /// Pausa justificada (não imputável à Pontual) estende o prazo prometido (R8).
+  justificado     Boolean   @default(true)
+  ativo           Boolean   @default(true)
+  ordem           Int       @default(0)
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model CategoriaFinanceira {
+  id              String                  @id @default(cuid())
+  nome            String
+  tipo            TipoCategoriaFinanceira
+  /// Grupo usado no DRE gerencial.
+  grupoDre        String?
+  ativo           Boolean                 @default(true)
+  ordem           Int                     @default(0)
+  criadoEm        DateTime                @default(now())
+  atualizadoEm    DateTime                @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([tipo, nome])
+}
