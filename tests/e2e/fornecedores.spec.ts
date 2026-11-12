@@ -1,14 +1,23 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, ehCelular, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { buscarAuditoriaFeitaPeloE2E, prepararUsuarioE2E } from "./banco";
+import { buscarAuditoriaFeitaPeloE2E, criarCategoriaDeProdutoDeTeste, criarFornecedorDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(82) } });
 
+// Categorias e o fornecedor com acento são criados aqui (prefixo "E2E "): o teste nunca depende dos cadastros reais,
+// que o dono pode renomear ou excluir ("Perfis", "Vidros", "Nova Opção"...). A limpeza do `banco.ts` remove todos.
+const CAT_PERFIS = "E2E Cat Perfis";
+const CAT_FERRAGENS = "E2E Cat Ferragens";
+const CAT_VIDROS = "E2E Cat Vidros";
+const COM_ACENTO = "E2E Nova Opção Ação";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  for (const nome of [CAT_PERFIS, CAT_FERRAGENS, CAT_VIDROS]) await criarCategoriaDeProdutoDeTeste(nome);
+  await criarFornecedorDeTeste(COM_ACENTO, [CAT_VIDROS]);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -28,15 +37,13 @@ async function esperarFicha(page: Page): Promise<string> {
   return page.url().split("/").pop() ?? "";
 }
 
-test("os fornecedores da spec foram semeados e a busca ignora acentos", async ({ page }) => {
-  await page.goto("/fornecedores?busca=blindex");
-  await expect(linkDoFornecedor(page, "Blindex")).toBeVisible();
+test("a busca ignora acentos e a lista mostra a categoria do fornecedor", async ({ page }) => {
+  // O nome tem acento ("Opção Ação"); a busca digitada sem acento e em minúsculas o encontra.
+  await page.goto("/fornecedores?busca=nova%20opcao%20acao");
+  await expect(linkDoFornecedor(page, COM_ACENTO)).toBeVisible();
   await semRolagemHorizontal(page);
-  // Blindex vende vidro: a categoria vem do seed.
-  const linha = ehCelular(page) ? page.locator("ul li").filter({ hasText: "Blindex" }) : page.locator("tr").filter({ hasText: "Blindex" });
-  await expect(linha).toContainText("Vidros");
-  await page.goto("/fornecedores?busca=nova%20opcao");
-  await expect(linkDoFornecedor(page, "Nova Opção")).toBeVisible();
+  const linha = ehCelular(page) ? page.locator("ul li").filter({ hasText: COM_ACENTO }) : page.locator("tr").filter({ hasText: COM_ACENTO });
+  await expect(linha).toContainText(CAT_VIDROS);
 });
 
 test("valida o CNPJ e o e-mail no servidor", async ({ page }) => {
@@ -55,8 +62,8 @@ test("cadastrar fornecedor com categorias, contato e prazo", async ({ page }) =>
   await page.getByLabel("Nome fantasia (opcional)").fill("E2E Alumínios");
   await page.getByLabel("CNPJ (opcional)").pressSequentially("11222333000181");
   await expect(page.getByLabel("CNPJ (opcional)")).toHaveValue(CNPJ);
-  await page.getByLabel("Perfis", { exact: true }).check();
-  await page.getByLabel("Ferragens e acessórios").check();
+  await page.getByLabel(CAT_PERFIS, { exact: true }).check();
+  await page.getByLabel(CAT_FERRAGENS, { exact: true }).check();
   await page.getByLabel("Vendedor ou contato").fill("Sandro");
   await page.getByLabel("Telefone ou WhatsApp").fill("22999583288");
   await page.getByLabel("E-mail").fill("Vendas@E2E-Aluminios.com");
@@ -68,8 +75,8 @@ test("cadastrar fornecedor com categorias, contato e prazo", async ({ page }) =>
   idAluminios = await esperarFicha(page);
   await expect(page.getByRole("heading", { name: ALUMINIOS })).toBeVisible();
   await expect(page.getByText(/11\.222\.333\/0001-81/)).toBeVisible();
-  await expect(page.getByLabel("Perfis", { exact: true })).toBeChecked();
-  await expect(page.getByLabel("Vidros", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel(CAT_PERFIS, { exact: true })).toBeChecked();
+  await expect(page.getByLabel(CAT_VIDROS, { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("E-mail")).toHaveValue("vendas@e2e-aluminios.com");
   await semRolagemHorizontal(page);
 });
@@ -91,14 +98,14 @@ test("CNPJ repetido é recusado com o nome de quem já tem", async ({ page }) =>
 
 test("editar muda as categorias e registra antes e depois na auditoria", async ({ page }) => {
   await page.goto(`/fornecedores/${idAluminios}`);
-  await page.getByLabel("Perfis", { exact: true }).uncheck();
-  await page.getByLabel("Vidros", { exact: true }).check();
+  await page.getByLabel(CAT_PERFIS, { exact: true }).uncheck();
+  await page.getByLabel(CAT_VIDROS, { exact: true }).check();
   await page.getByLabel("Prazo de entrega (dias)").fill("10");
   await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect(toast(page, "Fornecedor atualizado.")).toBeVisible();
   await page.goto(`/fornecedores/${idAluminios}`);
-  await expect(page.getByLabel("Perfis", { exact: true })).not.toBeChecked();
-  await expect(page.getByLabel("Vidros", { exact: true })).toBeChecked();
+  await expect(page.getByLabel(CAT_PERFIS, { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel(CAT_VIDROS, { exact: true })).toBeChecked();
   await expect(page.getByLabel("Prazo de entrega (dias)")).toHaveValue("10");
   const logs = await buscarAuditoriaFeitaPeloE2E("Fornecedor", "ATUALIZAR");
   expect(JSON.stringify(logs[0].depois)).toContain("prazoEntregaDias");
@@ -107,10 +114,10 @@ test("editar muda as categorias e registra antes e depois na auditoria", async (
 test("a lista mostra categoria e prazo, filtra por categoria e exporta CSV", async ({ page }) => {
   await page.goto("/fornecedores?busca=E2E");
   const linha = ehCelular(page) ? page.locator("ul li").filter({ hasText: ALUMINIOS }) : page.locator("tr").filter({ hasText: ALUMINIOS });
-  await expect(linha).toContainText("Vidros");
+  await expect(linha).toContainText(CAT_VIDROS);
   await expect(linha).toContainText("10 dias");
 
-  await page.getByLabel("O que fornece").selectOption({ label: "Perfis" });
+  await page.getByLabel("O que fornece").selectOption({ label: CAT_PERFIS });
   await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(linkDoFornecedor(page, ALUMINIOS)).toHaveCount(0);
 

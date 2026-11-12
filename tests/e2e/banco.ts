@@ -637,6 +637,31 @@ export async function criarPerfilBarraDeTeste(codigo: string, descricao: string,
   });
 }
 
+/**
+ * Categoria de produto de teste ("E2E ..."): os testes nunca dependem das categorias reais (o dono pode renomear
+ * ou excluir "Perfis", "Vidros" etc.). A limpeza apaga as "E2E %" depois dos fornecedores e produtos que as usam.
+ */
+export async function criarCategoriaDeProdutoDeTeste(nome: string): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "CategoriaProduto" (id, nome, ordem, "atualizadoEm") VALUES ($1, $2, 9999, now())`, [id, nome]);
+    return id;
+  });
+}
+
+/** Fornecedor de teste ("E2E ...") ligado às categorias de teste informadas (por nome). */
+export async function criarFornecedorDeTeste(razaoSocial: string, categorias: string[] = []): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "Fornecedor" (id, "razaoSocial", "atualizadoEm") VALUES ($1, $2, now())`, [id, razaoSocial]);
+    for (const nome of categorias) {
+      // Tabela de junção implícita do Prisma: A = CategoriaProduto, B = Fornecedor (ordem alfabética dos modelos).
+      await c.query(`INSERT INTO "_CategoriaProdutoToFornecedor" ("A", "B") SELECT id, $2 FROM "CategoriaProduto" WHERE nome = $1`, [nome, id]);
+    }
+    return id;
+  });
+}
+
 /** Define o retalho mínimo de Configurações (null = vazio). Quem usa guarda e restaura o valor original. */
 export async function definirRetalhoMinimo(mm: number | null): Promise<void> {
   await comConexao((c) => c.query(`UPDATE "ConfiguracaoEmpresa" SET "retalhoMinimoMm" = $1 WHERE id = 'singleton'`, [mm]));

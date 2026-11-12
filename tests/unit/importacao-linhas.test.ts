@@ -5,7 +5,7 @@ import { sugerirMapeamento } from "@/lib/dominio/mapeamento";
 import { CAMPOS_POR_TIPO } from "@/modules/importacao/campos";
 import { chaveDeNome, validarCliente, validarFornecedor, validarProduto, type ContextoDeImportacao } from "@/modules/importacao/linhas";
 
-import { CABECALHO_DE_EXEMPLO, csvDaPlanilhaDeExemplo, linhasDaPlanilhaDeExemplo, PROBLEMAS_PROPOSITAIS } from "../fixtures/planilha-de-produtos";
+import { CABECALHO_DE_EXEMPLO, CATEGORIAS_DE_EXEMPLO, csvDaPlanilhaDeExemplo, FORNECEDORES_DE_EXEMPLO, linhasDaPlanilhaDeExemplo, PROBLEMAS_PROPOSITAIS } from "../fixtures/planilha-de-produtos";
 
 const contexto = (): ContextoDeImportacao => ({
   categorias: new Map([[chaveDeNome("Perfis"), "cat-perfis"], [chaveDeNome("Ferragens e acessórios"), "cat-ferragens"]]),
@@ -141,10 +141,10 @@ describe("planilha de exemplo (300 produtos fictícios)", () => {
 
   it("as 300 linhas boas passam na validação e as 4 com defeito falham pelo motivo certo", () => {
     const ctx: ContextoDeImportacao = {
-      categorias: new Map(["Perfis", "Ferragens e acessórios", "Vidros", "Borrachas e escovas"].map((n) => [chaveDeNome(n), `c-${n}`])),
+      categorias: new Map(CATEGORIAS_DE_EXEMPLO.map((n) => [chaveDeNome(n), `c-${n}`])),
       linhas: new Map(),
       acabamentos: new Map(),
-      fornecedores: new Map(["Alubold", "Pontimac", "Dafel", "Klinke"].map((n) => [chaveDeNome(n), `f-${n}`])),
+      fornecedores: new Map(FORNECEDORES_DE_EXEMPLO.map((n) => [chaveDeNome(n), `f-${n}`])),
       fornecedoresAmbiguos: new Set(),
     };
     const planilha = lerCsv(csvDaPlanilhaDeExemplo({ comProblemas: true }));

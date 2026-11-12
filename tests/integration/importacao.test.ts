@@ -23,14 +23,24 @@ async function limpar() {
     await c.query(`DELETE FROM "Produto" WHERE codigo LIKE $1 OR "loteImportacaoId" IN (${lotes})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Interacao" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE "loteImportacaoId" IN (${lotes}))`);
     await c.query(`DELETE FROM "Cliente" WHERE "loteImportacaoId" IN (${lotes})`);
-    await c.query(`DELETE FROM "Fornecedor" WHERE "loteImportacaoId" IN (${lotes})`);
+    await c.query(`DELETE FROM "Fornecedor" WHERE "loteImportacaoId" IN (${lotes}) OR "razaoSocial" LIKE 'Int Imp Base %'`);
     await c.query(`DELETE FROM "LoteImportacaoItem" WHERE "loteId" IN (${lotes})`);
     await c.query(`DELETE FROM "LoteImportacao" WHERE "criadoPorId" = $1`, [USUARIO.id]);
+    // Os produtos e fornecedores que usavam estas categorias já saíram acima.
+    await c.query(`DELETE FROM "CategoriaProduto" WHERE nome LIKE 'Int Imp Cat %'`);
     await c.query(`DELETE FROM "LogAuditoria" WHERE "usuarioId" = $1`, [USUARIO.id]);
   });
 }
 
-beforeAll(limpar);
+// O teste não depende do cadastro real: cria os próprios fornecedores e categorias (prefixo "Int Imp ") e só toca neles.
+const FORNECEDORES_DO_TESTE = ["Int Imp Base A", "Int Imp Base B", "Int Imp Base C", "Int Imp Base D"];
+const CATEGORIAS_DO_TESTE = ["Int Imp Cat 1", "Int Imp Cat 2", "Int Imp Cat 3", "Int Imp Cat 4"];
+
+beforeAll(async () => {
+  await limpar();
+  for (const nome of CATEGORIAS_DO_TESTE) await prisma.categoriaProduto.create({ data: { nome } });
+  for (const razaoSocial of FORNECEDORES_DO_TESTE) await prisma.fornecedor.create({ data: { razaoSocial } });
+});
 afterAll(async () => {
   await limpar();
   await prisma.$disconnect();
@@ -44,7 +54,7 @@ function pedidoDeCsv(tipo: TipoDeImportacao, csv: string, modo: ModoDuplicadas =
 const contarProdutos = () => prisma.produto.count({ where: { codigo: { startsWith: PREFIXO }, deletadoEm: null } });
 
 describe("importar 300 produtos de exemplo (critério de aceite da Fase 1)", () => {
-  const csv = csvDaPlanilhaDeExemplo({ prefixo: PREFIXO, comProblemas: true });
+  const csv = csvDaPlanilhaDeExemplo({ prefixo: PREFIXO, comProblemas: true, fornecedores: FORNECEDORES_DO_TESTE, categorias: CATEGORIAS_DO_TESTE });
   let loteId = "";
 
   it("a análise valida a planilha toda: 300 boas, 4 com erro e 1 repetida no arquivo", async () => {
@@ -182,8 +192,8 @@ describe("importar clientes e fornecedores", () => {
   it("fornecedores: liga as categorias e ignora CNPJ já cadastrado", async () => {
     const csv = [
       "Razão social;CNPJ;O que fornece;Prazo de entrega (dias)",
-      "Int Imp Forn A;11.222.333/0001-81;Perfis, Vidros;7",
-      "Int Imp Forn B;;Ferragens e acessórios;",
+      `Int Imp Forn A;11.222.333/0001-81;${CATEGORIAS_DO_TESTE[0]}, ${CATEGORIAS_DO_TESTE[1]};7`,
+      `Int Imp Forn B;;${CATEGORIAS_DO_TESTE[2]};`,
       "Int Imp Forn C;11.222.333/0001-81;;",
     ].join("\r\n");
     const analise = await analisarImportacao(pedidoDeCsv("FORNECEDORES", csv));
@@ -191,7 +201,7 @@ describe("importar clientes e fornecedores", () => {
     const r = await aplicarImportacao({ usuario: USUARIO, pedido: pedidoDeCsv("FORNECEDORES", csv), importarValidas: false });
     expect(r.criados).toBe(2);
     const a = await prisma.fornecedor.findFirstOrThrow({ where: { razaoSocial: "Int Imp Forn A" }, include: { categorias: true } });
-    expect(a.categorias.map((c) => c.nome).sort()).toEqual(["Perfis", "Vidros"]);
+    expect(a.categorias.map((c) => c.nome).sort()).toEqual([CATEGORIAS_DO_TESTE[0], CATEGORIAS_DO_TESTE[1]]);
     expect(a.prazoEntregaDias).toBe(7);
     await reverterLote({ usuario: USUARIO, loteId: r.loteId });
     expect(await prisma.fornecedor.count({ where: { razaoSocial: { startsWith: "Int Imp Forn" }, deletadoEm: null } })).toBe(0);

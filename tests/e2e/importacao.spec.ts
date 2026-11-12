@@ -1,15 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E } from "./banco";
+import { criarCategoriaDeProdutoDeTeste, criarFornecedorDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 import { csvDaPlanilhaDeExemplo } from "../fixtures/planilha-de-produtos";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(85) } });
 
+// A planilha de exemplo usa fornecedores e categorias criados aqui (prefixo "E2E "), nunca os do cadastro real:
+// o dono pode excluir ou renomear os semeados sem quebrar este teste. A limpeza do `banco.ts` remove todos.
+const CATEGORIAS = ["E2E Imp Cat 1", "E2E Imp Cat 2", "E2E Imp Cat 3", "E2E Imp Cat 4"];
+const FORNECEDORES = ["E2E Imp Forn A", "E2E Imp Forn B", "E2E Imp Forn C", "E2E Imp Forn D"];
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  for (const nome of CATEGORIAS) await criarCategoriaDeProdutoDeTeste(nome);
+  for (const nome of FORNECEDORES) await criarFornecedorDeTeste(nome);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -46,7 +53,7 @@ test("passo 2 sugere as colunas e exige as obrigatórias", async ({ page }) => {
 });
 
 test("importa 300 produtos de exemplo: confere erros e repetidas, importa só as válidas e desfaz", async ({ page }) => {
-  await enviar(page, csvDaPlanilhaDeExemplo({ prefixo: PREFIXO, comProblemas: true }));
+  await enviar(page, csvDaPlanilhaDeExemplo({ prefixo: PREFIXO, comProblemas: true, categorias: CATEGORIAS, fornecedores: FORNECEDORES }));
   // Mapeamento automático já acerta pelos nomes das colunas.
   await expect(page.getByLabel("Código", { exact: false }).first()).toHaveValue("0");
   await page.getByRole("button", { name: "Conferir a planilha" }).click();
