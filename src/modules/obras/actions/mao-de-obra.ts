@@ -11,8 +11,8 @@ import { prisma } from "@/lib/db";
 import { sugerirCustoPorM2, type SugestaoDeMaoDeObra } from "@/lib/dominio/mao-de-obra";
 import { can } from "@/lib/permissoes";
 
-/** Calcula a sugestão a partir dos salários da fábrica e da instalação (funcionários ativos) e da capacidade mensal. Não grava nada. */
-export async function calcularSugestaoDeMaoDeObra(): Promise<SugestaoDeMaoDeObra> {
+/** Calcula a sugestão a partir dos salários da fábrica e da instalação (funcionários ativos) e da capacidade mensal. Não grava nada. Interna: só as ações abaixo (que exigem sessão) a chamam. */
+async function calcularSugestaoDeMaoDeObra(): Promise<SugestaoDeMaoDeObra> {
   const [funcionarios, config] = await Promise.all([
     prisma.funcionario.findMany({ where: { ativo: true, deletadoEm: null, demissaoEm: null, funcao: { in: ["FABRICA", "INSTALACAO"] } }, select: { salarioBaseCentavos: true } }),
     prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { capacidadeProducaoM2Mes: true } }),
