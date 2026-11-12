@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
+import type { GrupoDreChave } from "@/lib/dominio/dre";
 import type { Prisma, PrismaClient } from "../../generated/prisma/client";
 
 import type { ItemCatalogo, SlugCatalogo } from "./definicoes";
@@ -42,7 +43,7 @@ export function paraItem(slug: SlugCatalogo, r: Registro): ItemCatalogo {
     ordem: Number(r.ordem),
     ...(slug === "motivos-bloqueio" ? { justificado: Boolean(r.justificado) } : {}),
     ...(slug === "categorias-financeiras"
-      ? { tipo: r.tipo as "RECEITA" | "DESPESA", grupoDre: (r.grupoDre as string | null) ?? null }
+      ? { tipo: r.tipo as "RECEITA" | "DESPESA", grupo: (r.grupo as GrupoDreChave | null) ?? null }
       : {}),
   };
 }

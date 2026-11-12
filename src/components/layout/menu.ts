@@ -68,8 +68,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Visão geral e fluxo de caixa", fase: 5 },
       { titulo: "A receber", fase: 5 },
       { titulo: "A pagar", fase: 5 },
-      { titulo: "Contas e lançamentos", fase: 5 },
-      { titulo: "Notas fiscais", fase: 5 },
+      { titulo: "Contas e lançamentos", href: "/financeiro/contas" },
     ],
   },
   {

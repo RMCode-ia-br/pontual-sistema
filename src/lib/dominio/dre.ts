@@ -31,6 +31,14 @@ export const ROTULO_GRUPO_DRE: Record<GrupoDreChave, string> = {
   DESPESAS_FINANCEIRAS: "Despesas financeiras",
 };
 
+export const TODOS_OS_GRUPOS_DRE = Object.keys(ROTULO_GRUPO_DRE) as GrupoDreChave[];
+
+/** Receita só usa grupos de receita; despesa, os de despesa (o banco também confere). */
+export function grupoCombinaComTipo(tipo: "RECEITA" | "DESPESA", grupo: GrupoDreChave): boolean {
+  const ehGrupoDeReceita = grupo === "RECEITAS_OPERACIONAIS" || grupo === "OUTRAS_RECEITAS";
+  return tipo === "RECEITA" ? ehGrupoDeReceita : !ehGrupoDeReceita;
+}
+
 /** Grupos de despesa depois da margem bruta, na ordem em que aparecem. */
 export const GRUPOS_DE_DESPESA: readonly GrupoDreChave[] = ["DESPESAS_FIXAS", "DESPESAS_OPERACIONAIS", "DESPESAS_COMERCIAIS", "DESPESAS_ADMINISTRATIVAS", "DESPESAS_FINANCEIRAS"];
 

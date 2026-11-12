@@ -61,6 +61,8 @@ async function entidadeExiste(tipo: (typeof ENTIDADES_COM_ANEXO)[number], id: st
       return !!(await prisma.proposta.findFirst(filtro));
     case "Chamado":
       return !!(await prisma.chamado.findFirst(filtro));
+    case "Lancamento":
+      return !!(await prisma.lancamento.findFirst(filtro));
   }
 }
 

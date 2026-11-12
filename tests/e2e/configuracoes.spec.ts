@@ -247,10 +247,12 @@ test.describe("catálogos", () => {
 
     await page.getByLabel("Nome").first().fill("E2E Categoria");
     await page.getByLabel("Tipo").selectOption("DESPESA");
-    await page.getByLabel("Grupo no DRE (opcional)").fill("Grupo E2E");
+    // O grupo do DRE é uma lista fixa e acompanha o tipo: despesa não oferece grupo de receita.
+    await expect(page.getByLabel("Grupo no DRE").locator("option", { hasText: "Receitas operacionais" })).toHaveCount(0);
+    await page.getByLabel("Grupo no DRE").selectOption("DESPESAS_FIXAS");
     await page.getByRole("button", { name: "Adicionar" }).click();
     await expect(item(page, "E2E Categoria")).toContainText("Despesa");
-    await expect(item(page, "E2E Categoria")).toContainText("DRE: Grupo E2E");
+    await expect(item(page, "E2E Categoria")).toContainText("DRE: Despesas fixas");
   });
 
   test("motivo de bloqueio guarda se é justificado", async ({ page }) => {

@@ -22,7 +22,7 @@ type Passo = {
 export default async function PaginaPrimeirosPassos() {
   await exigirSessao();
 
-  const [cfg, admin, outrosAtivos, fornecedoresCompletos, produtosComCusto, funcionarios, clientes, projetos] = await Promise.all([
+  const [cfg, admin, outrosAtivos, fornecedoresCompletos, produtosComCusto, funcionarios, clientes, projetos, contasFinanceiras] = await Promise.all([
     obterConfiguracao(),
     prisma.usuario.findFirst({ where: { login: "admin", deletadoEm: null }, select: { precisaTrocarSenha: true, ativo: true } }),
     prisma.usuario.count({ where: { ativo: true, deletadoEm: null, login: { not: "admin" } } }),
@@ -31,6 +31,7 @@ export default async function PaginaPrimeirosPassos() {
     prisma.funcionario.count({ where: { deletadoEm: null } }),
     prisma.cliente.count({ where: { deletadoEm: null } }),
     prisma.projeto.count({ where: { deletadoEm: null } }),
+    prisma.contaFinanceira.count({ where: { deletadoEm: null, ativo: true } }),
   ]);
 
   const empresaCompleta = !!(cfg?.razaoSocial && cfg?.cnpj && cfg?.endereco && cfg?.telefone);
@@ -53,6 +54,12 @@ export default async function PaginaPrimeirosPassos() {
       descricao: "Razão social, CNPJ, endereço (confirme o número) e telefone aparecem nas propostas.",
       href: "/configuracoes/empresa",
       feito: empresaCompleta,
+    },
+    {
+      titulo: "Cadastrar as contas financeiras",
+      descricao: "Os bancos e o caixa onde o dinheiro entra e sai. O saldo inicial é opcional: enquanto não for informado, o fluxo de caixa e o DRE avisam.",
+      href: "/financeiro/contas",
+      feito: contasFinanceiras > 0,
     },
     {
       titulo: "Enviar o logo",

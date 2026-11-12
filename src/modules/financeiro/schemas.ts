@@ -1,0 +1,152 @@
+import { z } from "zod";
+
+import { FORMAS_PAGAMENTO } from "@/lib/dominio/parcelas";
+import { MAXIMO_CENTAVOS } from "@/lib/dominio/preco";
+import { parseMoedaParaCentavos } from "@/lib/formatadores";
+import { campoCaixa } from "@/lib/validadores/campos";
+
+/** Campo ausente do FormData vira texto vazio. */
+const bruto = (max: number) => z.preprocess((v) => (typeof v === "string" ? v : ""), z.string().trim().max(max, `Use no máximo ${max} caracteres.`));
+
+const textoObrigatorio = (rotulo: string, min: number, max: number) =>
+  bruto(max).refine((v) => v.length >= min, `${rotulo}: informe ao menos ${min} caracteres.`);
+
+const textoOpcional = (max: number) => bruto(max).transform((v) => (v === "" ? null : v));
+
+const idObrigatorio = (mensagem: string) => bruto(64).refine((v) => v.length > 0, mensagem);
+
+const idOpcional = bruto(64).transform((v) => (v === "" ? null : v));
+
+/** "aaaa-mm-dd" de um <input type="date">, conferindo que o dia existe. */
+export function dataValida(v: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+const dataObrigatoria = (rotulo: string) => bruto(10).refine(dataValida, `${rotulo}: informe uma data válida.`);
+
+/**
+ * Valor em reais ("1.234,56") → centavos inteiros. Com `permitirNegativo`, aceita um "-" na frente (saldo
+ * devedor de uma conta). Sem isso, exige valor maior que zero.
+ */
+function dinheiro(rotulo: string, opcoes: { permitirNegativo?: boolean; permitirZero?: boolean } = {}) {
+  return bruto(24).transform((v, ctx): number => {
+    const negativo = opcoes.permitirNegativo === true && v.startsWith("-");
+    const centavos = parseMoedaParaCentavos(negativo ? v.slice(1) : v);
+    if (centavos === null) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: informe um valor em reais, ex.: 1.234,56.` });
+      return z.NEVER;
+    }
+    if (centavos > MAXIMO_CENTAVOS) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: o valor máximo aceito é R$ 21.474.836,47.` });
+      return z.NEVER;
+    }
+    if (centavos === 0 && !opcoes.permitirZero) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: informe um valor maior que zero.` });
+      return z.NEVER;
+    }
+    return negativo ? -centavos : centavos;
+  });
+}
+
+export const TIPOS_DE_CONTA = ["BANCO", "CAIXA", "OUTRA"] as const;
+export const ROTULO_TIPO_DE_CONTA: Record<(typeof TIPOS_DE_CONTA)[number], string> = {
+  BANCO: "Banco",
+  CAIXA: "Caixa (espécie)",
+  OUTRA: "Outra",
+};
+
+const forma = bruto(20).transform((v, ctx) => {
+  if (v === "") return null;
+  if (!(FORMAS_PAGAMENTO as readonly string[]).includes(v)) {
+    ctx.addIssue({ code: "custom", message: "Escolha uma forma de pagamento da lista." });
+    return z.NEVER;
+  }
+  return v as (typeof FORMAS_PAGAMENTO)[number];
+});
+
+// ---------- Contas financeiras ----------
+
+/**
+ * Conta financeira: nome, tipo, saldo inicial e a data do saldo. O saldo é opcional ("não informado"): nada é
+ * inventado. Informado, vale no início do dia da data. Sem número de conta nem dado bancário.
+ */
+export const contaFinanceiraSchema = z
+  .object({
+    nome: textoObrigatorio("Nome", 2, 80),
+    tipo: z.enum(TIPOS_DE_CONTA, { message: "Escolha o tipo da conta." }),
+    saldoInformado: campoCaixa,
+    saldoInicial: bruto(24),
+    dataSaldoInicial: bruto(10),
+    observacao: textoOpcional(300),
+  })
+  .transform((d, ctx) => {
+    if (!d.saldoInformado) {
+      return { nome: d.nome, tipo: d.tipo, saldoInformado: false as const, saldoInicialCentavos: 0, dataSaldoInicial: null, observacao: d.observacao };
+    }
+    const valor = dinheiro("Saldo inicial", { permitirNegativo: true, permitirZero: true }).safeParse(d.saldoInicial);
+    if (!valor.success) {
+      ctx.addIssue({ code: "custom", path: ["saldoInicial"], message: d.saldoInicial === "" ? "Informe o saldo (pode ser zero) ou desmarque “Informar o saldo agora”." : valor.error.issues[0].message });
+    }
+    if (!dataValida(d.dataSaldoInicial)) ctx.addIssue({ code: "custom", path: ["dataSaldoInicial"], message: "Informe a data a que o saldo se refere." });
+    if (!valor.success || !dataValida(d.dataSaldoInicial)) return z.NEVER;
+    return { nome: d.nome, tipo: d.tipo, saldoInformado: true as const, saldoInicialCentavos: valor.data, dataSaldoInicial: d.dataSaldoInicial, observacao: d.observacao };
+  });
+
+export type DadosDaConta = z.output<typeof contaFinanceiraSchema>;
+
+export const contaIdSchema = z.object({ contaId: idObrigatorio("Conta inválida.") });
+
+export const ativarContaSchema = z.object({
+  contaId: idObrigatorio("Conta inválida."),
+  ativo: z.boolean(),
+});
+
+// ---------- Lançamentos ----------
+
+export const lancamentoSchema = z.object({
+  tipo: z.enum(["ENTRADA", "SAIDA"], { message: "Escolha entrada ou saída." }),
+  data: dataObrigatoria("Data"),
+  valor: dinheiro("Valor"),
+  contaFinanceiraId: idObrigatorio("Escolha a conta."),
+  categoriaId: idObrigatorio("Escolha a categoria."),
+  descricao: textoObrigatorio("Descrição", 2, 200),
+  forma,
+  comNotaFiscal: campoCaixa,
+  fornecedorId: idOpcional,
+  observacao: textoOpcional(500),
+});
+
+export type DadosDoLancamento = z.output<typeof lancamentoSchema>;
+
+export const transferenciaSchema = z
+  .object({
+    contaOrigemId: idObrigatorio("Escolha a conta de origem."),
+    contaDestinoId: idObrigatorio("Escolha a conta de destino."),
+    data: dataObrigatoria("Data"),
+    valor: dinheiro("Valor"),
+    descricao: textoOpcional(200),
+  })
+  .refine((d) => d.contaOrigemId !== d.contaDestinoId, { path: ["contaDestinoId"], message: "A origem e o destino precisam ser contas diferentes." });
+
+export type DadosDaTransferencia = z.output<typeof transferenciaSchema>;
+
+export const estornoSchema = z.object({
+  lancamentoId: idObrigatorio("Lançamento inválido."),
+  motivo: textoObrigatorio("Motivo", 3, 300),
+});
+
+export const conciliarSchema = z.object({
+  lancamentoId: idObrigatorio("Lançamento inválido."),
+  conciliado: z.boolean(),
+});
+
+export const lancamentoIdSchema = z.object({ lancamentoId: idObrigatorio("Lançamento inválido.") });
+
+// ---------- Filtros da tela de extrato ----------
+
+export const periodoSchema = z.object({
+  de: bruto(10).transform((v) => (dataValida(v) ? v : null)),
+  ate: bruto(10).transform((v) => (dataValida(v) ? v : null)),
+});

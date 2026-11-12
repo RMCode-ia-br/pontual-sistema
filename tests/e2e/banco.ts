@@ -51,6 +51,18 @@ async function limpar(c: Client): Promise<void> {
     await c.query(`DELETE FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
   }
 
+  // Fase 5 (financeiro): lançamentos e contas do teste saem ANTES de projetos, clientes, parcelas e categorias que os
+  // referenciam (todas as chaves são Restrict). Só o que tem o prefixo "E2E " é tocado.
+  const clientesE2E = `SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %'`;
+  const projetosFinanceiro = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (${clientesE2E})`;
+  await c.query(
+    `DELETE FROM "Lancamento" WHERE descricao LIKE 'E2E %' OR "contaFinanceiraId" IN (SELECT id FROM "ContaFinanceira" WHERE nome LIKE 'E2E %')
+       OR "clienteId" IN (${clientesE2E}) OR "projetoId" IN (${projetosFinanceiro})`,
+  );
+  await c.query(`DELETE FROM "ContaPagar" WHERE descricao LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "RecorrenciaPagar" WHERE descricao LIKE 'E2E %'`);
+  await c.query(`DELETE FROM "ContaFinanceira" WHERE nome LIKE 'E2E %'`);
+
   // Fase 4 (assistência): os chamados dos clientes de teste saem antes das contas (a cobrança aponta para a conta)
   // e depois de soltar os compromissos que apontam para eles; o contador volta ao maior número que sobrou.
   const chamadosE2E = `SELECT id FROM "Chamado" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;

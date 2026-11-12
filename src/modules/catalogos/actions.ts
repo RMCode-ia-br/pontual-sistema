@@ -9,6 +9,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
+import { grupoCombinaComTipo, ROTULO_GRUPO_DRE, type GrupoDreChave } from "@/lib/dominio/dre";
 import { can } from "@/lib/permissoes";
 
 import {
@@ -52,7 +53,13 @@ function lerDados(def: DefinicaoCatalogo, bruto: Record<string, string>, criando
       if (!base.data.tipo) return { ok: false, resultado: falha("Escolha se é receita ou despesa.", { tipo: "Escolha se é receita ou despesa." }) };
       dados.tipo = base.data.tipo; // o tipo não muda depois de criado (afetaria o histórico do DRE)
     }
-    dados.grupoDre = base.data.grupoDre ?? null;
+    const grupo = base.data.grupo;
+    if (!grupo) return { ok: false, resultado: falha("Escolha o grupo no DRE.", { grupo: "Escolha o grupo no DRE." }) };
+    if (criando && base.data.tipo && !grupoCombinaComTipo(base.data.tipo, grupo)) {
+      return { ok: false, resultado: falha("Esse grupo não combina com o tipo escolhido.", { grupo: "Esse grupo não combina com o tipo escolhido." }) };
+    }
+    dados.grupo = grupo;
+    dados.grupoDre = ROTULO_GRUPO_DRE[grupo]; // texto antigo, mantido coerente por compatibilidade
   }
   return { ok: true, dados };
 }
@@ -111,6 +118,9 @@ export async function editarItemCatalogo(slugBruto: string, idBruto: string, _an
         const delegado = delegadoDoCatalogo(alvo.slug, tx);
         const antes = await delegado.findFirst({ where: { id: id.data, deletadoEm: null } });
         if (!antes) throw new ErroNegocio("Item não encontrado.");
+        if (alvo.def.extra === "financeira" && !grupoCombinaComTipo(antes.tipo as "RECEITA" | "DESPESA", lido.dados.grupo as GrupoDreChave)) {
+          throw new ErroNegocio("Esse grupo não combina com o tipo da categoria.", { grupo: "Esse grupo não combina com o tipo da categoria." });
+        }
         const depois = await delegado.update({ where: { id: id.data }, data: { ...lido.dados, atualizadoPorId: sessao.id } });
         await registrarAuditoria(tx, { usuario: sessao, entidade: alvo.def.entidade, entidadeId: id.data, acao: "ATUALIZAR", antes, depois, ip });
       });

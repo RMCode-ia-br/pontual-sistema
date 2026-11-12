@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ResultadoAcao } from "@/lib/acoes";
+import { grupoCombinaComTipo, ROTULO_GRUPO_DRE, TODOS_OS_GRUPOS_DRE } from "@/lib/dominio/dre";
 import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 
 import { alternarAtivoItemCatalogo, criarItemCatalogo, editarItemCatalogo, moverItemCatalogo } from "../actions";
@@ -20,6 +21,9 @@ function CamposItem({ def, item, erros, criando, prefixo }: { def: DefinicaoCata
   // Ids únicos por formulário: o cadastro e o diálogo de edição ficam na mesma página ao mesmo tempo.
   const id = (campo: string) => `${prefixo}-${campo}`;
   const ehEspessura = def.extra === "espessura";
+  // Receita e despesa têm grupos de DRE diferentes: a lista de grupos acompanha o tipo escolhido.
+  const [tipo, setTipo] = useState<string>(item?.tipo ?? "");
+  const gruposDoTipo = TODOS_OS_GRUPOS_DRE.filter((g) => (tipo === "RECEITA" || tipo === "DESPESA") && grupoCombinaComTipo(tipo, g));
   return (
     <>
       <Campo id={id("nome")} rotulo={ehEspessura ? "Espessura (mm)" : "Nome"} erro={erros.nome} obrigatorio>
@@ -40,14 +44,21 @@ function CamposItem({ def, item, erros, criando, prefixo }: { def: DefinicaoCata
       {def.extra === "financeira" ? (
         <>
           <Campo id={id("tipo")} rotulo="Tipo" erro={erros.tipo} obrigatorio={criando}>
-            <Selecao id={id("tipo")} name="tipo" required={criando} disabled={!criando} defaultValue={item?.tipo ?? ""} {...ariaDoCampo(id("tipo"), erros.tipo)}>
+            <Selecao id={id("tipo")} name="tipo" required={criando} disabled={!criando} value={tipo} onChange={(e) => setTipo(e.target.value)} {...ariaDoCampo(id("tipo"), erros.tipo)}>
               {criando ? <option value="">Escolha...</option> : null}
               <option value="RECEITA">Receita</option>
               <option value="DESPESA">Despesa</option>
             </Selecao>
           </Campo>
-          <Campo id={id("grupoDre")} rotulo="Grupo no DRE (opcional)" erro={erros.grupoDre} dica="Ex.: Custos diretos, Despesas fixas.">
-            <Input id={id("grupoDre")} name="grupoDre" maxLength={60} defaultValue={item?.grupoDre ?? ""} autoComplete="off" {...ariaDoCampo(id("grupoDre"), erros.grupoDre, "dica")} />
+          <Campo id={id("grupo")} rotulo="Grupo no DRE" erro={erros.grupo} obrigatorio dica="É onde a categoria aparece no DRE gerencial.">
+            <Selecao key={tipo} id={id("grupo")} name="grupo" required defaultValue={tipo === item?.tipo ? (item?.grupo ?? "") : ""} disabled={gruposDoTipo.length === 0} {...ariaDoCampo(id("grupo"), erros.grupo, "dica")}>
+              <option value="">{gruposDoTipo.length === 0 ? "Escolha o tipo primeiro" : "Escolha o grupo..."}</option>
+              {gruposDoTipo.map((g) => (
+                <option key={g} value={g}>
+                  {ROTULO_GRUPO_DRE[g]}
+                </option>
+              ))}
+            </Selecao>
           </Campo>
         </>
       ) : null}
@@ -163,7 +174,7 @@ export function PainelCatalogo({ def, itens }: { def: DefinicaoCatalogo; itens: 
                     {def.extra === "justificado" && item.justificado ? <Badge variant="secondary">Justificado</Badge> : null}
                     {def.extra === "financeira" ? <Badge variant="secondary">{item.tipo === "RECEITA" ? "Receita" : "Despesa"}</Badge> : null}
                   </p>
-                  {def.extra === "financeira" && item.grupoDre ? <p className="text-muted-foreground text-xs">DRE: {item.grupoDre}</p> : null}
+                  {def.extra === "financeira" && item.grupo ? <p className="text-muted-foreground text-xs">DRE: {ROTULO_GRUPO_DRE[item.grupo]}</p> : null}
                 </div>
                 <Button type="button" variant="ghost" size="icon" disabled={pendente || pos === 0} onClick={() => executar(() => moverItemCatalogo(def.slug, item.id, "cima"))} aria-label={`Subir ${rotuloItem(item)}`}>
                   <ArrowUp aria-hidden />

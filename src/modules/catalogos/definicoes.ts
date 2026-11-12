@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { TODOS_OS_GRUPOS_DRE, type GrupoDreChave } from "@/lib/dominio/dre";
+
 /** Definição dos catálogos editáveis (spec seção 6). Sem dependências do servidor: serve ao cliente também. */
 export type SlugCatalogo =
   | "linhas"
@@ -58,7 +60,8 @@ export type ItemCatalogo = {
   ordem: number;
   justificado?: boolean;
   tipo?: "RECEITA" | "DESPESA";
-  grupoDre?: string | null;
+  /** Grupo do DRE (lista fixa). */
+  grupo?: GrupoDreChave | null;
 };
 
 export const slugSchema = z.enum([
@@ -85,10 +88,10 @@ export const dadosItemSchema = z.object({
   nome: z.string(),
   justificado: z.preprocess((v) => v === "on" || v === "true", z.boolean()),
   tipo: z.enum(["RECEITA", "DESPESA"]).optional(),
-  grupoDre: z
+  grupo: z
     .string()
     .trim()
-    .max(60, "Use no máximo 60 caracteres.")
-    .transform((v) => (v === "" ? null : v))
+    .transform((v) => (v === "" ? undefined : v))
+    .pipe(z.enum(TODOS_OS_GRUPOS_DRE as [GrupoDreChave, ...GrupoDreChave[]], { message: "Escolha o grupo no DRE." }).optional())
     .optional(),
 });
