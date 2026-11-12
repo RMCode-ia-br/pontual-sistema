@@ -12,7 +12,7 @@ import { ProducaoPdf } from "./producao-pdf";
 import { PropostaPdf, type LogoPdf } from "./proposta-pdf";
 
 /** O react-pdf lê PNG e JPEG (WebP não): outro formato simplesmente fica sem logo no PDF. */
-async function carregarLogo(caminho: string | null): Promise<LogoPdf> {
+export async function carregarLogo(caminho: string | null): Promise<LogoPdf> {
   if (!caminho) return null;
   try {
     const url = await criarUrlDeDownload(caminho, 120);

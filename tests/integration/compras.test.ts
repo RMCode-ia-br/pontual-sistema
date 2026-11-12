@@ -6,7 +6,6 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { UsuarioSessao } from "@/lib/auth/sessao";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { atualizarCompra, cancelarCompra, criarCompra, estornarRecebimento, fazerPedido, receberCompra, type EntradaDeCompra, type EntradaDeRecebimento, type ItemDeCompraEntrada } from "@/modules/compras/servico";
-import { definirPrecosKgDoAcabamento } from "@/modules/produtos/servico-preco-kg";
 
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
 

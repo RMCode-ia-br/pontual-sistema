@@ -68,6 +68,8 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "ContaPagar" WHERE descricao LIKE 'E2E %'`);
   await c.query(`DELETE FROM "RecorrenciaPagar" WHERE descricao LIKE 'E2E %'`);
   const comprasE2E = `SELECT id FROM "Compra" WHERE "projetoId" IN (${projetosFinanceiro}) OR "fornecedorId" IN (SELECT id FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %')`;
+  // A conta a pagar nascida da compra aponta para ela (FK restrita) e a descrição não começa com "E2E ": sai pelo vínculo.
+  await c.query(`DELETE FROM "ContaPagar" WHERE "compraId" IN (${comprasE2E})`);
   await c.query(`UPDATE "HistoricoPreco" SET "compraId" = NULL WHERE "compraId" IN (${comprasE2E})`);
   await c.query(`DELETE FROM "HistoricoPrecoKg" WHERE "compraId" IN (${comprasE2E})`);
   await c.query(`DELETE FROM "MovimentoEstoque" WHERE "itemRecebimentoId" IN (SELECT id FROM "ItemRecebimento" WHERE "itemCompraId" IN (SELECT id FROM "ItemCompra" WHERE "compraId" IN (${comprasE2E})))`);
@@ -641,6 +643,33 @@ export async function retalhosDoProdutoDeTeste(codigo: string): Promise<{ compri
     const r = await c.query<{ comprimentoMm: number; status: string; local: string | null }>(
       `SELECT r."comprimentoMm", r.status::text AS status, r.local FROM "Retalho" r JOIN "Produto" p ON p.id = r."produtoId" WHERE p.codigo = $1 ORDER BY r."comprimentoMm" DESC`,
       [codigo],
+    );
+    return r.rows;
+  });
+}
+
+/** Contas a pagar nascidas das compras do fornecedor de teste (valor, parcelas e se estão ligadas à compra). */
+export async function contasPagarDasComprasDeTeste(fornecedor: string): Promise<{ valorCentavos: number; parcelaTotal: number | null; comCompra: boolean }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ valorCentavos: number; parcelaTotal: number | null; comCompra: boolean }>(
+      `SELECT cp."valorCentavos", cp."parcelaTotal", (cp."compraId" IS NOT NULL) AS "comCompra"
+         FROM "ContaPagar" cp JOIN "Fornecedor" f ON f.id = cp."fornecedorId"
+        WHERE f."razaoSocial" = $1 AND cp."deletadoEm" IS NULL ORDER BY cp.vencimento, cp."parcelaNumero"`,
+      [fornecedor],
+    );
+    return r.rows;
+  });
+}
+
+/** Recebimentos (não estornados) e o valor congelado de cada um, das compras do fornecedor de teste. */
+export async function recebimentosDasComprasDeTeste(fornecedor: string): Promise<{ valorCentavos: number | null; quantidadeCompra: string; quantidadeEstoque: string }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ valorCentavos: number | null; quantidadeCompra: string; quantidadeEstoque: string }>(
+      `SELECT ir."valorCentavos", ir."quantidadeCompra"::text AS "quantidadeCompra", ir."quantidadeEstoque"::text AS "quantidadeEstoque"
+         FROM "ItemRecebimento" ir
+         JOIN "ItemCompra" ic ON ic.id = ir."itemCompraId" JOIN "Compra" co ON co.id = ic."compraId" JOIN "Fornecedor" f ON f.id = co."fornecedorId"
+        WHERE f."razaoSocial" = $1 AND ir."deletadoEm" IS NULL ORDER BY co.numero, ic.ordem`,
+      [fornecedor],
     );
     return r.rows;
   });
