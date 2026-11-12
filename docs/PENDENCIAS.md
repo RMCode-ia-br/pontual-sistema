@@ -4,7 +4,9 @@
 - [ ] **Endereço correto:** propostas trazem o nº 185, o site traz 195. Está editável em Configurações.
 - [x] **Alíquota efetiva do Simples:** fora do escopo por decisão do dono (2026-11-12): o imposto é lançado à mão como despesa real "Impostos (DAS)" e o sistema não calcula alíquota (decisão 102). A margem de lucro foi informada em 2026-11-13: é **markup sobre o custo** (80%; 100% para guarda-corpo e vidro temperado), ver `docs/DECISOES.md` (58 e 61).
 - [ ] **Numeração das propostas:** começa em 2000-26 (informado pelo dono; o último real é próximo de 1200). Confirmar se o contador reinicia por ano (padrão: não).
-- [x] **Limite do Simples Nacional:** fora do escopo por decisão do dono (R17: sem RBT12 nem alerta do limite). A coluna continua no banco, sem uso.
+- [x] **Limite do Simples Nacional / RBT12:** fora do escopo por decisão do dono (sem RBT12 nem alerta). Substituído na Fase 7 pelo indicador gerencial "Recebido com nota fiscal nos últimos 12 meses" (decisão 117), que a coluna antiga `limiteSimplesCentavos` passa a alimentar como "limite" (migração M1 a anula; aguarda o OK do Régis).
+- [ ] **Limite do faturamento com nota (Marcelo):** informar o valor real em Configurações → Empresa → Financeiro **depois dos testes**. Vazio ou zero = "limite não informado": o painel mostra só o valor recebido com nota, sem percentual (decisão 117c). Nada é preenchido por conta própria.
+- [x] **Confirmado pelo Marcelo (2026-11-12):** o indicador de faturamento com nota soma só os pagamentos marcados com nota (`Lancamento.comNotaFiscal`); entrada avulsa marcada com nota, sem conta a receber, fica de fora (decisão 117). "Pedido de avaliação no Google enviado" = tarefa "Pedir avaliação" concluída (decisão 118).
 - [ ] **Preços e tabelas de fornecedores**, **composições técnicas das tipologias** e fórmulas de corte (nada é preenchido por conta própria).
 - [x] **Mapa gatilho → etapa** confirmado pelo Marcelo em 2026-11-12 (sinal na aprovação; 2ª parcela na conclusão de FABRICACAO; última na conclusão de INSTALACAO_VIDROS). Segue editável em Configurações → Modelo de etapas.
 - [ ] Faixas de valor para sugerir o porte do projeto (opcional).
@@ -13,6 +15,7 @@
 - [ ] **Link direto de avaliação do Google** (o link `share.google` pode não ser o de avaliação) e prints/texto do Perfil do Google e do Instagram, se a leitura automática não for possível.
 
 ## Da RM Code
+- [ ] **Isolamento do banco de testes (fica para a migração aos planos Pro):** hoje os testes de integração e E2E rodam no banco compartilhado, que tem dados reais do Marcelo. Até lá a regra é: prefixo próprio ("Int ", "E2E "), comparação por diferença e **nenhuma dependência de dado que o dono possa editar ou excluir** (decisão 121). Com o Supabase Pro, usar um projeto/branch só de testes.
 - [ ] **Endurecimento antes do uso definitivo:** repositório privado, backup, separação de ambientes, segurança e LGPD (ver Fase 8). Inclui migrar para Vercel Pro e Supabase Pro. Não é necessário no mês de teste (decisão 101).
 - [x] **LGPD:** resolvida em 2026-11-11: o banco foi recriado em **São Paulo (`sa-east-1`)** e a região da Vercel ajustada para `gru1` (`docs/DECISOES.md`, item 25).
 - [ ] Usuário dedicado `prisma` no banco (hoje pode estar usando `postgres`).
@@ -185,7 +188,7 @@ Diferenças pequenas já corrigidas (quadro por item com colunas nº | quantidad
 
 ## Surgidas na Fase 5 (financeiro)
 - [ ] **Contas financeiras e saldos iniciais:** o sistema não traz nenhuma conta nem saldo (nada foi inventado). O Marcelo cadastra as contas (nome, tipo, saldo inicial e data do saldo) quando começar a usar; até lá o fluxo de caixa e o DRE avisam "saldo não informado". Sem número de conta nem dado bancário.
-- [ ] **"Com nota" no recebimento:** a marca pode mudar no pagamento, mas o valor **não** é recalculado sozinho (o valor da parcela já traz o acréscimo de 5% quando a proposta era com nota). Confirmar com o Marcelo se isso basta ou se ele quer que o sistema ajuste o valor.
+- [ ] **"Com nota" no recebimento (segue aberta):** a marca pode mudar no pagamento, mas o valor **não** é recalculado sozinho (o valor da parcela já traz o acréscimo de 5% quando a proposta era com nota). Confirmar com o Marcelo o que deve acontecer com o valor quando se troca a marca "com nota" de um recebimento já registrado: basta como está ou o sistema deve ajustar o valor? (A parte da marca que alimenta o indicador de faturamento com nota já foi confirmada: vale a do pagamento, decisão 117.)
 - [ ] **Categorias sugeridas** (decisão 102): "Tarifas bancárias e maquininha", "Frete" e "Instalação terceirizada" foram acrescentadas ao seed; o Marcelo ajusta nomes e grupos em Configurações → Catálogos.
 - [ ] **Prazos de cobrança e horizonte das recorrências** são padrões editáveis (vence em breve: 7 dias; lembrete de cobrança: no dia; recorrências: 3 meses à frente). Revisar depois do mês de teste.
 - [ ] **Formas de pagamento como catálogo editável** (hoje a lista é fixa: PIX, transferência, espécie, cartão de crédito e boleto): melhoria futura, se o Marcelo pedir outra forma no mês de teste.
@@ -235,5 +238,5 @@ Corrigidos na própria revisão: leitura de quantidade com ponto ("2.5" virava 2
 - [ ] **Cadastro rápido de perfil em barra sem comprimento** assume 6.000 mm (padrão da spec), o que torna inalcançável o aviso "barra sem comprimento" para produtos novos.
 - [ ] **Lista de materiais converte metros em barras pela soma total**, sem plano de corte (três peças de 4 m dão 2 barras; na prática precisam de 3). É a evolução futura com o programa da linha Suprema.
 - [ ] **Testes de integração que alteram o singleton de Configurações** (mão de obra por m², retalho mínimo) restauram no fim; se o processo morrer no meio, o valor real fica trocado. Passar a gravar e restaurar em transação ou a usar um valor fixo de teste lido de volta.
-- [ ] **Teste de integração da importação (`importacao.test.ts`) depende de fornecedores semeados** ("Pontimac" e "Dafel" pelo nome): o Marcelo excluiu um e renomeou outro, e o teste passou a falhar (não é regressão de código). Fazer o teste criar os fornecedores de que precisa, com prefixo "Int ".
+- [x] **Teste de integração da importação (`importacao.test.ts`) dependia de fornecedores semeados** ("Pontimac" e "Dafel" pelo nome; o Marcelo excluiu um e renomeou outro). Resolvido na Fase 7 (Bloco 0a, decisão 121): o teste e o E2E criam os próprios fornecedores e categorias, com prefixo. Ainda dependem de nomes editáveis, a corrigir no Bloco 0a: linha "Suprema", motivos de bloqueio, categorias financeiras, tipologia e condição de pagamento (ver `docs/revisoes/fase-7a.md`).
 - [ ] **`seed:demo` de estoque e compras foi escrito, mas não executado** (banco com dados reais); validar num banco de desenvolvimento vazio antes de usar.
