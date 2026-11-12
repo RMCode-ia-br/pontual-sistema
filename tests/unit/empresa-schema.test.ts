@@ -34,10 +34,17 @@ describe("configuração da empresa", () => {
     expect(r.margemMinimaAlertaPercentual).toBeNull();
   });
 
-  it("não lida mais com alíquota nem limite do Simples (decisão do dono): os campos antigos são ignorados", () => {
-    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "6,5", limiteSimplesCentavos: "4.800.000,00" });
+  it("não lida com alíquota (decisão do dono): o campo antigo é ignorado", () => {
+    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "6,5" });
     expect(r).not.toHaveProperty("aliquotaImpostoPercentual");
-    expect(r).not.toHaveProperty("limiteSimplesCentavos");
+  });
+
+  it("limite do faturamento com nota: opcional (vazio = null), aceita zero e valor em reais, recusa texto", () => {
+    expect(empresaSchema.parse(base).limiteSimplesCentavos).toBeNull();
+    expect(empresaSchema.parse({ ...base, limiteSimplesCentavos: "" }).limiteSimplesCentavos).toBeNull();
+    expect(empresaSchema.parse({ ...base, limiteSimplesCentavos: "0" }).limiteSimplesCentavos).toBe(0); // zero também é "não informado" nas contas
+    expect(empresaSchema.parse({ ...base, limiteSimplesCentavos: "4.800.000,00" }).limiteSimplesCentavos).toBe(480000000);
+    expect(empresaSchema.safeParse({ ...base, limiteSimplesCentavos: "muito" }).success).toBe(false);
   });
 
   it("parâmetros do financeiro: números inteiros dentro dos limites e categoria sugerida opcional", () => {

@@ -253,7 +253,9 @@ model ConfiguracaoEmpresa {
   porteMedioMinimoCentavos      Int?
   porteGrandeMinimoCentavos     Int?
   diasAlertaPrazoAmarelo        Int      @default(3)
-  limiteSimplesCentavos         Int      @default(480000000)
+  /// Limite do acompanhamento "recebido com nota fiscal nos últimos 12 meses" (Fase 7, decisão 117). Nasce VAZIO: o Marcelo informa
+  /// depois dos testes. Vazio ou zero = "limite não informado" (sem percentual). O nome vem do desenho antigo (Simples) e foi mantido.
+  limiteSimplesCentavos         Int?
 
   // Financeiro (Fase 5): parâmetros editáveis em Configurações → Empresa.
   /// Categoria sugerida ao registrar o recebimento de parcelas (vazia = o gestor escolhe a cada vez).

@@ -108,6 +108,7 @@ export function FormEmpresa({ valores, marcados, categoriasDeReceita }: Props) {
           {t("acrescimoNotaPb", "Acréscimo quando a venda é com nota fiscal", { modo: "decimal", max: 5, sufixo: "%", obrigatorio: true, dica: "Somado ao total (preço × 1,05 com 5%), em linha separada na proposta. Vendas sem nota não têm acréscimo." })}
           {t("margemMinimaAlertaPercentual", "Margem mínima de alerta", { modo: "decimal", max: 6, sufixo: "%", dica: "Margem real sobre o preço (lucro ÷ preço). Abaixo disso a proposta mostra um aviso. Vazio = sem alerta." })}
           {t("metaFaturamentoMensalCentavos", "Meta de faturamento mensal", { modo: "decimal", max: 20, sufixo: "R$", obrigatorio: true })}
+          {t("limiteSimplesCentavos", "Limite do faturamento com nota fiscal (opcional)", { modo: "decimal", max: 20, sufixo: "R$", dica: "Só para acompanhar no painel quanto já foi recebido com nota nos últimos 12 meses. Não calcula imposto. Vazio ou zero: o painel mostra o valor recebido sem percentual (\"limite não informado\"). O Marcelo informa o valor real quando quiser." })}
           {t("capacidadeProducaoM2Mes", "Capacidade de produção por mês", { modo: "numeric", max: 6, sufixo: "m²", obrigatorio: true })}
           {t("custoMaoDeObraPorM2Centavos", "Custo de mão de obra por m² (opcional)", { modo: "decimal", max: 20, sufixo: "R$" })}
           {t("retalhoMinimoMm", "Retalho mínimo reaproveitável (opcional)", { modo: "numeric", max: 4, sufixo: "mm" })}

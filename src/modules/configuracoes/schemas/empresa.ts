@@ -217,6 +217,8 @@ export const empresaSchema = z
     acrescimoNotaPb: percentualEmPontosBase("Acréscimo da nota fiscal", 10000),
     margemMinimaAlertaPercentual: percentual("Margem mínima"),
     metaFaturamentoMensalCentavos: dinheiroObrigatorio("Meta mensal"),
+    // Limite do acompanhamento "recebido com nota fiscal nos últimos 12 meses". Vazio (ou zero) = "limite não informado".
+    limiteSimplesCentavos: dinheiroOpcional("Limite do faturamento com nota fiscal"),
     capacidadeProducaoM2Mes: inteiroObrigatorio("Capacidade de produção", 1, 100000),
     garantiaRegulagemDias: inteiroObrigatorio("Garantia de regulagem", 0, 3650),
     retalhoMinimoMm: inteiroOpcional("Retalho mínimo", 0, 6000),
@@ -301,6 +303,7 @@ export function empresaParaFormulario(cfg: Registro | null): Record<string, stri
     acrescimoNotaPb: typeof c.acrescimoNotaPb === "number" ? pontosBaseParaPercentual(c.acrescimoNotaPb) : "",
     margemMinimaAlertaPercentual: decimalParaTexto(c.margemMinimaAlertaPercentual),
     metaFaturamentoMensalCentavos: moedaParaTexto(c.metaFaturamentoMensalCentavos),
+    limiteSimplesCentavos: moedaParaTexto(c.limiteSimplesCentavos),
     capacidadeProducaoM2Mes: n("capacidadeProducaoM2Mes"),
     garantiaRegulagemDias: n("garantiaRegulagemDias"),
     retalhoMinimoMm: n("retalhoMinimoMm"),
