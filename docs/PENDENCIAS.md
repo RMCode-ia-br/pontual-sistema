@@ -46,7 +46,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 **Dívida técnica registrada (média e baixa):**
 - [ ] **Varrer objetos órfãos do Storage** (enviados e nunca concluídos) na rotina diária; o bucket já limita tamanho e tipos.
 - [ ] **Download de anexo de tarefa excluída** ainda funciona (a checagem olha só o anexo, não a entidade pai) e o uso de arquivos na tela de Backup subestima o bucket (objetos de anexos removidos continuam lá).
-- [ ] **Testes E2E usam o banco real** (restauram a configuração no fim, mas um processo interrompido pode deixá-la alterada). Ideal: um banco/projeto Supabase só de testes.
+- [ ] **Testes E2E usam o banco real** (restauram a configuração no fim, mas um processo interrompido pode deixá-la alterada). Ideal: um banco/projeto Supabase só de testes. Consequência já vista: o E2E "a lista de tarefas começa vazia" é **pulado** (com o motivo) quando o banco já tem tarefas de verdade, como as da aprovação de "Casa Regis" e "Varanda Ludmilla".
 - [ ] **Rotas públicas** (`/api/health`, `/icons/*`) consultam o banco sem limite de requisições (superfície de DoS leve): limitar por IP ou usar cache.
 - [ ] **CSP:** `connect-src` e `img-src` aceitam qualquer `*.supabase.co` (fixar o host do projeto); `script-src 'unsafe-inline'` é exigência do Next sem nonce.
 - [ ] **Logo:** uma chamada ao Storage e uma URL nova por renderização do layout (e na tela de login, sem autenticação): guardar em cache.
@@ -54,7 +54,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **CI:** rodar `prettier --check`, E2E (exige banco de teste) e fixar as actions por hash.
 - [ ] **Backup:** `openssl enc` não autentica integridade (preferir `age` ou GPG autenticado); só há o e-mail padrão do GitHub como alerta de falha.
 - [ ] **Tarefas:** sem paginação no servidor (limite fixo de 200); o status `CANCELADA` existe mas nenhuma ação o usa; os campos `tipo` e os vínculos (`clienteId`/`projetoId`) ainda não têm formulário.
-- [ ] **Anexo:** `descricao`, `momento` (antes/durante/depois) e `usarNoPortfolio` existem no schema mas nenhuma ação os grava (chegam com a galeria de obras, Fase 4).
+- [x] **Anexo:** `descricao`, `momento` (antes/durante/depois) e `usarNoPortfolio` agora são gravados e editáveis (fotos da obra e galeria, Fase 4; decisão 97).
 - [ ] **Busca:** sem índice trigram/GIN para `unaccent(...) ILIKE` (sem problema com poucos dados; criar função `unaccent` imutável e o índice quando o volume crescer).
 - [ ] **Atalho de teclado para "Novo"** (a spec pede, além do Ctrl+K).
 - [ ] **Feriados nacionais cobrem 2026 a 2030:** regerar a cada ano (e avisar quando o horizonte acabar, antes de a Fase 4 usar dias úteis). Férias coletivas que atravessam o ano aparecem só no ano de início.
@@ -113,6 +113,11 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Lista de obras sem paginação no servidor** (limite de 300, com aviso) e **busca sem ignorar acentos** (`contains` sem `unaccent`, como na lista de propostas). Passar para SQL agregado quando o volume crescer (Fase 7).
 - [ ] **Agenda e etapa não se sincronizam:** concluir a etapa de instalação não marca o compromisso como realizado (nem o contrário), e remarcar ou cancelar o compromisso não muda as datas previstas da etapa. Confirmar com o Marcelo se quer a sincronização.
 - [ ] **Calendário de instalação sem visão por equipe lado a lado** (colunas por equipe): hoje é um filtro de equipe sobre o calendário comum. Avaliar se o dia a dia pede a visão em colunas.
+- [ ] **Galeria: o cliente que só autorizou "por foto"**: a autorização é por obra (como a spec). Se o Marcelo quiser autorização por foto, é um campo a mais no anexo.
+- [ ] **Região da legenda** é a UF do endereço da obra (não há cadastro de regiões). Se ele quiser "Região dos Lagos" ou "Norte Fluminense", é preciso um cadastro (cidade → região).
+- [ ] **Kit de postagem sem marca d'água nem corte para o formato do Instagram** (quadrado/vertical): as fotos saem como foram enviadas (reduzidas a ~1600 px). Avaliar se ele quer isso.
+- [ ] **Fotos já enviadas na aba "Arquivos e fotos" do projeto** (antes desta fase) não têm momento nem categoria e não entram na galeria; para entrarem, reenviar pela aba Fotos da obra.
+- [ ] **Download do kit depende do Storage ao vivo** (baixa as fotos no momento): se o Supabase estiver pausado (plano gratuito) o ZIP falha com mensagem; as miniaturas ficam como "Imagem indisponível".
 - [ ] **Dias de pausa e prazo "sem pausas":** o "sem considerar pausas" é o prazo contado do relógio sem nenhuma pausa; conferir com o Marcelo se é essa a versão que ele quer ver.
 
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)

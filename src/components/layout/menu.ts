@@ -58,7 +58,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Em andamento", href: "/obras" },
       { titulo: "Calendário de instalação", href: "/obras/calendario" },
       { titulo: "Assistência e garantia", fase: 4 },
-      { titulo: "Galeria de obras", fase: 4 },
+      { titulo: "Galeria de obras", href: "/obras/galeria" },
     ],
   },
   {

@@ -29,6 +29,10 @@ const arquivoSchema = entidadeSchema.extend({
 const concluirSchema = arquivoSchema.extend({
   caminho: z.string().min(1).max(300),
   categoria: z.string().trim().max(60).optional(),
+  /** Foto de obra: quando foi tirada em relação à obra (ANTES, DURANTE ou DEPOIS). */
+  momento: z.enum(["ANTES", "DURANTE", "DEPOIS"]).optional(),
+  usarNoPortfolio: z.boolean().optional(),
+  descricao: z.string().trim().max(300).optional(),
 });
 
 /** Confirma que a entidade existe antes de aceitar anexo (nunca confiar em IDs vindos do cliente). */
@@ -55,6 +59,8 @@ async function entidadeExiste(tipo: (typeof ENTIDADES_COM_ANEXO)[number], id: st
       return !!(await prisma.medidaRascunho.findFirst(filtro));
     case "Proposta":
       return !!(await prisma.proposta.findFirst(filtro));
+    case "Chamado":
+      return !!(await prisma.chamado.findFirst(filtro));
   }
 }
 
@@ -88,7 +94,7 @@ export async function concluirUploadAnexo(entrada: unknown): Promise<ResultadoAc
 
   const dados = concluirSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
-  const { entidadeTipo, entidadeId, caminho, nome, categoria } = dados.data;
+  const { entidadeTipo, entidadeId, caminho, nome, categoria, momento, usarNoPortfolio, descricao } = dados.data;
 
   return executar("anexos.concluir", async () => {
     // O caminho tem que ser exatamente um dos gerados no passo 1 para ESTA entidade.
@@ -123,10 +129,15 @@ export async function concluirUploadAnexo(entrada: unknown): Promise<ResultadoAc
           caminho,
           mime: info.mime,
           tamanhoBytes: info.tamanhoBytes,
+          // Só foto tem momento e portfólio: para os demais anexos o padrão do banco (portfólio sim) não tem efeito,
+          // porque a galeria só lista anexos com momento.
+          momento: momento && info.mime.startsWith("image/") ? momento : null,
+          ...(usarNoPortfolio === undefined ? {} : { usarNoPortfolio }),
+          descricao: descricao || null,
           criadoPorId: sessao.id,
           atualizadoPorId: sessao.id,
         },
-        select: { id: true, entidadeTipo: true, entidadeId: true, nome: true, categoria: true, mime: true, tamanhoBytes: true },
+        select: { id: true, entidadeTipo: true, entidadeId: true, nome: true, categoria: true, mime: true, tamanhoBytes: true, momento: true, usarNoPortfolio: true },
       });
       await registrarAuditoria(tx, { usuario: sessao, entidade: "Anexo", entidadeId: criado.id, acao: "CRIAR", depois: criado, ip });
       return criado;

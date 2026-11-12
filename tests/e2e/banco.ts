@@ -203,6 +203,30 @@ export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boole
   });
 }
 
+/** Tarefas abertas que NÃO são dos testes (títulos "E2E ..."): dado de verdade no banco de desenvolvimento. */
+export async function contarTarefasForaDoE2E(): Promise<number> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ n: number }>(`SELECT count(*)::int AS n FROM "Tarefa" WHERE "deletadoEm" IS NULL AND status = 'ABERTA' AND titulo NOT LIKE 'E2E %'`);
+    return r.rows[0].n;
+  });
+}
+
+/** Define os tipos de serviço do projeto de teste (alimentam a legenda sugerida da galeria). */
+export async function definirTiposDeServicoDaObra(projetoId: string, tipos: string[]): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Projeto" SET "tiposServico" = $2::"TipoServico"[] WHERE id = $1`, [projetoId, tipos]));
+}
+
+/** Ids das fotos de obra (ativas) do projeto de teste, da mais antiga para a mais nova. */
+export async function idsDasFotosDaObra(projetoId: string): Promise<string[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ id: string }>(
+      `SELECT id FROM "Anexo" WHERE "entidadeTipo" = 'Projeto' AND "entidadeId" = $1 AND "deletadoEm" IS NULL AND categoria = 'foto-obra' ORDER BY "criadoEm"`,
+      [projetoId],
+    );
+    return r.rows.map((x) => x.id);
+  });
+}
+
 /** Cria uma equipe de teste ("E2E ...") e a atribui às etapas dos tipos informados da obra. */
 export async function atribuirEquipeAEtapas(projetoId: string, nomeDaEquipe: string, tipos: string[]): Promise<void> {
   await comConexao(async (c) => {

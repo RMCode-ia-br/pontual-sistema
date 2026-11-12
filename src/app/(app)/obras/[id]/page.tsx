@@ -14,11 +14,13 @@ import { listarInteracoesDoVinculo } from "@/modules/clientes/queries";
 import { BotaoGerarEtapas } from "@/modules/obras/components/botao-gerar-etapas";
 import { CartaoPrazo } from "@/modules/obras/components/cartao-prazo";
 import { EtapasDaObra } from "@/modules/obras/components/etapas-da-obra";
+import { FotosDaObra } from "@/modules/obras/components/fotos-da-obra";
 import { PainelPausas } from "@/modules/obras/components/painel-pausas";
 import { ParcelasDaObra } from "@/modules/obras/components/parcelas-da-obra";
 import { ResumoDaObra } from "@/modules/obras/components/resumo-da-obra";
 import { SemaforoTag } from "@/modules/obras/components/semaforo-tag";
 import { listarEquipesAtivas, listarMotivosDeBloqueio, obterObra, obterPedidoDeAvaliacao } from "@/modules/obras/queries";
+import { listarFotosDaObra } from "@/modules/obras/queries-fotos";
 import { excluirInteracaoDoProjeto, registrarInteracaoDoProjeto } from "@/modules/projetos/actions/interacoes";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 
@@ -27,6 +29,7 @@ export const metadata: Metadata = { title: "Obra" };
 const ABAS = [
   { valor: "resumo", titulo: "Resumo" },
   { valor: "etapas", titulo: "Etapas e prazo" },
+  { valor: "fotos", titulo: "Fotos" },
   { valor: "financeiro", titulo: "Parcelas" },
   { valor: "historico", titulo: "Diário e linha do tempo" },
 ] as const;
@@ -124,6 +127,12 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
               <PainelPausas projetoId={obra.id} pausas={obra.pausas} motivos={await listarMotivosDeBloqueio()} hoje={obra.hoje} concluida={concluida} relogioIniciado={obra.prazo.relogioIniciado} />
             </>
           )}
+        </div>
+      ) : null}
+
+      {aba === "fotos" ? (
+        <div className="max-w-5xl">
+          <FotosDaObra projetoId={obra.id} fotos={await listarFotosDaObra(obra.id)} autorizaPortfolio={obra.autorizaPortfolio} />
         </div>
       ) : null}
 

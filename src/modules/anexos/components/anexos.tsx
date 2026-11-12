@@ -53,7 +53,9 @@ export async function prepararArquivo(arquivo: File): Promise<File> {
  * Envia um arquivo ao bucket privado: valida, pede a URL assinada ao servidor, envia direto ao
  * Storage (não passa por Server Action) e registra o anexo. Devolve o ID do anexo ou lança Error.
  */
-export async function enviarAnexo(entidadeTipo: EntidadeComAnexo, entidadeId: string, original: File, categoria?: string): Promise<string> {
+export type ExtrasDoAnexo = { momento?: "ANTES" | "DURANTE" | "DEPOIS"; usarNoPortfolio?: boolean; descricao?: string };
+
+export async function enviarAnexo(entidadeTipo: EntidadeComAnexo, entidadeId: string, original: File, categoria?: string, extras: ExtrasDoAnexo = {}): Promise<string> {
   // Foto de celular novo passa dos 10 MB antes de comprimir: o limite vale para o arquivo FINAL.
   // Aqui só se barra o tipo e o absurdo (acima de 60 MB nem vale tentar comprimir).
   const tipoOk = validarArquivo(original.type, 1);
@@ -82,6 +84,7 @@ export async function enviarAnexo(entidadeTipo: EntidadeComAnexo, entidadeId: st
     mime: arquivo.type,
     tamanhoBytes: arquivo.size,
     categoria,
+    ...extras,
   });
   if (!conclusao.ok || !conclusao.dados) throw new Error(conclusao.ok ? "Não foi possível registrar o arquivo." : conclusao.erro);
   return conclusao.dados.id;

@@ -36,6 +36,24 @@ export async function criarUrlDeDownload(caminho: string, segundos = 60, nomePar
   return data.signedUrl;
 }
 
+/**
+ * URLs assinadas de vários arquivos de uma vez (miniaturas de uma galeria). O mapa só traz os que existem no bucket:
+ * quem não está nele não ganha link (a tela mostra um quadro vazio em vez de quebrar).
+ */
+export async function criarUrlsDeDownload(caminhos: string[], segundos = 1800): Promise<Map<string, string>> {
+  if (caminhos.length === 0) return new Map();
+  const { data, error } = await supabase().storage.from(nomeDoBucket()).createSignedUrls(caminhos, segundos);
+  if (error || !data) throw new Error("Não foi possível gerar os links das fotos.");
+  return new Map(data.flatMap((d) => (d.signedUrl && d.path ? [[d.path, d.signedUrl] as const] : [])));
+}
+
+/** Conteúdo de um arquivo do bucket (para montar um ZIP no servidor). */
+export async function baixarObjeto(caminho: string): Promise<Uint8Array> {
+  const { data, error } = await supabase().storage.from(nomeDoBucket()).download(caminho);
+  if (error || !data) throw new Error("Não foi possível baixar o arquivo.");
+  return new Uint8Array(await data.arrayBuffer());
+}
+
 /** Tamanho e tipo REAIS do objeto no bucket (null se não existir): não confiar no que o navegador declarou. */
 export async function infoDoObjeto(caminho: string): Promise<{ tamanhoBytes: number; mime: string } | null> {
   const pasta = caminho.split("/").slice(0, -1).join("/");
