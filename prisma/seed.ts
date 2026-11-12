@@ -12,6 +12,7 @@ import { criarClientePrisma } from "../src/lib/db/criar-cliente";
 import { COR_PADRAO_DO_SISTEMA } from "../src/lib/tema/derivar";
 
 import { semearLogoPadrao } from "./seed-identidade";
+import { semearObras } from "./seed-obras";
 import { semearPropostas } from "./seed-propostas";
 import {
   ACABAMENTOS,
@@ -206,7 +207,7 @@ async function fornecedores(): Promise<string> {
 }
 
 async function main() {
-  const etapas = [criarAdminInicial, configuracaoEmpresa, () => semearLogoPadrao(prisma), catalogos, feriados, modelosTexto, fornecedores, () => semearPropostas(prisma)];
+  const etapas = [criarAdminInicial, configuracaoEmpresa, () => semearLogoPadrao(prisma), catalogos, feriados, modelosTexto, fornecedores, () => semearPropostas(prisma), () => semearObras(prisma)];
   for (const etapa of etapas) {
     console.log(await etapa());
   }

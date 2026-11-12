@@ -1,4 +1,4 @@
-// Pontual Gestão — schema das Fases 0 (Fundação), 1 (Cadastros), 2 (Comercial) e 3 (Propostas).
+// Pontual Gestão — schema das Fases 0 (Fundação), 1 (Cadastros), 2 (Comercial), 3 (Propostas) e 4 (Obras).
 // Convenções (docs/ESPECIFICACAO.md, seção 4): nomes em português sem acento, dinheiro em
 // centavos (Int), medidas em mm, exclusão lógica (deletadoEm) e colunas de auditoria.
 
@@ -132,24 +132,25 @@ enum AcaoLoteItem {
 // ===================== Sistema =====================
 
 model Usuario {
-  id                 String         @id @default(cuid())
+  id                 String           @id @default(cuid())
   nome               String
   /// Sempre gravado em minúsculas (login não diferencia maiúsculas).
-  login              String         @unique
+  login              String           @unique
   /// Opcional; único quando preenchido. Sempre em minúsculas.
-  email              String?        @unique
+  email              String?          @unique
   senhaHash          String
-  ativo              Boolean        @default(true)
-  papel              PapelUsuario   @default(ADMIN)
-  precisaTrocarSenha Boolean        @default(true)
+  ativo              Boolean          @default(true)
+  papel              PapelUsuario     @default(ADMIN)
+  precisaTrocarSenha Boolean          @default(true)
   /// Incrementada ao trocar/redefinir senha ou desativar: invalida sessões antigas.
-  versaoSessao       Int            @default(1)
+  versaoSessao       Int              @default(1)
   ultimoLoginEm      DateTime?
   funcionario        Funcionario?
   projetos           Projeto[]
   eventosAgenda      EventoAgenda[]
   feedsAgenda        FeedAgenda[]
   sessoesRevogadas   SessaoRevogada[]
+  etapasProjeto      EtapaProjeto[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -487,14 +488,16 @@ model MotivoPerda {
 }
 
 model MotivoBloqueio {
-  id              String    @id @default(cuid())
-  nome            String    @unique
+  id              String         @id @default(cuid())
+  nome            String         @unique
   /// Pausa justificada (não imputável à Pontual) estende o prazo prometido (R8).
-  justificado     Boolean   @default(true)
-  ativo           Boolean   @default(true)
-  ordem           Int       @default(0)
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  justificado     Boolean        @default(true)
+  ativo           Boolean        @default(true)
+  ordem           Int            @default(0)
+  etapasProjeto   EtapaProjeto[]
+  pausasProjeto   PausaProjeto[]
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -556,6 +559,7 @@ model Cliente {
   eventosAgenda           EventoAgenda[]
 
   contasReceber   ContaReceber[]
+  chamados        Chamado[]
   criadoEm        DateTime       @default(now())
   atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
@@ -689,6 +693,7 @@ model Equipe {
   ativo         Boolean        @default(true)
   membros       EquipeMembro[]
   eventosAgenda EventoAgenda[]
+  etapasProjeto EtapaProjeto[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -926,7 +931,7 @@ enum StatusEventoAgenda {
 }
 
 /// `Projeto` é a entidade única do ciclo inteiro (comercial → obra). Dinheiro em centavos.
-/// `valorFechado`, prazos e pausas entram nas Fases 3 e 4 (não adiantar tabelas/campos de fases futuras).
+/// Os campos de prazo (Fase 4) são preenchidos na aprovação (copiados da proposta aprovada) e ajustáveis na obra.
 model Projeto {
   id                           String              @id @default(cuid())
   /// P-AAAA-NNNN (contador anual em ContadorSequencia).
@@ -970,6 +975,28 @@ model Projeto {
   /// Última mudança de fase: base de "dias parado" e da lista "Sem retorno".
   ultimaMovimentacaoEm         DateTime            @default(now())
 
+  // ----- Obra (Fase 4: R7/R8) -----
+  /// Como o prazo foi prometido (copiado da proposta aprovada): total simples ou por grupo de etapas.
+  prazoModo            ModoPrazo @default(NENHUM)
+  /// Prazo total simples; no modo "20 a 35 dias" vale o MÁXIMO (R7).
+  prazoDias            Int?
+  prazoMaterialDias    Int?
+  prazoExecucaoDias    Int?
+  prazoVidrosDias      Int?
+  /// Dias úteis (padrão) ou corridos, como estava na proposta no momento do envio.
+  tipoDiasPrazo        TipoDias  @default(UTEIS)
+  /// O relógio começa na conclusão da MEDICAO_EXATA (R8). Vazio = prazo ainda provisório.
+  dataInicioPrazo      DateTime? @db.Date
+  prazoFinalPrometido  DateTime? @db.Date
+  /// Cache da soma dos dias de pausas justificadas (a fonte são as linhas de PausaProjeto).
+  diasPausaJustificada Int       @default(0)
+  /// Gravada quando a etapa ENTREGA é concluída.
+  dataConclusao        DateTime? @db.Date
+  /// Autorização para usar as fotos no portfólio (R18): padrão sim, o gestor pode desmarcar por obra.
+  autorizaPortfolio    Boolean   @default(true)
+  /// Marca "já publicada no Instagram" (galeria, 7.8) para não repetir.
+  publicadoInstagramEm DateTime? @db.Date
+
   tarefas        Tarefa[]
   interacoes     Interacao[]
   eventos        EventoAgenda[]
@@ -977,6 +1004,9 @@ model Projeto {
   historicoFases HistoricoFaseProjeto[]
   propostas      Proposta[]
   contasReceber  ContaReceber[]
+  etapas         EtapaProjeto[]
+  pausas         PausaProjeto[]
+  chamados       Chamado[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -991,6 +1021,7 @@ model Projeto {
   @@index([arquitetoId])
   @@index([construtoraId])
   @@index([criadoEm])
+  @@index([status, prazoFinalPrometido])
 }
 
 /// Cada mudança de fase (alimenta conversão por fase e "tempo visita → proposta enviada").
@@ -1010,29 +1041,35 @@ model HistoricoFaseProjeto {
 
 /// Visitas, medições, instalações, entregas e assistências. Instantes em UTC; exibição em America/Sao_Paulo.
 model EventoAgenda {
-  id            String             @id @default(cuid())
-  tipo          TipoEventoAgenda
-  titulo        String?
-  inicio        DateTime
-  fim           DateTime
-  responsavelId String?
-  responsavel   Usuario?           @relation(fields: [responsavelId], references: [id], onDelete: Restrict)
-  equipeId      String?
-  equipe        Equipe?            @relation(fields: [equipeId], references: [id], onDelete: Restrict)
-  clienteId     String?
-  cliente       Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  projetoId     String?
-  projeto       Projeto?           @relation(fields: [projetoId], references: [id], onDelete: Restrict)
-  enderecoId    String?
-  endereco      EnderecoCliente?   @relation(fields: [enderecoId], references: [id], onDelete: Restrict)
+  id             String             @id @default(cuid())
+  tipo           TipoEventoAgenda
+  titulo         String?
+  inicio         DateTime
+  fim            DateTime
+  responsavelId  String?
+  responsavel    Usuario?           @relation(fields: [responsavelId], references: [id], onDelete: Restrict)
+  equipeId       String?
+  equipe         Equipe?            @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  clienteId      String?
+  cliente        Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  projetoId      String?
+  projeto        Projeto?           @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  enderecoId     String?
+  endereco       EnderecoCliente?   @relation(fields: [enderecoId], references: [id], onDelete: Restrict)
   /// Local em texto (cópia do endereço da obra no momento do agendamento ou digitado).
-  local         String?
-  status        StatusEventoAgenda @default(AGENDADO)
+  local          String?
+  status         StatusEventoAgenda @default(AGENDADO)
   /// Minutos de antecedência do lembrete (ex.: 1440 = 24 h). Vazio = sem lembrete.
-  lembreteMin   Int?
-  observacoes   String?
-  realizadoEm   DateTime?
-  medidas       MedidaRascunho[]
+  lembreteMin    Int?
+  observacoes    String?
+  realizadoEm    DateTime?
+  /// Etapa da obra que este agendamento cumpre (ex.: instalação) — calendário de instalação (Fase 4).
+  etapaProjetoId String?
+  etapaProjeto   EtapaProjeto?      @relation(fields: [etapaProjetoId], references: [id], onDelete: Restrict)
+  /// Chamado de assistência que este agendamento atende (Fase 4).
+  chamadoId      String?
+  chamado        Chamado?           @relation(fields: [chamadoId], references: [id], onDelete: Restrict)
+  medidas        MedidaRascunho[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1040,6 +1077,8 @@ model EventoAgenda {
   atualizadoPorId String?
   deletadoEm      DateTime?
 
+  @@index([etapaProjetoId])
+  @@index([chamadoId])
   @@index([deletadoEm, inicio])
   @@index([responsavelId, inicio])
   @@index([equipeId, inicio])
@@ -1602,6 +1641,10 @@ model ContaReceber {
   /// Recebimento COM nota fiscal (regra do dono): herda da proposta e pode mudar no recebimento (Fase 5).
   comNotaFiscal  Boolean            @default(false)
   observacao     String?
+  /// Etapa cuja conclusão abriu a parcela (gatilho, Fase 4). Vazio enquanto aguarda ou se não era por etapa.
+  etapaProjetoId String?
+  etapaProjeto   EtapaProjeto?      @relation(fields: [etapaProjetoId], references: [id], onDelete: Restrict)
+  chamado        Chamado?
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1610,7 +1653,207 @@ model ContaReceber {
   deletadoEm      DateTime?
 
   @@unique([propostaId, ordem])
+  @@index([etapaProjetoId])
   @@index([projetoId, deletadoEm])
   @@index([status, vencimento])
   @@index([clienteId])
+}
+
+// ===================== Fase 4 (Obras) =====================
+// Etapas (R7), prazo e pausas (R8), assistência e garantia (R12). Datas de calendário em `@db.Date`.
+// Nenhuma duração de etapa é gravada aqui: os dias vêm da proposta (nunca inventados).
+
+enum TipoEtapa {
+  MEDICAO_EXATA
+  PEDIDO_MATERIAL
+  FABRICACAO
+  INSTALACAO_ESQUADRIAS
+  MEDICAO_VIDROS
+  PEDIDO_VIDROS
+  INSTALACAO_VIDROS
+  ACABAMENTO
+  ENTREGA
+  /// Etapa extra que o gestor acrescenta ao modelo.
+  OUTRA
+}
+
+enum StatusEtapa {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDA
+  BLOQUEADA
+  /// Não se aplica a esta obra (ex.: sem esquadria). Não recebe prazo e não atrasa.
+  DISPENSADA
+}
+
+/// Os três prazos impressos nas propostas (R7).
+enum GrupoPrazo {
+  MATERIAL
+  EXECUCAO
+  VIDROS_FINALIZACAO
+}
+
+enum TipoProblemaChamado {
+  REGULAGEM
+  VIDRO
+  OUTRO
+}
+
+enum ClassificacaoChamado {
+  EM_GARANTIA
+  FORA_DA_GARANTIA
+}
+
+enum StatusChamado {
+  ABERTO
+  AGENDADO
+  EM_ATENDIMENTO
+  RESOLVIDO
+  CANCELADO
+}
+
+/// Modelo de etapas (R7), editável em Configurações. Só um modelo é o padrão (índice parcial na migração).
+model ModeloEtapas {
+  id     String            @id @default(cuid())
+  nome   String
+  padrao Boolean           @default(false)
+  ativo  Boolean           @default(true)
+  itens  ModeloEtapaItem[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+}
+
+model ModeloEtapaItem {
+  id             String            @id @default(cuid())
+  modeloId       String
+  modelo         ModeloEtapas      @relation(fields: [modeloId], references: [id], onDelete: Restrict)
+  tipo           TipoEtapa
+  nome           String
+  ordem          Int
+  /// Vazio = fora dos três prazos (é o caso do marco MEDICAO_EXATA, que inicia o relógio).
+  grupoPrazo     GrupoPrazo?
+  /// Peso dentro do grupo ao distribuir os dias entre as etapas (padrão: iguais).
+  peso           Int               @default(1)
+  /// Concluir esta etapa libera as parcelas com este gatilho (R6). Um item por gatilho em cada modelo.
+  liberaGatilho  GatilhoPagamento?
+  /// Marco do início da garantia de regulagem (R12). Um por modelo.
+  marcoGarantia  Boolean           @default(false)
+  /// Etapa que só existe se algum item aprovado exige esquadria (Tipologia.exigeEsquadria).
+  exigeEsquadria Boolean           @default(false)
+  ativo          Boolean           @default(true)
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([modeloId, ordem])
+}
+
+/// Etapa de uma obra. Nome, grupo, peso, gatilho e marco são COPIADOS do modelo ao gerar: mudar o modelo
+/// depois não altera obras que já existem.
+model EtapaProjeto {
+  id               String            @id @default(cuid())
+  projetoId        String
+  projeto          Projeto           @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  tipo             TipoEtapa
+  nome             String
+  ordem            Int
+  grupoPrazo       GrupoPrazo?
+  peso             Int               @default(1)
+  liberaGatilho    GatilhoPagamento?
+  marcoGarantia    Boolean           @default(false)
+  status           StatusEtapa       @default(PENDENTE)
+  responsavelId    String?
+  responsavel      Usuario?          @relation(fields: [responsavelId], references: [id], onDelete: Restrict)
+  equipeId         String?
+  equipe           Equipe?           @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  inicioPrevisto   DateTime?         @db.Date
+  fimPrevisto      DateTime?         @db.Date
+  /// Data calculada antes de a medição exata ser concluída (R8): a tela avisa que ainda não é definitiva.
+  provisoria       Boolean           @default(false)
+  inicioReal       DateTime?         @db.Date
+  fimReal          DateTime?         @db.Date
+  motivoBloqueioId String?
+  motivoBloqueio   MotivoBloqueio?   @relation(fields: [motivoBloqueioId], references: [id], onDelete: Restrict)
+  detalheBloqueio  String?
+  observacao       String?
+
+  eventos       EventoAgenda[]
+  contasReceber ContaReceber[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([projetoId, ordem])
+  @@index([status, fimPrevisto])
+  @@index([equipeId, inicioPrevisto])
+}
+
+/// Pausa da obra (R8). Se `justificada` (motivo não imputável à Pontual), estende o prazo prometido.
+/// `fim` vazio = pausa em curso (conta até hoje).
+model PausaProjeto {
+  id               String         @id @default(cuid())
+  projetoId        String
+  projeto          Projeto        @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  inicio           DateTime       @db.Date
+  fim              DateTime?      @db.Date
+  motivoBloqueioId String
+  motivoBloqueio   MotivoBloqueio @relation(fields: [motivoBloqueioId], references: [id], onDelete: Restrict)
+  /// Copiada do motivo ao abrir; o gestor pode ajustar.
+  justificada      Boolean
+  observacao       String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([projetoId, inicio])
+}
+
+/// Assistência e garantia (R12). A classificação é sugerida pelo sistema e pode ser sobrescrita.
+model Chamado {
+  id                    String               @id @default(cuid())
+  /// Sequencial legível (ContadorSequencia, chave "chamado").
+  numero                Int                  @unique
+  clienteId             String
+  cliente               Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  projetoId             String?
+  projeto               Projeto?             @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  descricao             String
+  tipoProblema          TipoProblemaChamado
+  classificacaoSugerida ClassificacaoChamado
+  classificacao         ClassificacaoChamado
+  /// Texto mostrado ao gestor ("instalação concluída em dd/mm; regulagem até dd/mm").
+  motivoClassificacao   String?
+  cobrarVisita          Boolean              @default(false)
+  valorCobradoCentavos  Int?
+  contaReceberId        String?              @unique
+  contaReceber          ContaReceber?        @relation(fields: [contaReceberId], references: [id], onDelete: Restrict)
+  status                StatusChamado        @default(ABERTO)
+  abertoEm              DateTime             @default(now())
+  resolvidoEm           DateTime?
+  solucao               String?
+
+  eventos EventoAgenda[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([status, abertoEm])
+  @@index([clienteId])
+  @@index([projetoId])
 }

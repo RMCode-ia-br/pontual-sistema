@@ -196,6 +196,14 @@ export const MODELOS_TEXTO: { chave: string; titulo: string; categoria: Categori
     conteudo:
       "Olá, {{cliente}}! Nossa equipe fará a instalação em {{dataInstalacao}}, no endereço {{enderecoObra}}. Por favor, garanta o acesso ao local no horário combinado.",
   },
+  {
+    // Galeria de obras / kit de postagem (spec 7.8). NUNCA usar nome, telefone ou endereço do cliente aqui:
+    // só tipo de serviço, linha, cidade e UF (os dados do cliente nem chegam ao preenchimento do texto).
+    chave: "portfolio.legenda",
+    titulo: "Galeria: legenda sugerida da postagem (revisar texto)",
+    categoria: "OUTRO",
+    conteudo: "{{tipoServico}} em alumínio linha {{linha}}, entregues em {{cidade}}/{{regiao}}. Pontualidade, qualidade e entrega em cada obra.",
+  },
 ];
 
 // ---------- Feriados nacionais ----------

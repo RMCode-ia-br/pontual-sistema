@@ -100,6 +100,14 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [x] **Fixture 1127-26:** trocada pelos 22 itens reais (medidas, quantidades e preços); soma calculada R$ 89.725,00.
 - [ ] **Mapa gatilho → etapa** (entrega do material = fabricação concluída; entrega e instalação = instalação de vidros concluída) segue para confirmação; as parcelas por gatilho ficam "aguardando" até a Fase 4.
 
+## Surgidas na Fase 4 (obras)
+- [ ] **Confirmar o mapa gatilho → etapa e o marco da garantia** do modelo de etapas (padrão: entrega do material = FABRICACAO concluída; entrega e instalação = INSTALACAO_VIDROS concluída, que também inicia os 90 dias de regulagem). Editável em Configurações → Modelo de etapas.
+- [ ] **Durações das etapas:** não existem no sistema de propósito. Os dias vêm de cada proposta (por grupo: material, execução, vidros e finalização; ou total). O Marcelo pode querer durações padrão por tipo de obra; só depois de ele informar.
+- [ ] **Feriados municipais de Macaé e férias coletivas** (dezembro e Carnaval) precisam estar cadastrados em Configurações → Feriados para o prazo em dias úteis ficar certo e para os avisos aparecerem. Só os feriados nacionais (2026 a 2030) e o Carnaval como ponto facultativo vêm da seed. A obra avisa quando a data final cai num ano sem nenhum feriado cadastrado.
+- [ ] **Texto da legenda do portfólio** (`portfolio.legenda`) é um texto simples proposto por mim e marcado "revisar texto"; o Marcelo ajusta o tom em Configurações → Modelos de texto. A "região" da legenda usa a UF do endereço da obra (não há cadastro de regiões); nunca entram nome, telefone ou endereço do cliente.
+- [ ] **Pausa depois de vencido o prazo** também estende o prazo prometido (a spec não limita). Se o Marcelo achar que distorce a pontualidade, limitar a pausas anteriores ao prazo original.
+- [ ] **Dias de pausa e prazo "sem pausas":** o "sem considerar pausas" é o prazo contado do relógio sem nenhuma pausa; conferir com o Marcelo se é essa a versão que ele quer ver.
+
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)
 Corrigidos na fase: aprovação de duas revisões do mesmo número, revisão após excluir rascunho, contador de propostas regredindo, descrição não regerada ao duplicar opção, validade encerrada fora do PDF, importação de visita sem confirmação, `se()` não preguiçoso, aviso no PDF de rascunho (ver `docs/revisoes/fase-3.md`).
 - [ ] **Lista/filtro de propostas "vencidas"** (validade) e notificação por cron (Fase 8); hoje só o selo na ficha.

@@ -15,6 +15,16 @@ export function somarDias(dataLocal: string, dias: number): string {
   return texto(new Date(paraUtc(dataLocal).getTime() + dias * 86_400_000));
 }
 
+/** Dias corridos de `a` até `b` (positivo se `b` é depois de `a`). */
+export function diferencaEmDias(a: string, b: string): number {
+  return Math.round((paraUtc(b).getTime() - paraUtc(a).getTime()) / 86_400_000);
+}
+
+/** Dia da semana de uma data de calendário (0 = domingo … 6 = sábado). */
+export function diaDaSemanaDe(dataLocal: string): number {
+  return paraUtc(dataLocal).getUTCDay();
+}
+
 /** Domingo da semana que contém a data. */
 export function inicioDaSemana(dataLocal: string): string {
   return somarDias(dataLocal, -paraUtc(dataLocal).getUTCDay());
