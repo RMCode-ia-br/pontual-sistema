@@ -6,6 +6,8 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { prisma } from "@/lib/db";
+import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { formatarData, formatarTelefone } from "@/lib/formatadores";
 import { primeiroNome } from "@/lib/dominio/modelos-texto";
 import { cn } from "@/lib/utils";
@@ -22,6 +24,8 @@ import { SecaoEnderecos } from "@/modules/clientes/components/secao-enderecos";
 import { listarContatos, listarEnderecos, listarInteracoes, listarMensagensProntas, obterCliente, ROTULO_MARCACAO } from "@/modules/clientes/queries";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
+import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
+import { listarChamados } from "@/modules/obras/queries-chamados";
 import { ProjetosDoCliente } from "@/modules/projetos/components/projetos-do-cliente";
 import { contarProjetosDoCliente, listarProjetosDoCliente } from "@/modules/projetos/queries";
 
@@ -32,6 +36,7 @@ const ABAS = [
   { valor: "enderecos", titulo: "Endereços" },
   { valor: "contatos", titulo: "Contatos" },
   { valor: "projetos", titulo: "Projetos" },
+  { valor: "assistencia", titulo: "Assistência" },
   { valor: "anexos", titulo: "Arquivos" },
   { valor: "linha-do-tempo", titulo: "Linha do tempo" },
 ] as const;
@@ -52,7 +57,12 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
     linkAvaliacao: empresa?.linkAvaliacaoGoogle ?? undefined,
   });
 
-  const contagem: Record<string, number | undefined> = { enderecos: cliente.qtdEnderecos, contatos: cliente.qtdContatos, projetos: await contarProjetosDoCliente(cliente.id) };
+  const contagem: Record<string, number | undefined> = {
+    enderecos: cliente.qtdEnderecos,
+    contatos: cliente.qtdContatos,
+    projetos: await contarProjetosDoCliente(cliente.id),
+    assistencia: await prisma.chamado.count({ where: { clienteId: cliente.id, deletadoEm: null, status: { in: [...STATUS_EM_ABERTO] } } }),
+  };
   const documento = cliente.cpfCnpj ? (cliente.tipoPessoa === "PF" ? formatarCpf(cliente.cpfCnpj) : formatarCnpj(cliente.cpfCnpj)) : null;
   const descricao = [
     cliente.tipoPessoa === "PF" ? "Pessoa física" : "Pessoa jurídica",
@@ -168,6 +178,11 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       {aba === "projetos" ? (
         <div className="max-w-3xl">
           <ProjetosDoCliente clienteId={cliente.id} projetos={await listarProjetosDoCliente(cliente.id)} />
+        </div>
+      ) : null}
+      {aba === "assistencia" ? (
+        <div className="max-w-3xl">
+          <SecaoDeAssistencia chamados={(await listarChamados({ situacao: "todos", busca: "", clienteId: cliente.id })).linhas} novoHref={`/obras/assistencia/novo?cliente=${cliente.id}`} />
         </div>
       ) : null}
       {aba === "anexos" ? (

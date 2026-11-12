@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
+import { formatarNumeroDoChamado } from "@/lib/dominio/chamados";
 import { obterExpediente } from "@/modules/agenda/queries";
 import { FormEvento } from "@/modules/agenda/components/form-evento";
 import { TIPOS_EVENTO, type TipoEvento } from "@/modules/agenda/schemas";
@@ -14,9 +15,19 @@ export const metadata: Metadata = { title: "Novo compromisso" };
 
 const ID = /^[\w-]{1,64}$/;
 
-export default async function PaginaNovoEvento({ searchParams }: { searchParams: Promise<{ inicio?: string; projeto?: string; tipo?: string; etapa?: string; equipe?: string }> }) {
+export default async function PaginaNovoEvento({ searchParams }: { searchParams: Promise<{ inicio?: string; projeto?: string; tipo?: string; etapa?: string; equipe?: string; chamado?: string }> }) {
   const usuario = await exigirSessao();
-  const { inicio, projeto: projetoId, tipo, etapa: etapaId, equipe: equipeId } = await searchParams;
+  const { inicio, projeto: projetoIdDaUrl, tipo, etapa: etapaId, equipe: equipeId, chamado: chamadoId } = await searchParams;
+
+  // Vindo de um chamado de assistência (?chamado=ID): chega com o cliente e a obra do chamado, e o tipo "Assistência".
+  const chamado =
+    chamadoId && ID.test(chamadoId)
+      ? await prisma.chamado.findFirst({
+          where: { id: chamadoId, deletadoEm: null, status: { in: ["ABERTO", "AGENDADO", "EM_ATENDIMENTO"] } },
+          select: { id: true, numero: true, projetoId: true, cliente: { select: { id: true, nome: true } } },
+        })
+      : null;
+  const projetoId = chamado?.projetoId ?? projetoIdDaUrl;
 
   // Vindo do projeto (?projeto=ID): já chega com o projeto, o cliente e o endereço da obra escolhidos.
   const projeto =
@@ -51,7 +62,9 @@ export default async function PaginaNovoEvento({ searchParams }: { searchParams:
           usuarioAtualId={usuario.id}
           duracaoPadraoMin={expediente.visitaDuracaoMin}
           inicioInicial={inicio && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(inicio) ? inicio : undefined}
-          tipoInicial={(TIPOS_EVENTO as readonly string[]).includes(tipo ?? "") ? (tipo as TipoEvento) : undefined}
+          tipoInicial={chamado ? "ASSISTENCIA" : (TIPOS_EVENTO as readonly string[]).includes(tipo ?? "") ? (tipo as TipoEvento) : undefined}
+          clienteInicial={chamado ? chamado.cliente : null}
+          chamadoInicial={chamado ? { id: chamado.id, rotulo: formatarNumeroDoChamado(chamado.numero) } : null}
           projetoInicial={projeto ? { id: projeto.id, rotulo: `${projeto.codigo} · ${projeto.titulo} — ${projeto.cliente.nome}`, clienteId: projeto.clienteId, clienteNome: projeto.cliente.nome, enderecoObraId: projeto.enderecoObraId } : null}
         />
       </div>

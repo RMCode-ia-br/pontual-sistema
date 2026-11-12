@@ -51,6 +51,13 @@ async function limpar(c: Client): Promise<void> {
     await c.query(`DELETE FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
   }
 
+  // Fase 4 (assistência): os chamados dos clientes de teste saem antes das contas (a cobrança aponta para a conta)
+  // e depois de soltar os compromissos que apontam para eles; o contador volta ao maior número que sobrou.
+  const chamadosE2E = `SELECT id FROM "Chamado" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
+  await c.query(`UPDATE "EventoAgenda" SET "chamadoId" = NULL WHERE "chamadoId" IN (${chamadosE2E})`);
+  await c.query(`DELETE FROM "Chamado" WHERE id IN (${chamadosE2E})`);
+  await c.query(`UPDATE "ContadorSequencia" SET "valor" = coalesce((SELECT max("numero") FROM "Chamado"), 0) WHERE "chave" = 'chamado'`);
+
   // Fase 3 (propostas): tudo que os testes criam usa nome/título "E2E " (filhos antes dos pais).
   const projetosDaFase3 = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
   const propostasE2E = `SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetosDaFase3})`;
@@ -246,6 +253,35 @@ export async function concluirEtapasAnterioresDaObra(projetoId: string): Promise
       [projetoId],
     ),
   );
+}
+
+/** Dá a instalação por concluída (etapa-marco da garantia) há `diasAtras` dias: a garantia de regulagem corre daí. */
+export async function concluirMarcoDaGarantia(projetoId: string, diasAtras: number): Promise<void> {
+  await comConexao((c) =>
+    c.query(
+      `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = CURRENT_DATE - $2::int, "fimReal" = CURRENT_DATE - $2::int
+        WHERE "projetoId" = $1 AND "marcoGarantia" AND "deletadoEm" IS NULL`,
+      [projetoId, diasAtras],
+    ),
+  );
+}
+
+/** Id do cliente da obra de teste. */
+export async function clienteDaObra(projetoId: string): Promise<string> {
+  return comConexao(async (c) => (await c.query<{ clienteId: string }>(`SELECT "clienteId" FROM "Projeto" WHERE id = $1`, [projetoId])).rows[0].clienteId);
+}
+
+/** Chamados do cliente de teste: número, classificação, situação, se a cobrança virou conta e quantas visitas estão ligadas. */
+export async function chamadosDoCliente(clienteId: string): Promise<{ numero: number; classificacao: string; status: string; temConta: boolean; visitas: number }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ numero: number; classificacao: string; status: string; temConta: boolean; visitas: number }>(
+      `SELECT h.numero, h.classificacao::text AS classificacao, h.status::text AS status, (h."contaReceberId" IS NOT NULL) AS "temConta",
+              (SELECT count(*)::int FROM "EventoAgenda" e WHERE e."chamadoId" = h.id AND e."deletadoEm" IS NULL) AS visitas
+         FROM "Chamado" h WHERE h."clienteId" = $1 AND h."deletadoEm" IS NULL ORDER BY h.numero`,
+      [clienteId],
+    );
+    return r.rows;
+  });
 }
 
 /** Parcelas da obra de teste (descrição, situação e se foram ligadas a uma etapa). */

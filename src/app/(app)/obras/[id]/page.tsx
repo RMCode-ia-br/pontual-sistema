@@ -6,6 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
 import { prisma } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,8 @@ import { ParcelasDaObra } from "@/modules/obras/components/parcelas-da-obra";
 import { ResumoDaObra } from "@/modules/obras/components/resumo-da-obra";
 import { SemaforoTag } from "@/modules/obras/components/semaforo-tag";
 import { listarEquipesAtivas, listarMotivosDeBloqueio, obterObra, obterPedidoDeAvaliacao } from "@/modules/obras/queries";
+import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
+import { listarChamados } from "@/modules/obras/queries-chamados";
 import { listarFotosDaObra } from "@/modules/obras/queries-fotos";
 import { excluirInteracaoDoProjeto, registrarInteracaoDoProjeto } from "@/modules/projetos/actions/interacoes";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
@@ -31,6 +34,7 @@ const ABAS = [
   { valor: "etapas", titulo: "Etapas e prazo" },
   { valor: "fotos", titulo: "Fotos" },
   { valor: "financeiro", titulo: "Parcelas" },
+  { valor: "assistencia", titulo: "Assistência" },
   { valor: "historico", titulo: "Diário e linha do tempo" },
 ] as const;
 
@@ -50,7 +54,9 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
   const concluida = obra.status === "CONCLUIDO";
   const nomes = Object.fromEntries(obra.etapas.map((e) => [e.id, e.nome]));
   const atrasadas = obra.etapas.filter((e) => e.atrasada).length;
-  const contagem: Record<string, number | undefined> = { etapas: atrasadas };
+  // Chamados em aberto desta obra (o número vai na aba); a lista completa só é carregada na aba.
+  const chamadosEmAberto = await prisma.chamado.count({ where: { projetoId: obra.id, deletadoEm: null, status: { in: [...STATUS_EM_ABERTO] } } });
+  const contagem: Record<string, number | undefined> = { etapas: atrasadas, assistencia: chamadosEmAberto };
 
   return (
     <>
@@ -139,6 +145,12 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
       {aba === "financeiro" ? (
         <div className="max-w-3xl">
           <ParcelasDaObra parcelas={obra.parcelas} />
+        </div>
+      ) : null}
+
+      {aba === "assistencia" ? (
+        <div className="max-w-3xl">
+          <SecaoDeAssistencia chamados={(await listarChamados({ situacao: "todos", busca: "", projetoId: obra.id })).linhas} novoHref={`/obras/assistencia/novo?projeto=${obra.id}`} />
         </div>
       ) : null}
 

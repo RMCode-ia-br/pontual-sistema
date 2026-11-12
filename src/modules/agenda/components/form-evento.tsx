@@ -52,9 +52,13 @@ type Props = {
   equipeInicial?: string;
   /** Etapa da obra que este compromisso cumpre (vai oculta no envio; só vale na criação). */
   etapaInicial?: { id: string; nome: string } | null;
+  /** Cliente já escolhido ao abrir "novo" (vem do chamado de assistência, que pode não ter obra). */
+  clienteInicial?: { id: string; nome: string } | null;
+  /** Chamado de assistência que esta visita atende (vai oculto no envio; só vale na criação). */
+  chamadoInicial?: { id: string; rotulo: string } | null;
 };
 
-export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoPadraoMin, inicioInicial, tipoInicial, projetoInicial = null, equipeInicial, etapaInicial = null }: Props) {
+export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoPadraoMin, inicioInicial, tipoInicial, projetoInicial = null, equipeInicial, etapaInicial = null, clienteInicial = null, chamadoInicial = null }: Props) {
   const router = useRouter();
   const editando = !!evento;
   const formulario = useRef<HTMLFormElement>(null);
@@ -70,7 +74,7 @@ export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoP
   const [projeto, setProjeto] = useState<{ id: string; clienteId: string } | null>(
     evento?.projeto ? { id: evento.projeto.id, clienteId: evento.clienteId ?? "" } : projetoInicial ? { id: projetoInicial.id, clienteId: projetoInicial.clienteId } : null,
   );
-  const [clienteId, setClienteId] = useState(evento?.clienteId ?? projetoInicial?.clienteId ?? "");
+  const [clienteId, setClienteId] = useState(evento?.clienteId ?? projetoInicial?.clienteId ?? clienteInicial?.id ?? "");
   const [enderecos, setEnderecos] = useState<EnderecoParaEscolha[]>([]);
   const [enderecoId, setEnderecoId] = useState(evento?.enderecoId ?? projetoInicial?.enderecoObraId ?? "");
   const [livres, setLivres] = useState<{ chave: string; horarios: HorarioLivre[] } | null>(null);
@@ -137,6 +141,12 @@ export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoP
           Este compromisso cumpre a etapa <strong>{etapaInicial.nome}</strong> da obra.
         </p>
       ) : null}
+      {!evento && chamadoInicial ? <input type="hidden" name="chamadoId" value={chamadoInicial.id} /> : null}
+      {!evento && chamadoInicial ? (
+        <p className="bg-muted/50 rounded-lg p-3 text-sm" role="note">
+          Esta visita atende o chamado <strong>{chamadoInicial.rotulo}</strong>.
+        </p>
+      ) : null}
 
       {avisos.length > 0 ? (
         <div role="alert" className="grid gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
@@ -199,7 +209,7 @@ export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoP
             <CampoCliente
               id="clienteId"
               name="clienteId"
-              inicial={evento?.clienteId && evento.clienteNome ? { id: evento.clienteId, nome: evento.clienteNome } : null}
+              inicial={evento?.clienteId && evento.clienteNome ? { id: evento.clienteId, nome: evento.clienteNome } : clienteInicial}
               aoMudar={(c) => {
                 setSujo(true);
                 setClienteId(c?.id ?? "");

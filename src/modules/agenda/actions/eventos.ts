@@ -14,6 +14,7 @@ import { formatarDataHora, inputDataHoraParaInstante } from "@/lib/formatadores"
 import { can } from "@/lib/permissoes";
 import { resumoDoEndereco } from "@/modules/clientes/schemas";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
+import { mudarStatusDoChamado } from "@/modules/obras/servico-chamados";
 import { mudarFaseDoProjeto } from "@/modules/projetos/servico";
 
 import { avisosDoEvento } from "../servico";
@@ -39,6 +40,7 @@ const campos = {
 
 function revalidar(projetoId?: string | null, id?: string) {
   revalidatePath("/agenda");
+  revalidatePath("/obras", "layout");
   if (id) revalidatePath(`/agenda/${id}`);
   if (projetoId) {
     revalidatePath(`/projetos/${projetoId}`);
@@ -88,6 +90,16 @@ async function resolver(dados: DadosDoEvento) {
     etapaProjetoId = etapa.id;
   }
 
+  // O chamado precisa ser do cliente do compromisso e estar em aberto (nunca confiar no ID que veio do navegador).
+  let chamadoId: string | null = null;
+  if (dados.chamadoId) {
+    const chamado = await prisma.chamado.findFirst({ where: { id: dados.chamadoId, deletadoEm: null }, select: { id: true, clienteId: true, projetoId: true, status: true } });
+    if (!chamado || chamado.clienteId !== clienteId) throw new ErroNegocio("O chamado não pertence a este cliente.", { clienteId: "Escolha o cliente do chamado." });
+    if (chamado.projetoId && chamado.projetoId !== (projeto?.id ?? null)) throw new ErroNegocio("O chamado é de outra obra.", { projetoId: "Escolha a obra do chamado." });
+    if (chamado.status === "RESOLVIDO" || chamado.status === "CANCELADO") throw new ErroNegocio("Esse chamado já foi encerrado. Reabra-o para agendar uma visita.");
+    chamadoId = chamado.id;
+  }
+
   let local = dados.local ?? null;
   if (dados.enderecoId) {
     const endereco = await prisma.enderecoCliente.findFirst({
@@ -98,7 +110,7 @@ async function resolver(dados: DadosDoEvento) {
     local ??= resumoDoEndereco(endereco) || null;
   }
 
-  return { inicio, fim, projeto, clienteId, local, etapaProjetoId };
+  return { inicio, fim, projeto, clienteId, local, etapaProjetoId, chamadoId };
 }
 
 /** Avisos (conflito, feriado, fora do expediente) pedem confirmação, como o aviso de cliente duplicado. */
@@ -119,7 +131,7 @@ export async function criarEvento(_anterior: ResultadoAcao<{ id: string }> | nul
   const dados = lido.data;
 
   return executar("agenda.criar", async () => {
-    const { inicio, fim, projeto, clienteId, local, etapaProjetoId } = await resolver(dados);
+    const { inicio, fim, projeto, clienteId, local, etapaProjetoId, chamadoId } = await resolver(dados);
     await exigirConfirmacaoDeAvisos(dados, inicio, fim);
     const ip = extrairIp(await headers());
 
@@ -135,6 +147,7 @@ export async function criarEvento(_anterior: ResultadoAcao<{ id: string }> | nul
           clienteId,
           projetoId: projeto?.id ?? null,
           etapaProjetoId,
+          chamadoId,
           enderecoId: dados.enderecoId ?? null,
           local,
           lembreteMin: dados.lembreteMin ?? null,
@@ -157,6 +170,11 @@ export async function criarEvento(_anterior: ResultadoAcao<{ id: string }> | nul
         // Agendar a visita tira o projeto de "Novo contato" (as demais fases só mudam por decisão da pessoa).
         const proxima = dados.tipo === "VISITA_TECNICA" ? faseAposAgendarVisita(projeto.status) : null;
         if (proxima) await mudarFaseDoProjeto(tx, { usuario: sessao, projeto, para: proxima, ip });
+      }
+      // Marcar a visita de um chamado ainda "Aberto" o passa para "Visita agendada" (os demais andamentos são decisão da pessoa).
+      if (chamadoId) {
+        const chamado = await tx.chamado.findUnique({ where: { id: chamadoId }, select: { status: true } });
+        if (chamado?.status === "ABERTO") await mudarStatusDoChamado(tx, { id: chamadoId, para: "AGENDADO", usuario: sessao, ip });
       }
       return novo;
     });
