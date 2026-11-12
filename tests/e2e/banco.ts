@@ -582,6 +582,11 @@ export async function criarProdutoDeTeste(codigo: string, descricao: string, cus
   });
 }
 
+/** Define saldo e estoque mínimo direto no produto de teste (só para montar o cenário do painel e do relatório). */
+export async function definirSaldoEMinimoDeTeste(codigo: string, saldo: string, minimo: string | null): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Produto" SET "saldoCache" = $2, "estoqueMinimo" = $3 WHERE codigo = $1`, [codigo, saldo, minimo]));
+}
+
 /** Saldo em cache, soma real dos movimentos e quantidade de movimentos do produto (para conferir que o cache bate). */
 export async function estoqueDoProdutoDeTeste(codigo: string): Promise<{ saldoCache: number; somaDosMovimentos: number; movimentos: number }> {
   return comConexao(async (c) => {

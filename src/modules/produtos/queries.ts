@@ -16,6 +16,8 @@ export type FiltrosProdutos = {
   fornecedor?: string;
   /** "sem" = sem custo informado; "com" = com custo; "antigo" = custo sem atualização há mais de ${DIAS_CUSTO_DESATUALIZADO} dias. */
   custo?: "sem" | "com" | "antigo";
+  /** "abaixo" = estoque abaixo do mínimo (só produto que TEM mínimo definido; campo vazio = sem alerta). */
+  estoque?: "abaixo";
   situacao: "ativos" | "inativos" | "todos";
 };
 
@@ -28,6 +30,7 @@ const idOuNada = (v: string | undefined) => (v ? v.slice(0, 64) : undefined);
 export function lerListaProdutos(brutos: ParametrosBrutos) {
   const situacao = um(brutos.situacao);
   const custo = um(brutos.custo);
+  const estoque = um(brutos.estoque);
   return {
     parametros: lerParametrosLista(brutos, CONFIG_LISTA_PRODUTOS),
     filtros: {
@@ -35,6 +38,7 @@ export function lerListaProdutos(brutos: ParametrosBrutos) {
       linha: idOuNada(um(brutos.linha)),
       fornecedor: idOuNada(um(brutos.fornecedor)),
       custo: custo === "sem" || custo === "com" || custo === "antigo" ? custo : undefined,
+      estoque: estoque === "abaixo" ? ("abaixo" as const) : undefined,
       situacao: situacao === "inativos" || situacao === "todos" ? situacao : "ativos",
     } satisfies FiltrosProdutos,
   };
@@ -53,7 +57,12 @@ async function idsPorBusca(termo: string): Promise<string[]> {
 }
 
 async function montarFiltro(parametros: ParametrosLista, filtros: FiltrosProdutos): Promise<Prisma.ProdutoWhereInput | null> {
-  const ids = parametros.busca ? await idsPorBusca(parametros.busca) : null;
+  let ids = parametros.busca ? await idsPorBusca(parametros.busca) : null;
+  if (filtros.estoque === "abaixo") {
+    const abaixo = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM "Produto" WHERE "deletadoEm" IS NULL AND "estoqueMinimo" IS NOT NULL AND "saldoCache" < "estoqueMinimo" LIMIT 3000`;
+    const conjunto = new Set(abaixo.map((a) => a.id));
+    ids = ids ? ids.filter((i) => conjunto.has(i)) : [...conjunto];
+  }
   if (ids && ids.length === 0) return null;
   return {
     deletadoEm: null,

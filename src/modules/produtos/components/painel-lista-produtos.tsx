@@ -70,12 +70,13 @@ export async function PainelListaProdutos({ brutos, usuarioId }: { brutos: Param
     linha: filtros.linha,
     fornecedor: filtros.fornecedor,
     custo: filtros.custo,
+    estoque: filtros.estoque,
     situacao: filtros.situacao === "ativos" ? undefined : filtros.situacao,
     ordem: padrao ? undefined : parametros.ordem,
     direcao: padrao ? undefined : parametros.direcao,
     tamanho: parametros.tamanho === 25 ? undefined : parametros.tamanho,
   };
-  const filtrado = !!(parametros.busca || filtros.categoria || filtros.linha || filtros.fornecedor || filtros.custo || filtros.situacao !== "ativos");
+  const filtrado = !!(parametros.busca || filtros.categoria || filtros.linha || filtros.fornecedor || filtros.custo || filtros.estoque || filtros.situacao !== "ativos");
   const consultaDoFiltro = montarConsulta({ ...atuais, tamanho: undefined }).replace(/^\?/, "");
 
   return (
@@ -85,6 +86,7 @@ export async function PainelListaProdutos({ brutos, usuarioId }: { brutos: Param
           <FiltroSelect nome="categoria" rotulo="Categoria" valor={filtros.categoria} opcoes={opcoes.categorias.map((c) => ({ valor: c.id, rotulo: c.nome }))} />
           <FiltroSelect nome="fornecedor" rotulo="Fornecedor" valor={filtros.fornecedor} opcoes={opcoes.fornecedores.map((f) => ({ valor: f.id, rotulo: f.nome }))} />
           <FiltroSelect nome="linha" rotulo="Linha" valor={filtros.linha} opcoes={opcoes.linhas.map((l) => ({ valor: l.id, rotulo: l.nome }))} />
+          <FiltroSelect nome="estoque" rotulo="Estoque" valor={filtros.estoque} opcoes={[{ valor: "abaixo", rotulo: "Abaixo do mínimo" }]} />
           <FiltroSelect nome="custo" rotulo="Custo" valor={filtros.custo} opcoes={[{ valor: "sem", rotulo: "Sem custo informado" }, { valor: "com", rotulo: "Com custo" }, { valor: "antigo", rotulo: "Custo desatualizado (+90 dias)" }]} />
           <FiltroSelect nome="situacao" rotulo="Situação" valor={filtros.situacao === "ativos" ? undefined : filtros.situacao} todos="Ativos" opcoes={[{ valor: "inativos", rotulo: "Inativos" }, { valor: "todos", rotulo: "Todos" }]} />
         </FiltrosDaLista>

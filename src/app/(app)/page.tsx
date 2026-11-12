@@ -15,10 +15,11 @@ import { resumoDePropostas } from "@/modules/propostas/resumo";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { ROTULO_TIPO_EVENTO, type TipoEvento } from "@/modules/agenda/schemas";
+import { resumoDeEstoque } from "@/modules/estoque/resumo";
 import { resumoFinanceiro } from "@/modules/financeiro/resumo";
 import { DIAS_DA_PONTUALIDADE_NO_PAINEL, resumoDeObras } from "@/modules/obras/resumo";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
-import { formatarDataHora, formatarMoeda } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarDataHora, formatarMoeda } from "@/lib/formatadores";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -35,7 +36,7 @@ type Cartao = {
 
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
-  const [resumo, proximas, cadastros, comercial, propostas, obras, fin] = await Promise.all([
+  const [resumo, proximas, cadastros, comercial, propostas, obras, fin, estoque] = await Promise.all([
     resumoDeTarefas(usuario.id),
     listarTarefas({ status: "abertas" }),
     resumoDeCadastros(),
@@ -43,6 +44,7 @@ export default async function PaginaPainel() {
     resumoDePropostas(),
     resumoDeObras(),
     resumoFinanceiro(),
+    resumoDeEstoque(dataLocalDoInstante(new Date())),
   ]);
   const percentualDaMeta = fin.metaMensalCentavos > 0 ? Math.min(100, Math.round((fin.recebidoNoMesCentavos * 100) / fin.metaMensalCentavos)) : null;
   const pontualidade = obras.pontualidade;
@@ -370,6 +372,52 @@ export default async function PaginaPainel() {
             </p>
           </Link>
         </div>
+      </section>
+
+      <section aria-labelledby="titulo-estoque" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-estoque" className="text-lg font-medium">
+            Estoque e compras
+          </h2>
+          <Link href="/relatorios/estoque" className="text-primary text-sm hover:underline">
+            Ver relatório de estoque
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Link href="/compras?aba=abertas" title="Como é calculado: pedidos feitos ao fornecedor e recebidos em parte, ainda não recebidos por inteiro. Atrasada = previsão de entrega já passada." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Compras em aberto</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{estoque.comprasEmAberto}</p>
+            <p className={cn("text-muted-foreground mt-1 text-xs", estoque.comprasAtrasadas > 0 && "text-destructive")}>
+              {estoque.comprasAtrasadas > 0 ? `${estoque.comprasAtrasadas} com entrega atrasada` : "Nenhuma com entrega atrasada"}
+              {estoque.comprasRascunho > 0 ? ` · ${estoque.comprasRascunho} rascunho(s)` : ""}
+            </p>
+          </Link>
+          <Link href="/estoque/retalhos" title="Como é calculado: sobras de perfil guardadas para outra obra (sobra maior ou igual ao retalho mínimo das Configurações)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Retalhos disponíveis</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{estoque.retalhosDisponiveis}</p>
+            <p className="text-muted-foreground mt-1 text-xs">Para usar em obras</p>
+          </Link>
+          <Link href="/estoque/retalhos" title="Como é calculado: kg de sucata registrados nos cortes e ajustes, menos o que já foi vendido." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Sucata para vender</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{(estoque.sucataMilesimosKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg</p>
+            <p className="text-muted-foreground mt-1 text-xs">Saldo registrado</p>
+          </Link>
+          <Link href="/produtos?estoque=abaixo" title="Como é calculado: só produtos que têm estoque mínimo definido e saldo abaixo dele. Produto sem mínimo não gera alerta." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Abaixo do mínimo</p>
+            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", estoque.abaixoDoMinimo > 0 && "text-destructive")}>{estoque.abaixoDoMinimo}</p>
+            <p className="text-muted-foreground mt-1 text-xs">Só produtos com mínimo definido</p>
+          </Link>
+          <Link href="/estoque/preco-do-kg" title="Como é calculado: perfis comprados por kg que ainda estão sem custo (falta preço do kg, peso por metro ou comprimento da barra)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Perfis sem custo</p>
+            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", estoque.perfisSemCusto > 0 && "text-amber-700 dark:text-amber-400")}>{estoque.perfisSemCusto}</p>
+            <p className="text-muted-foreground mt-1 text-xs">{estoque.perfisSemCusto > 0 ? "Informe o preço do kg" : "Todos com custo"}</p>
+          </Link>
+        </div>
+        {estoque.produtos === 0 ? (
+          <p className="text-muted-foreground mt-3 text-sm">
+            O estoque começa vazio, sem nada inventado: cadastre os <Link href="/produtos" className="underline">produtos</Link> e, se quiser, faça a <Link href="/estoque/inventario-inicial" className="underline">contagem inicial</Link>.
+          </p>
+        ) : null}
       </section>
 
       <section aria-labelledby="titulo-atencao" className="mt-8">

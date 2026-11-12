@@ -1,4 +1,4 @@
-import { Banknote, Filter, HardHat, Landmark, Percent, Receipt, Scale } from "lucide-react";
+import { Banknote, Boxes, Filter, HardHat, Landmark, Percent, Receipt, Scale } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -56,7 +56,18 @@ export default async function PaginaRelatorios() {
           </li>
         ))}
       </ul>
-      <p className="text-muted-foreground mt-6 text-sm">Os relatórios de estoque chegam com o módulo correspondente.</p>
+      <h2 className="mt-8 mb-3 text-lg font-medium">Estoque e compras</h2>
+      <ul className="grid gap-3 sm:grid-cols-2">
+        <li>
+          <Link href="/relatorios/estoque" className="hover:bg-accent flex gap-3 rounded-xl border p-4 transition-colors">
+            <Boxes className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
+            <span>
+              <span className="block font-medium">Posição do estoque e compras por fornecedor</span>
+              <span className="text-muted-foreground text-sm">Estoque valorizado (separando o que está sem custo), abaixo do mínimo, retalhos, sucata e o que se comprou de cada fornecedor.</span>
+            </span>
+          </Link>
+        </li>
+      </ul>
     </>
   );
 }
