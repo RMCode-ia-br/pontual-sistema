@@ -110,6 +110,9 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **A entrega só conclui com as etapas anteriores resolvidas** (concluídas ou dispensadas). Confirmar com o Marcelo se isso atrapalha o dia a dia (etapas que ele nunca registra podem ser removidas do modelo ou dispensadas).
 - [ ] **Obras da Fase 3 já aprovadas no banco de São Paulo** (se houver) não têm etapas: usar o botão "Gerar etapas" na obra. Não há dados reais lá (só demonstração).
 - [ ] **Atribuição de equipe e responsável por etapa** é manual (diálogo "Editar"); a escala de equipes por data entra com o calendário de instalação (Bloco 4).
+- [ ] **Lista de obras sem paginação no servidor** (limite de 300, com aviso) e **busca sem ignorar acentos** (`contains` sem `unaccent`, como na lista de propostas). Passar para SQL agregado quando o volume crescer (Fase 7).
+- [ ] **Agenda e etapa não se sincronizam:** concluir a etapa de instalação não marca o compromisso como realizado (nem o contrário), e remarcar ou cancelar o compromisso não muda as datas previstas da etapa. Confirmar com o Marcelo se quer a sincronização.
+- [ ] **Calendário de instalação sem visão por equipe lado a lado** (colunas por equipe): hoje é um filtro de equipe sobre o calendário comum. Avaliar se o dia a dia pede a visão em colunas.
 - [ ] **Dias de pausa e prazo "sem pausas":** o "sem considerar pausas" é o prazo contado do relógio sem nenhuma pausa; conferir com o Marcelo se é essa a versão que ele quer ver.
 
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)

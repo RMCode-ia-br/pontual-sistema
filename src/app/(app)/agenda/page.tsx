@@ -8,14 +8,15 @@ import { FiltroSelect } from "@/components/lista/filtros-da-lista";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { limitesDoDia } from "@/lib/dominio/agenda";
-import { diasDaSemana, gradeDoMes, mesVizinho, somarDias } from "@/lib/dominio/calendario";
+import { diasDaSemana } from "@/lib/dominio/calendario";
 import { dataLocalDoInstante, inputParaData } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { cn } from "@/lib/utils";
 import { AssinaturaDaAgenda } from "@/modules/agenda/components/assinatura-da-agenda";
-import { GradeDeHoras, GradeMes, ListaDaAgenda, nomeDoMes } from "@/modules/agenda/components/calendario";
+import { GradeDeHoras, GradeMes, ListaDaAgenda } from "@/modules/agenda/components/calendario";
 import { lerFiltrosAgenda, listarEventos, listarFeedsDoUsuario, periodosDoCalendario } from "@/modules/agenda/queries";
 import { ROTULO_TIPO_EVENTO, ROTULO_VISTA, TIPOS_EVENTO, VISTAS, type Vista } from "@/modules/agenda/schemas";
+import { periodoDaVista } from "@/modules/agenda/vista";
 import { listarEquipes } from "@/modules/funcionarios/queries";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 
@@ -24,21 +25,6 @@ export const metadata: Metadata = { title: "Agenda" };
 type Busca = Record<string, string | string[] | undefined>;
 
 const primeiro = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-
-/** Intervalo de dias que a visão mostra e o título dela. */
-function periodoDaVista(vista: Vista, data: string): { de: string; ate: string; titulo: string; anterior: string; proxima: string } {
-  const br = (d: string) => d.split("-").reverse().join("/");
-  if (vista === "mes") {
-    const grade = gradeDoMes(data);
-    return { de: grade[0][0], ate: grade[grade.length - 1][6], titulo: nomeDoMes(data), anterior: mesVizinho(data, -1), proxima: mesVizinho(data, 1) };
-  }
-  if (vista === "semana") {
-    const dias = diasDaSemana(data);
-    return { de: dias[0], ate: dias[6], titulo: `${br(dias[0])} a ${br(dias[6])}`, anterior: somarDias(data, -7), proxima: somarDias(data, 7) };
-  }
-  if (vista === "dia") return { de: data, ate: data, titulo: br(data), anterior: somarDias(data, -1), proxima: somarDias(data, 1) };
-  return { de: data, ate: somarDias(data, 30), titulo: `Próximos 30 dias, a partir de ${br(data)}`, anterior: somarDias(data, -30), proxima: somarDias(data, 30) };
-}
 
 export default async function PaginaAgenda({ searchParams }: { searchParams: Promise<Busca> }) {
   const usuario = await exigirSessao();

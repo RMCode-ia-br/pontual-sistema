@@ -2,15 +2,11 @@ import { ROTULO_GRUPO_PRAZO } from "@/lib/dominio/etapas";
 import { formatarDataCalendario } from "@/lib/formatadores";
 
 import type { ObraDetalhe } from "../queries";
+import { dias } from "../textos";
 import { FormPrazoDaObra } from "./form-prazo-da-obra";
 import { SemaforoTag } from "./semaforo-tag";
 
 const fmt = (d: string) => formatarDataCalendario(d);
-
-function dias(n: number, tipo: "UTEIS" | "CORRIDOS"): string {
-  const abs = Math.abs(n);
-  return `${abs} ${tipo === "UTEIS" ? (abs === 1 ? "dia útil" : "dias úteis") : abs === 1 ? "dia corrido" : "dias corridos"}`;
-}
 
 /** O prazo da obra: o que foi prometido, quanto falta e o efeito das pausas. Tudo calculado na consulta. */
 export function CartaoPrazo({ obra, nomes }: { obra: ObraDetalhe; nomes: Record<string, string> }) {

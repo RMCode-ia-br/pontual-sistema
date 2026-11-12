@@ -14,9 +14,9 @@ export const metadata: Metadata = { title: "Novo compromisso" };
 
 const ID = /^[\w-]{1,64}$/;
 
-export default async function PaginaNovoEvento({ searchParams }: { searchParams: Promise<{ inicio?: string; projeto?: string; tipo?: string }> }) {
+export default async function PaginaNovoEvento({ searchParams }: { searchParams: Promise<{ inicio?: string; projeto?: string; tipo?: string; etapa?: string; equipe?: string }> }) {
   const usuario = await exigirSessao();
-  const { inicio, projeto: projetoId, tipo } = await searchParams;
+  const { inicio, projeto: projetoId, tipo, etapa: etapaId, equipe: equipeId } = await searchParams;
 
   // Vindo do projeto (?projeto=ID): já chega com o projeto, o cliente e o endereço da obra escolhidos.
   const projeto =
@@ -26,7 +26,13 @@ export default async function PaginaNovoEvento({ searchParams }: { searchParams:
           select: { id: true, codigo: true, titulo: true, clienteId: true, enderecoObraId: true, cliente: { select: { nome: true } } },
         })
       : null;
+  // Vindo do calendário de instalação (?etapa=ID): o compromisso cumpre essa etapa, que precisa ser da obra escolhida.
+  const etapa =
+    projeto && etapaId && ID.test(etapaId)
+      ? await prisma.etapaProjeto.findFirst({ where: { id: etapaId, projetoId: projeto.id, deletadoEm: null }, select: { id: true, nome: true } })
+      : null;
   const [usuarios, equipes, expediente] = await Promise.all([listarUsuariosAtivos(), listarEquipes(), obterExpediente()]);
+  const equipesAtivas = equipes.filter((e) => e.ativo);
 
   return (
     <>
@@ -39,7 +45,9 @@ export default async function PaginaNovoEvento({ searchParams }: { searchParams:
       <div className="max-w-3xl">
         <FormEvento
           usuarios={usuarios}
-          equipes={equipes.filter((e) => e.ativo).map((e) => ({ id: e.id, nome: e.nome }))}
+          equipes={equipesAtivas.map((e) => ({ id: e.id, nome: e.nome }))}
+          equipeInicial={equipeId && equipesAtivas.some((e) => e.id === equipeId) ? equipeId : undefined}
+          etapaInicial={etapa}
           usuarioAtualId={usuario.id}
           duracaoPadraoMin={expediente.visitaDuracaoMin}
           inicioInicial={inicio && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(inicio) ? inicio : undefined}

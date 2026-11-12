@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { MENU, rotaAtiva, type GrupoMenu } from "./menu";
+import { itemAtivo, MENU, rotaAtiva, type GrupoMenu } from "./menu";
 
 type Props = {
   /** Sidebar recolhida: só ícones. */
@@ -113,10 +113,10 @@ export function Navegacao({ recolhida = false, aoNavegar }: Props) {
                       <Link
                         href={item.href}
                         onClick={aoNavegar}
-                        aria-current={rotaAtiva(caminho, item.href) ? "page" : undefined}
+                        aria-current={itemAtivo(caminho, item.href) ? "page" : undefined}
                         className={cn(
                           "hover:bg-muted flex min-h-9 items-center rounded-md px-2 text-sm",
-                          rotaAtiva(caminho, item.href) && "bg-accent text-accent-foreground font-medium",
+                          itemAtivo(caminho, item.href) && "bg-accent text-accent-foreground font-medium",
                         )}
                       >
                         {item.titulo}

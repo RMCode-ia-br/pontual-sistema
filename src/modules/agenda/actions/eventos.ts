@@ -30,6 +30,7 @@ const campos = {
   equipeId: true,
   clienteId: true,
   projetoId: true,
+  etapaProjetoId: true,
   enderecoId: true,
   local: true,
   lembreteMin: true,
@@ -79,6 +80,14 @@ async function resolver(dados: DadosDoEvento) {
     if (!equipe) throw new ErroNegocio("A equipe escolhida não está disponível.", { equipeId: "Escolha uma equipe ativa." });
   }
 
+  // A etapa precisa ser da obra do compromisso (nunca confiar no ID que veio do navegador).
+  let etapaProjetoId: string | null = null;
+  if (dados.etapaProjetoId) {
+    const etapa = await prisma.etapaProjeto.findFirst({ where: { id: dados.etapaProjetoId, deletadoEm: null, projetoId: projeto?.id ?? "sem-projeto" }, select: { id: true } });
+    if (!etapa) throw new ErroNegocio("A etapa não pertence a este projeto.", { projetoId: "Escolha o projeto da etapa." });
+    etapaProjetoId = etapa.id;
+  }
+
   let local = dados.local ?? null;
   if (dados.enderecoId) {
     const endereco = await prisma.enderecoCliente.findFirst({
@@ -89,7 +98,7 @@ async function resolver(dados: DadosDoEvento) {
     local ??= resumoDoEndereco(endereco) || null;
   }
 
-  return { inicio, fim, projeto, clienteId, local };
+  return { inicio, fim, projeto, clienteId, local, etapaProjetoId };
 }
 
 /** Avisos (conflito, feriado, fora do expediente) pedem confirmação, como o aviso de cliente duplicado. */
@@ -110,7 +119,7 @@ export async function criarEvento(_anterior: ResultadoAcao<{ id: string }> | nul
   const dados = lido.data;
 
   return executar("agenda.criar", async () => {
-    const { inicio, fim, projeto, clienteId, local } = await resolver(dados);
+    const { inicio, fim, projeto, clienteId, local, etapaProjetoId } = await resolver(dados);
     await exigirConfirmacaoDeAvisos(dados, inicio, fim);
     const ip = extrairIp(await headers());
 
@@ -125,6 +134,7 @@ export async function criarEvento(_anterior: ResultadoAcao<{ id: string }> | nul
           equipeId: dados.equipeId ?? null,
           clienteId,
           projetoId: projeto?.id ?? null,
+          etapaProjetoId,
           enderecoId: dados.enderecoId ?? null,
           local,
           lembreteMin: dados.lembreteMin ?? null,
@@ -168,7 +178,7 @@ export async function editarEvento(_anterior: ResultadoAcao<{ id: string }> | nu
     const anterior = await prisma.eventoAgenda.findFirst({ where: { id, deletadoEm: null }, select: { local: true, enderecoId: true } });
     const localAutomatico = !!anterior && dadosDoFormulario.local === (anterior.local ?? undefined) && dadosDoFormulario.enderecoId !== (anterior.enderecoId ?? undefined);
     const dados = localAutomatico ? { ...dadosDoFormulario, local: undefined } : dadosDoFormulario;
-    const { inicio, fim, projeto, clienteId, local } = await resolver(dados);
+    const { inicio, fim, projeto, clienteId, local } = await resolver({ ...dados, etapaProjetoId: undefined }); // o vínculo com a etapa não muda na edição
     await exigirConfirmacaoDeAvisos(dados, inicio, fim, id);
     const ip = extrairIp(await headers());
 

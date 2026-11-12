@@ -55,8 +55,8 @@ export const MENU: GrupoMenu[] = [
     titulo: "Obras",
     icone: HardHat,
     itens: [
-      { titulo: "Em andamento", fase: 4 },
-      { titulo: "Calendário de instalação", fase: 4 },
+      { titulo: "Em andamento", href: "/obras" },
+      { titulo: "Calendário de instalação", href: "/obras/calendario" },
       { titulo: "Assistência e garantia", fase: 4 },
       { titulo: "Galeria de obras", fase: 4 },
     ],
@@ -124,6 +124,17 @@ export const MENU_CELULAR = [
 export function rotaAtiva(caminhoAtual: string, href: string): boolean {
   if (href === "/") return caminhoAtual === "/";
   return caminhoAtual === href || caminhoAtual.startsWith(`${href}/`);
+}
+
+const HREFS_DO_MENU: string[] = MENU.flatMap((g) => [g.href, ...(g.itens ?? []).map((i) => i.href)]).filter((h): h is string => !!h);
+
+/**
+ * Item do menu realçado: a rota casa e nenhum outro item MAIS específico dentro dele também casa
+ * (ex.: em /obras/calendario só "Calendário de instalação" fica ativo, e não também "Em andamento").
+ */
+export function itemAtivo(caminhoAtual: string, href: string): boolean {
+  if (!rotaAtiva(caminhoAtual, href)) return false;
+  return !HREFS_DO_MENU.some((outro) => outro !== href && outro.startsWith(`${href}/`) && rotaAtiva(caminhoAtual, outro));
 }
 
 /** Todas as páginas existentes, para a busca global (Ctrl+K). */

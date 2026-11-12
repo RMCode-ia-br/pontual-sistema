@@ -58,6 +58,8 @@ const eventoBase = z.object({
   equipeId: campoIdOpcional,
   clienteId: campoIdOpcional,
   projetoId: campoIdOpcional,
+  /** Etapa da obra que este compromisso cumpre (vem do "Agendar" do calendário de instalação). Só na criação. */
+  etapaProjetoId: campoIdOpcional,
   enderecoId: campoIdOpcional,
   local: campoTextoOpcional(300),
   lembreteMin: z

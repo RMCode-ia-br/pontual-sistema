@@ -203,6 +203,15 @@ export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boole
   });
 }
 
+/** Cria uma equipe de teste ("E2E ...") e a atribui às etapas dos tipos informados da obra. */
+export async function atribuirEquipeAEtapas(projetoId: string, nomeDaEquipe: string, tipos: string[]): Promise<void> {
+  await comConexao(async (c) => {
+    const equipeId = randomUUID();
+    await c.query(`INSERT INTO "Equipe" (id, nome, "atualizadoEm") VALUES ($1, $2, now())`, [equipeId, nomeDaEquipe]);
+    await c.query(`UPDATE "EtapaProjeto" SET "equipeId" = $1 WHERE "projetoId" = $2 AND tipo::text = ANY($3::text[])`, [equipeId, projetoId, tipos]);
+  });
+}
+
 /** Atalho de teste: deixa concluídas as etapas abertas anteriores à entrega (a interface exige resolver cada uma). */
 export async function concluirEtapasAnterioresDaObra(projetoId: string): Promise<void> {
   await comConexao((c) =>

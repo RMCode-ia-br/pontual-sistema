@@ -48,9 +48,13 @@ type Props = {
   inicioInicial?: string;
   tipoInicial?: TipoEvento;
   projetoInicial?: ProjetoParaEscolha | null;
+  /** Equipe já escolhida ao abrir "novo" (vem da etapa da obra no calendário de instalação). */
+  equipeInicial?: string;
+  /** Etapa da obra que este compromisso cumpre (vai oculta no envio; só vale na criação). */
+  etapaInicial?: { id: string; nome: string } | null;
 };
 
-export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoPadraoMin, inicioInicial, tipoInicial, projetoInicial = null }: Props) {
+export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoPadraoMin, inicioInicial, tipoInicial, projetoInicial = null, equipeInicial, etapaInicial = null }: Props) {
   const router = useRouter();
   const editando = !!evento;
   const formulario = useRef<HTMLFormElement>(null);
@@ -62,7 +66,7 @@ export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoP
   const [inicio, setInicio] = useState(evento?.inicio ?? inicioInicial ?? "");
   const [duracao, setDuracao] = useState(String(evento?.duracaoMin ?? duracaoPadraoMin));
   const [responsavelId, setResponsavelId] = useState(evento ? (evento.responsavelId ?? "") : usuarioAtualId);
-  const [equipeId, setEquipeId] = useState(evento?.equipeId ?? "");
+  const [equipeId, setEquipeId] = useState(evento?.equipeId ?? equipeInicial ?? "");
   const [projeto, setProjeto] = useState<{ id: string; clienteId: string } | null>(
     evento?.projeto ? { id: evento.projeto.id, clienteId: evento.clienteId ?? "" } : projetoInicial ? { id: projetoInicial.id, clienteId: projetoInicial.clienteId } : null,
   );
@@ -127,6 +131,12 @@ export function FormEvento({ evento, usuarios, equipes, usuarioAtualId, duracaoP
       className="grid gap-5"
     >
       {evento ? <input type="hidden" name="id" value={evento.id} /> : null}
+      {!evento && etapaInicial ? <input type="hidden" name="etapaProjetoId" value={etapaInicial.id} /> : null}
+      {!evento && etapaInicial ? (
+        <p className="bg-muted/50 rounded-lg p-3 text-sm" role="note">
+          Este compromisso cumpre a etapa <strong>{etapaInicial.nome}</strong> da obra.
+        </p>
+      ) : null}
 
       {avisos.length > 0 ? (
         <div role="alert" className="grid gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">

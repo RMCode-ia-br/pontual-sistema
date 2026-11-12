@@ -85,13 +85,15 @@ test.describe("área logada", () => {
 
     await menu.getByRole("button", { name: "Comercial" }).click();
     await expect(menu.getByRole("link", { name: "Tarefas" })).toBeVisible();
-    // Funil, Projetos e Propostas já existem (links); as telas de fases futuras (ex.: Obras) ficam desabilitadas.
+    // Funil, Projetos, Propostas e Obras já existem (links); as telas de fases futuras (ex.: Financeiro) ficam desabilitadas.
     await expect(menu.getByRole("link", { name: "Funil" })).toBeVisible();
     await expect(menu.getByRole("link", { name: "Propostas" })).toBeVisible();
     await menu.getByRole("button", { name: "Obras" }).click();
-    const emAndamento = menu.getByText("Em andamento");
-    await expect(emAndamento).toBeVisible();
-    await expect(emAndamento.locator("xpath=ancestor-or-self::*[@aria-disabled='true'][1]")).toHaveCount(1);
+    await expect(menu.getByRole("link", { name: "Em andamento" })).toBeVisible(); // a tela de obras já existe
+    await menu.getByRole("button", { name: "Financeiro" }).click();
+    const aReceber = menu.getByText("A receber");
+    await expect(aReceber).toBeVisible();
+    await expect(aReceber.locator("xpath=ancestor-or-self::*[@aria-disabled='true'][1]")).toHaveCount(1); // Financeiro é da Fase 5
 
     await menu.getByRole("button", { name: "Configurações" }).click();
     await expect(menu.getByRole("link", { name: "Usuários" })).toBeVisible();

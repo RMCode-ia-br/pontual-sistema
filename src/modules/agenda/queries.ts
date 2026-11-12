@@ -10,7 +10,13 @@ import { obterConfiguracao } from "@/modules/configuracoes/queries";
 
 import { STATUS_EVENTO, TIPOS_EVENTO, type StatusEvento, type TipoEvento } from "./schemas";
 
-export type FiltrosAgenda = { responsavelId?: string; equipeId?: string; tipo?: TipoEvento };
+export type FiltrosAgenda = {
+  responsavelId?: string;
+  equipeId?: string;
+  tipo?: TipoEvento;
+  /** Vários tipos de uma vez (ex.: calendário de instalação). Se vier, prevalece sobre `tipo`. */
+  tipos?: readonly TipoEvento[];
+};
 
 function um(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
@@ -113,7 +119,7 @@ export async function listarEventos(periodo: Intervalo, filtros: FiltrosAgenda =
       fim: { gt: periodo.inicio },
       ...(filtros.responsavelId ? { responsavelId: filtros.responsavelId } : {}),
       ...(filtros.equipeId ? { equipeId: filtros.equipeId } : {}),
-      ...(filtros.tipo ? { tipo: filtros.tipo } : {}),
+      ...(filtros.tipos ? { tipo: { in: [...filtros.tipos] } } : filtros.tipo ? { tipo: filtros.tipo } : {}),
     },
     orderBy: [{ inicio: "asc" }, { id: "asc" }],
     take: LIMITE_EVENTOS,
