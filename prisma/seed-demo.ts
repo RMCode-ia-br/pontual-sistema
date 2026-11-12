@@ -5,7 +5,7 @@
  * SÓ para desenvolvimento: recusa rodar com NODE_ENV=production ou sem ALLOW_DEMO_SEED=true, para nunca
  * misturar dados inventados com os reais. Tudo que cria é identificado ("[Demo]" no nome, "DEMO-" no
  * código) e a limpeza só apaga isso. Fase 2: projetos em todas as fases do funil (com histórico, perdas com motivo e
- * visitas na agenda). Financeiro das fases seguintes entra depois.
+ * visitas na agenda). Fase 4: obras. Fase 5: financeiro (contas, lançamentos, contas a pagar e recorrência).
  */
 import { config } from "dotenv";
 
@@ -34,6 +34,11 @@ async function limpar() {
   // Obras da demonstração (Fase 4): chamados, parcelas, etapas e pausas saem antes das obras.
   await prisma.chamado.deleteMany({ where: { clienteId: { in: ids } } });
   await prisma.$executeRaw`UPDATE "ContadorSequencia" SET "valor" = coalesce((SELECT max("numero") FROM "Chamado"), 0) WHERE "chave" = 'chamado'`;
+  // Financeiro da demonstração (Fase 5): lançamentos, contas a pagar, recorrência e contas financeiras saem antes das parcelas.
+  await prisma.lancamento.deleteMany({ where: { OR: [{ contaFinanceira: { nome: { startsWith: "[Demo] " } } }, { clienteId: { in: ids } }, { projetoId: { in: projetos } }] } });
+  await prisma.contaPagar.deleteMany({ where: { descricao: { startsWith: "[Demo] " } } });
+  await prisma.recorrenciaPagar.deleteMany({ where: { descricao: { startsWith: "[Demo] " } } });
+  await prisma.contaFinanceira.deleteMany({ where: { nome: { startsWith: "[Demo] " } } });
   await prisma.contaReceber.deleteMany({ where: { projetoId: { in: projetos } } });
   await prisma.etapaProjeto.deleteMany({ where: { projetoId: { in: projetos } } });
   await prisma.pausaProjeto.deleteMany({ where: { projetoId: { in: projetos } } });
@@ -109,7 +114,8 @@ async function criar() {
   }
   await criarProjetosDeDemonstracao();
   const obras = await criarObrasDeDemonstracao();
-  console.log(`Demonstração criada: 40 clientes, 30 projetos com visitas, ${obras} obras com etapas, 4 fornecedores e 60 produtos (todos fictícios).`);
+  await criarFinanceiroDeDemonstracao();
+  console.log(`Demonstração criada: 40 clientes, 30 projetos com visitas, ${obras} obras com etapas, financeiro (2 contas, lançamentos, contas a pagar e uma recorrência), 4 fornecedores e 60 produtos (todos fictícios).`);
 }
 
 /**
@@ -288,6 +294,76 @@ async function criarProjetosDeDemonstracao() {
         await tx.eventoAgenda.create({ data: { tipo: "VISITA_TECNICA", inicio, fim: new Date(inicio.getTime() + 3_600_000), projetoId: projeto.id, clienteId: cliente.id, responsavelId: usuario?.id, status: inicio < new Date() ? "REALIZADO" : "AGENDADO", realizadoEm: inicio < new Date() ? inicio : null, titulo: "[Demo] Visita técnica" } });
       }
     });
+  }
+}
+
+/**
+ * Financeiro de demonstração (Fase 5): duas contas "[Demo]" (uma com saldo informado, outra não), recebimentos dos sinais das
+ * obras de demonstração, despesas dos últimos meses, contas a pagar atrasadas, de hoje e futuras e uma recorrência mensal.
+ * Valores FICTÍCIOS, só para ver o fluxo de caixa e o DRE com volume; a limpeza remove tudo que começa com "[Demo]".
+ */
+async function criarFinanceiroDeDemonstracao() {
+  const hoje = new Date();
+  hoje.setUTCHours(0, 0, 0, 0);
+  const dia = (deslocamento: number) => new Date(hoje.getTime() + deslocamento * 86_400_000);
+  const categoria = async (nome: string) => (await prisma.categoriaFinanceira.findFirst({ where: { nome, deletadoEm: null }, select: { id: true } }))?.id ?? null;
+  const [receita, perfis, aluguel, das, tarifas] = await Promise.all([categoria("Venda de esquadrias"), categoria("Perfis de alumínio"), categoria("Aluguel"), categoria("Impostos (DAS)"), categoria("Tarifas bancárias e maquininha")]);
+  if (!receita || !perfis || !aluguel || !das || !tarifas) {
+    console.log("Categorias financeiras ausentes: financeiro de demonstração não criado (rode a seed antes).");
+    return;
+  }
+  const banco = await prisma.contaFinanceira.create({
+    data: { nome: "[Demo] Banco", tipo: "BANCO", saldoInicialInformado: true, saldoInicialCentavos: 2_000_000, dataSaldoInicial: dia(-100), ordem: 90 },
+    select: { id: true },
+  });
+  const caixa = await prisma.contaFinanceira.create({ data: { nome: "[Demo] Caixa (espécie)", tipo: "CAIXA", ordem: 91 }, select: { id: true } });
+
+  // Recebimentos: o sinal das obras de demonstração (as quatro primeiras), cada um há alguns dias.
+  const sinais = await prisma.contaReceber.findMany({ where: { projeto: { cliente: { nome: { startsWith: "[Demo] " } } }, ordem: 1, status: "ABERTA" }, orderBy: { id: "asc" }, take: 4 });
+  for (const [i, s] of sinais.entries()) {
+    await prisma.lancamento.create({
+      data: { data: dia(-(8 + i * 11)), tipo: "ENTRADA", valorCentavos: s.valorCentavos, contaFinanceiraId: banco.id, categoriaId: receita, descricao: `[Demo] Recebimento: ${s.descricao}`, forma: "PIX", projetoId: s.projetoId, clienteId: s.clienteId, contaReceberId: s.id },
+    });
+    await prisma.contaReceber.update({ where: { id: s.id }, data: { status: "PAGA", valorPagoCentavos: s.valorCentavos, categoriaFinanceiraId: receita } });
+  }
+
+  // Despesas e uma venda de sucata dos meses anteriores (avulsos).
+  const avulsos: [number, "ENTRADA" | "SAIDA", number, string | null, string, string][] = [
+    [-70, "SAIDA", 420_000, perfis, "[Demo] Compra de perfis", banco.id],
+    [-45, "SAIDA", 380_000, perfis, "[Demo] Compra de perfis", banco.id],
+    [-20, "SAIDA", 450_000, perfis, "[Demo] Compra de perfis", banco.id],
+    [-60, "SAIDA", 250_000, aluguel, "[Demo] Aluguel da oficina", banco.id],
+    [-30, "SAIDA", 250_000, aluguel, "[Demo] Aluguel da oficina", banco.id],
+    [-45, "SAIDA", 95_000, das, "[Demo] DAS", banco.id],
+    [-15, "SAIDA", 98_000, das, "[Demo] DAS", banco.id],
+    [-25, "SAIDA", 4_500, tarifas, "[Demo] Tarifas e maquininha", caixa.id],
+    [-35, "ENTRADA", 80_000, receita, "[Demo] Venda de sucata de alumínio", caixa.id],
+  ];
+  for (const [d, tipo, valor, cat, descricao, conta] of avulsos) {
+    await prisma.lancamento.create({ data: { data: dia(d), tipo, valorCentavos: valor, contaFinanceiraId: conta, categoriaId: cat, descricao } });
+  }
+
+  // Contas a pagar: atrasada, de hoje, a vencer e parcelada.
+  const pagar = (descricao: string, valorCentavos: number, deslocamento: number, extra: { parcelaNumero?: number; parcelaTotal?: number; parcelamentoId?: string } = {}) => {
+    const venc = dia(deslocamento);
+    return prisma.contaPagar.create({
+      data: { descricao: `[Demo] ${descricao}`, valorCentavos, vencimento: venc, competencia: new Date(Date.UTC(venc.getUTCFullYear(), venc.getUTCMonth(), 1)), categoriaId: perfis, ...extra },
+    });
+  };
+  await pagar("Vidros do fornecedor (atrasada)", 600_000, -9);
+  await pagar("Ferragens (vence hoje)", 180_000, 0);
+  await pagar("Alumínio (a vencer)", 520_000, 6);
+  const parcelamento = "demo-parcelamento";
+  for (let n = 1; n <= 3; n++) await pagar(`Máquina de corte (${n}/3)`, 233_333, 12 + (n - 1) * 30, { parcelaNumero: n, parcelaTotal: 3, parcelamentoId: parcelamento });
+
+  // Recorrência mensal (aluguel) com as ocorrências até o horizonte.
+  const venc = dia(10);
+  const recorrencia = await prisma.recorrenciaPagar.create({
+    data: { descricao: "[Demo] Aluguel da oficina", valorCentavos: 250_000, diaVencimento: venc.getUTCDate(), periodicidade: "MENSAL", inicio: venc, categoriaId: aluguel, geradaAte: dia(10 + 90) },
+  });
+  for (let k = 0; k < 4; k++) {
+    const v = new Date(Date.UTC(venc.getUTCFullYear(), venc.getUTCMonth() + k, Math.min(venc.getUTCDate(), 28)));
+    await prisma.contaPagar.create({ data: { descricao: "[Demo] Aluguel da oficina", valorCentavos: 250_000, vencimento: v, competencia: new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), 1)), categoriaId: aluguel, recorrenciaId: recorrencia.id } });
   }
 }
 

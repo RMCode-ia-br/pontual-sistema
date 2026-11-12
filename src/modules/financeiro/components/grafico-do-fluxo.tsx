@@ -20,7 +20,7 @@ export function GraficoDoFluxo({ pontos, descricao }: { pontos: PontoDoFluxo[]; 
         <ComposedChart data={dados} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis dataKey="nome" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => `R$ ${compacto.format(v)}`} />
+          <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} width={80} tickFormatter={(v: number) => `R$ ${compacto.format(v)}`} />
           <Tooltip cursor={{ fill: "rgba(0,0,0,0.05)" }} formatter={(v) => formatarMoeda(Math.round(Number(v) * 100))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="Entradas" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />

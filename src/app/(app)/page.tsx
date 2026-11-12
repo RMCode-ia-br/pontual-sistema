@@ -15,6 +15,7 @@ import { resumoDePropostas } from "@/modules/propostas/resumo";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { ROTULO_TIPO_EVENTO, type TipoEvento } from "@/modules/agenda/schemas";
+import { resumoFinanceiro } from "@/modules/financeiro/resumo";
 import { DIAS_DA_PONTUALIDADE_NO_PAINEL, resumoDeObras } from "@/modules/obras/resumo";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { formatarDataHora, formatarMoeda } from "@/lib/formatadores";
@@ -34,7 +35,16 @@ type Cartao = {
 
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
-  const [resumo, proximas, cadastros, comercial, propostas, obras] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros(), resumoComercial(), resumoDePropostas(), resumoDeObras()]);
+  const [resumo, proximas, cadastros, comercial, propostas, obras, fin] = await Promise.all([
+    resumoDeTarefas(usuario.id),
+    listarTarefas({ status: "abertas" }),
+    resumoDeCadastros(),
+    resumoComercial(),
+    resumoDePropostas(),
+    resumoDeObras(),
+    resumoFinanceiro(),
+  ]);
+  const percentualDaMeta = fin.metaMensalCentavos > 0 ? Math.min(100, Math.round((fin.recebidoNoMesCentavos * 100) / fin.metaMensalCentavos)) : null;
   const pontualidade = obras.pontualidade;
 
   const cartoes: Cartao[] = [
@@ -119,7 +129,7 @@ export default async function PaginaPainel() {
 
   return (
     <>
-      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. O financeiro chega na próxima etapa." />
+      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção hoje." />
 
       <section aria-label="Resumo de tarefas" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {cartoes.map((c) => {
@@ -292,11 +302,125 @@ export default async function PaginaPainel() {
         </div>
       </section>
 
+      <section aria-labelledby="titulo-financeiro" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-financeiro" className="text-lg font-medium">
+            Financeiro
+          </h2>
+          <Link href="/financeiro" className="text-primary text-sm hover:underline">
+            Ver fluxo de caixa
+          </Link>
+        </div>
+        {!fin.temContas ? (
+          <Link href="/financeiro/contas" className="hover:bg-accent block rounded-xl border border-dashed p-4 text-sm transition-colors">
+            <span className="font-medium">Cadastre as contas onde o dinheiro entra e sai</span>
+            <span className="text-muted-foreground block">O saldo e o fluxo de caixa aparecem aqui assim que houver uma conta. O saldo inicial é opcional.</span>
+          </Link>
+        ) : null}
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Link href="/financeiro/contas" title="Como é calculado: soma dos saldos das contas ativas hoje. Conta sem saldo informado soma só o movimento registrado." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Saldo das contas</p>
+            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", fin.saldoAtualCentavos < 0 && "text-destructive")}>{formatarMoeda(fin.saldoAtualCentavos)}</p>
+            <p className="text-muted-foreground mt-1 text-xs">{fin.contasSemSaldo > 0 ? `${fin.contasSemSaldo} conta(s) com saldo não informado` : "Soma das contas ativas"}</p>
+          </Link>
+          <Link href="/financeiro/receber?aba=todas" title="Como é calculado: soma dos recebimentos de parcelas e cobranças no mês, pela data do pagamento, sem estornos. Meta em Configurações → Empresa." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Recebido no mês</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatarMoeda(fin.recebidoNoMesCentavos)}</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {percentualDaMeta !== null ? `${percentualDaMeta}% da meta de ${formatarMoeda(fin.metaMensalCentavos)}` : "Meta mensal não definida"} · mês anterior {formatarMoeda(fin.recebidoNoMesAnteriorCentavos)}
+            </p>
+          </Link>
+          <Link
+            href="/financeiro/receber?aba=atrasadas"
+            title="Como é calculado: o que falta receber das contas em aberto, por vencimento. Parcelas que aguardam uma etapa não entram."
+            className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", fin.receber.vencidoCentavos > 0 && "border-destructive/40 bg-destructive/5")}
+          >
+            <p className="text-muted-foreground text-sm">A receber</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatarMoeda(fin.receber.vencidoCentavos + fin.receber.hojeCentavos + fin.receber.proximosCentavos)}</p>
+            <p className="text-muted-foreground mt-1 grid text-xs">
+              <span className={cn(fin.receber.vencidoCentavos > 0 && "text-destructive")}>Vencido: {formatarMoeda(fin.receber.vencidoCentavos)}</span>
+              <span>Hoje: {formatarMoeda(fin.receber.hojeCentavos)}</span>
+              <span>
+                Próximos {fin.diasDeAlerta} dias: {formatarMoeda(fin.receber.proximosCentavos)}
+              </span>
+            </p>
+          </Link>
+          <Link
+            href="/financeiro/pagar?aba=atrasadas"
+            title="Como é calculado: o que falta pagar das contas em aberto, por vencimento."
+            className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", fin.pagar.vencidoCentavos > 0 && "border-destructive/40 bg-destructive/5")}
+          >
+            <p className="text-muted-foreground text-sm">A pagar</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatarMoeda(fin.pagar.vencidoCentavos + fin.pagar.hojeCentavos + fin.pagar.proximosCentavos)}</p>
+            <p className="text-muted-foreground mt-1 grid text-xs">
+              <span className={cn(fin.pagar.vencidoCentavos > 0 && "text-destructive")}>Vencido: {formatarMoeda(fin.pagar.vencidoCentavos)}</span>
+              <span>Hoje: {formatarMoeda(fin.pagar.hojeCentavos)}</span>
+              <span>
+                Próximos {fin.diasDeAlerta} dias: {formatarMoeda(fin.pagar.proximosCentavos)}
+              </span>
+            </p>
+          </Link>
+          <Link href="/financeiro" title="Como é calculado: saldo atual + entradas previstas − saídas previstas até cada data. O que já venceu fica de fora." className="hover:bg-accent col-span-2 rounded-xl border p-4 transition-colors lg:col-span-1">
+            <p className="text-muted-foreground text-sm">Saldo projetado</p>
+            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", fin.projetado.em30Centavos < 0 && "text-destructive")}>{formatarMoeda(fin.projetado.em30Centavos)}</p>
+            <p className="text-muted-foreground mt-1 grid text-xs">
+              <span>em 30 dias</span>
+              <span>60 dias: {formatarMoeda(fin.projetado.em60Centavos)}</span>
+              <span>90 dias: {formatarMoeda(fin.projetado.em90Centavos)}</span>
+            </p>
+          </Link>
+        </div>
+      </section>
+
       <section aria-labelledby="titulo-atencao" className="mt-8">
         <h2 id="titulo-atencao" className="mb-3 text-lg font-medium">
           Atenção hoje
         </h2>
         <div className="grid gap-3 lg:grid-cols-2">
+          <div className={cn("rounded-xl border p-4", fin.receberEmAtencao.length > 0 && "border-destructive/40 bg-destructive/5")}>
+            <h3 className="mb-2 text-sm font-medium" title="Como é calculado: parcelas em aberto que venceram ou vencem hoje, as mais antigas primeiro.">
+              Parcelas atrasadas ou vencendo hoje
+            </h3>
+            {fin.receberEmAtencao.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhuma parcela atrasada ou vencendo hoje.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {fin.receberEmAtencao.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <Link href={`/financeiro/receber/${c.id}`} className="min-w-0 hover:underline">
+                      <span className="font-medium">{c.descricao}</span>
+                      <span className="text-muted-foreground block text-xs">{c.quem}</span>
+                    </Link>
+                    <span className={cn("text-xs tabular-nums", c.diasEmAtraso > 0 && "text-destructive")}>
+                      {formatarMoeda(c.saldoCentavos)} · {c.diasEmAtraso > 0 ? `atrasada há ${c.diasEmAtraso} dia${c.diasEmAtraso === 1 ? "" : "s"}` : "vence hoje"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className={cn("rounded-xl border p-4", fin.pagarEmAtencao.length > 0 && "border-destructive/40 bg-destructive/5")}>
+            <h3 className="mb-2 text-sm font-medium" title="Como é calculado: contas a pagar em aberto que venceram ou vencem hoje, as mais antigas primeiro.">
+              Contas a pagar atrasadas ou vencendo hoje
+            </h3>
+            {fin.pagarEmAtencao.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhuma conta atrasada ou vencendo hoje.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {fin.pagarEmAtencao.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <Link href={`/financeiro/pagar/${c.id}`} className="min-w-0 hover:underline">
+                      <span className="font-medium">{c.descricao}</span>
+                      {c.quem ? <span className="text-muted-foreground block text-xs">{c.quem}</span> : null}
+                    </Link>
+                    <span className={cn("text-xs tabular-nums", c.diasEmAtraso > 0 && "text-destructive")}>
+                      {formatarMoeda(c.saldoCentavos)} · {c.diasEmAtraso > 0 ? `atrasada há ${c.diasEmAtraso} dia${c.diasEmAtraso === 1 ? "" : "s"}` : "vence hoje"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className="rounded-xl border p-4">
             <h3 className="mb-2 text-sm font-medium">Visitas de hoje e de amanhã</h3>
             {comercial.visitas.length === 0 ? (
