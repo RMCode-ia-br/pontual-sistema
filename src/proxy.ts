@@ -10,6 +10,6 @@ const { auth } = NextAuth(authConfig);
 export default auth;
 
 export const config = {
-  // Ignora arquivos estáticos, imagens do Next e arquivos públicos do PWA.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|sw.js).*)"],
+  // Ignora arquivos estáticos, imagens do Next e arquivos públicos do PWA e do navegador (favicon, ícones).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|icons/|sw.js).*)"],
 };

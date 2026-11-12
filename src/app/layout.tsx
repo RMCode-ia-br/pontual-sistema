@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   description: "Sistema de gestão da Pontual Soluções em Esquadrias e Vidros.",
   applicationName: "Pontual Gestão",
   robots: { index: false, follow: false },
-  icons: { icon: "/icons/icone-192.png", apple: "/icons/apple-touch-icon.png" },
+  // Favicon e ícone do iOS vêm dos arquivos src/app/{icon.png,apple-icon.png,favicon.ico} (gerados por `npm run icones`).
 };
 
 // A cor da barra do navegador acompanha a cor da marca de Configurações (no escuro, o fundo do sistema).

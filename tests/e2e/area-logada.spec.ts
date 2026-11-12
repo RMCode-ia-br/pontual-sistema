@@ -15,10 +15,17 @@ test.describe("sem sessão: PWA, cabeçalhos e rotina diária", () => {
     expect(json.icons.map((i: { sizes: string }) => i.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
     expect(json.icons.some((i: { purpose: string }) => i.purpose === "maskable")).toBe(true);
 
-    for (const arquivo of ["icone-192.png", "icone-512.png", "icone-maskable-512.png", "apple-touch-icon.png"]) {
-      const r = await request.get(`/icons/${arquivo}`);
-      expect(r.status(), arquivo).toBe(200);
-      expect(r.headers()["content-type"], arquivo).toContain("image/png");
+    // Todo ícone declarado no manifesto existe e é servido sem login.
+    for (const icone of json.icons as Array<{ src: string }>) {
+      const r = await request.get(icone.src);
+      expect(r.status(), icone.src).toBe(200);
+      expect(r.headers()["content-type"], icone.src).toContain("image/png");
+    }
+    // Favicon e ícone do iOS (convenção de arquivos do Next) também são públicos.
+    for (const caminho of ["/icon.png", "/apple-icon.png", "/favicon.ico"]) {
+      const r = await request.get(caminho);
+      expect(r.status(), caminho).toBe(200);
+      expect(r.headers()["content-type"], caminho).toMatch(/^image\/(png|x-icon|vnd\.microsoft\.icon)/);
     }
     expect((await request.get("/icons/inexistente.png")).status()).toBe(404);
   });

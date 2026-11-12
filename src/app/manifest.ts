@@ -22,8 +22,10 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     background_color: "#ffffff",
     theme_color: corDoTema,
     icons: [
+      // "any": logo circular com transparência fora do círculo. "maskable": fundo opaco e logo nos 80% centrais.
       { src: "/icons/icone-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icone-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/icone-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
       { src: "/icons/icone-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };

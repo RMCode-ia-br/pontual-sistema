@@ -11,6 +11,7 @@ import { gerarHashSenha, validarPoliticaSenha } from "../src/lib/auth/senha";
 import { criarClientePrisma } from "../src/lib/db/criar-cliente";
 import { COR_PADRAO_DO_SISTEMA } from "../src/lib/tema/derivar";
 
+import { semearLogoPadrao } from "./seed-identidade";
 import { semearPropostas } from "./seed-propostas";
 import {
   ACABAMENTOS,
@@ -205,7 +206,7 @@ async function fornecedores(): Promise<string> {
 }
 
 async function main() {
-  const etapas = [criarAdminInicial, configuracaoEmpresa, catalogos, feriados, modelosTexto, fornecedores, () => semearPropostas(prisma)];
+  const etapas = [criarAdminInicial, configuracaoEmpresa, () => semearLogoPadrao(prisma), catalogos, feriados, modelosTexto, fornecedores, () => semearPropostas(prisma)];
   for (const etapa of etapas) {
     console.log(await etapa());
   }
