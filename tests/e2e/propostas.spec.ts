@@ -194,6 +194,17 @@ test("ciclo: enviar congela, nova revisão compara, aprovar gera parcelas e leva
   await page.goto(`/projetos/${idProjeto}`);
   await expect(page.getByText("Aprovado", { exact: true }).first()).toBeVisible();
   await semRolagemHorizontal(page);
+
+  // A aprovação gerou as etapas da obra (R5 passo 4 → R7): o atalho leva à obra, com as 9 etapas do modelo pendentes
+  // e as parcelas por gatilho ainda aguardando a conclusão da etapa que as libera.
+  await page.getByRole("link", { name: "Acompanhar obra" }).click();
+  await expect(page).toHaveURL(/\/obras\/[\w-]+$/);
+  await page.getByRole("navigation", { name: "Seções da obra" }).getByRole("link", { name: "Etapas e prazo" }).click();
+  await expect(page.getByRole("listitem", { name: /^Etapa \d: / })).toHaveCount(9);
+  await expect(page.getByRole("listitem", { name: "Etapa 1: Medição exata" })).toContainText("Pendente");
+  await page.getByRole("navigation", { name: "Seções da obra" }).getByRole("link", { name: "Parcelas" }).click();
+  await expect(page.getByText(/Aguarda a etapa “Fabricação”/)).toBeVisible();
+  await semRolagemHorizontal(page);
 });
 
 test("PDFs: a proposta e a folha de produção abrem; sem sessão são recusados", async ({ page, browser }) => {

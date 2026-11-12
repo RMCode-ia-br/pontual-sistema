@@ -31,6 +31,12 @@ async function limpar() {
   const clientes = await prisma.cliente.findMany({ where: { nome: { startsWith: "[Demo] " } }, select: { id: true } });
   const ids = clientes.map((c) => c.id);
   const projetos = (await prisma.projeto.findMany({ where: { clienteId: { in: ids } }, select: { id: true } })).map((p) => p.id);
+  // Obras da demonstração (Fase 4): chamados, parcelas, etapas e pausas saem antes das obras.
+  await prisma.chamado.deleteMany({ where: { clienteId: { in: ids } } });
+  await prisma.$executeRaw`UPDATE "ContadorSequencia" SET "valor" = coalesce((SELECT max("numero") FROM "Chamado"), 0) WHERE "chave" = 'chamado'`;
+  await prisma.contaReceber.deleteMany({ where: { projetoId: { in: projetos } } });
+  await prisma.etapaProjeto.deleteMany({ where: { projetoId: { in: projetos } } });
+  await prisma.pausaProjeto.deleteMany({ where: { projetoId: { in: projetos } } });
   await prisma.medidaRascunho.deleteMany({ where: { projetoId: { in: projetos } } });
   await prisma.eventoAgenda.deleteMany({ where: { OR: [{ projetoId: { in: projetos } }, { clienteId: { in: ids } }] } });
   await prisma.tarefa.deleteMany({ where: { OR: [{ projetoId: { in: projetos } }, { clienteId: { in: ids } }] } });
@@ -102,7 +108,146 @@ async function criar() {
     }
   }
   await criarProjetosDeDemonstracao();
-  console.log("Demonstração criada: 40 clientes, 30 projetos com visitas, 4 fornecedores e 60 produtos (todos fictícios).");
+  const obras = await criarObrasDeDemonstracao();
+  console.log(`Demonstração criada: 40 clientes, 30 projetos com visitas, ${obras} obras com etapas, 4 fornecedores e 60 produtos (todos fictícios).`);
+}
+
+/**
+ * Obras de demonstração (Fase 4), uma por situação que o painel precisa mostrar. Os dias e prazos abaixo são
+ * FICTÍCIOS (só para a demonstração) e nunca vão para a seed real; as etapas copiam o modelo padrão.
+ * Cada etapa dura 4 dias corridos a partir da vizinha: a etapa atual tem a data de fim dada e as demais são
+ * calculadas para trás (concluídas, no prazo) e para a frente (pendentes).
+ */
+const OBRAS_DE_DEMONSTRACAO = [
+  { nome: "recém-aprovada", atual: 0, status: "PENDENTE", fimAtual: 5 },
+  { nome: "no prazo", atual: 1, status: "EM_ANDAMENTO", fimAtual: 9 },
+  { nome: "vence em breve", atual: 2, status: "EM_ANDAMENTO", fimAtual: 2 },
+  { nome: "atrasada", atual: 2, status: "EM_ANDAMENTO", fimAtual: -6 },
+  { nome: "bloqueada com pausa", atual: 4, status: "BLOQUEADA", fimAtual: 1 },
+  { nome: "concluída no prazo", atual: 9, status: "CONCLUIDA", fimAtual: -12, atrasoDias: 0 },
+  { nome: "concluída atrasada", atual: 9, status: "CONCLUIDA", fimAtual: -20, atrasoDias: 6 },
+] as const;
+
+async function criarObrasDeDemonstracao(): Promise<number> {
+  const modelo = await prisma.modeloEtapas.findFirst({ where: { padrao: true, deletadoEm: null }, select: { itens: { where: { deletadoEm: null, ativo: true }, orderBy: { ordem: "asc" } } } });
+  if (!modelo || modelo.itens.length === 0) {
+    console.log("Sem modelo de etapas padrão: obras de demonstração não criadas (rode a seed antes).");
+    return 0;
+  }
+  const itens = modelo.itens;
+  const clientes = await prisma.cliente.findMany({ where: { nome: { startsWith: "[Demo] " } }, orderBy: { nome: "asc" }, skip: 30, take: OBRAS_DE_DEMONSTRACAO.length, select: { id: true, nome: true } });
+  const usuario = await prisma.usuario.findFirst({ where: { ativo: true, deletadoEm: null }, select: { id: true } });
+  const motivo = await prisma.motivoBloqueio.findFirst({ where: { ativo: true, justificado: true }, select: { id: true } });
+  const ano = new Date().getFullYear();
+  const hoje = new Date();
+  hoje.setUTCHours(0, 0, 0, 0);
+  const dia = (deslocamento: number) => new Date(hoje.getTime() + deslocamento * 86_400_000);
+
+  for (const [i, cenario] of OBRAS_DE_DEMONSTRACAO.entries()) {
+    const cliente = clientes[i];
+    if (!cliente) break;
+    const concluida = cenario.status === "CONCLUIDA";
+    // Fim previsto da etapa k: a atual tem o dado; as outras andam 4 dias por etapa (a "atual" das concluídas é a última).
+    const referencia = concluida ? itens.length - 1 : cenario.atual;
+    const fimPrevisto = (k: number) => cenario.fimAtual + (k - referencia) * 4;
+    const atraso = "atrasoDias" in cenario ? cenario.atrasoDias : 0;
+    const ultimoFim = fimPrevisto(itens.length - 1);
+
+    await prisma.$transaction(async (tx) => {
+      const [{ valor }] = await tx.$queryRaw<{ valor: number }[]>`INSERT INTO "ContadorSequencia" ("chave", "valor", "atualizadoEm") VALUES (${`projeto:${ano}`}, 1, now()) ON CONFLICT ("chave") DO UPDATE SET "valor" = "ContadorSequencia"."valor" + 1 RETURNING "valor"`;
+      const medicaoConcluida = concluida || cenario.atual > 0;
+      const projeto = await tx.projeto.create({
+        data: {
+          codigo: `P-${ano}-${String(valor).padStart(4, "0")}`,
+          titulo: `[Demo] Obra — ${cenario.nome}`,
+          clienteId: cliente.id,
+          responsavelId: usuario?.id,
+          status: concluida ? "CONCLUIDO" : cenario.atual === 0 ? "APROVADO" : "EM_EXECUCAO",
+          valorFechadoCentavos: 1_500_000 + i * 100_000,
+          prazoModo: "TOTAL",
+          // Prazo prometido = do início da medição ao fim previsto da última etapa (assim "no prazo" é de fato no prazo).
+          prazoDias: Math.max(1, ultimoFim - fimPrevisto(0)),
+          tipoDiasPrazo: "CORRIDOS",
+          dataInicioPrazo: medicaoConcluida ? dia(fimPrevisto(0)) : null,
+          prazoFinalPrometido: dia(ultimoFim),
+          diasPausaJustificada: cenario.nome === "bloqueada com pausa" ? 3 : 0,
+          dataConclusao: concluida ? dia(ultimoFim + atraso) : null,
+          autorizaPortfolio: true,
+        },
+        select: { id: true },
+      });
+
+      const etapas: { id: string; liberaGatilho: string | null; concluida: boolean; fimReal: Date | null }[] = [];
+      for (const [k, item] of itens.entries()) {
+        const encerrada = k < cenario.atual || concluida;
+        const status = encerrada ? "CONCLUIDA" : k === cenario.atual ? cenario.status : "PENDENTE";
+        const fim = fimPrevisto(k);
+        const fimReal = encerrada ? dia(fim + (concluida && k === itens.length - 1 ? atraso : 0)) : null;
+        const criada = await tx.etapaProjeto.create({
+          data: {
+            projetoId: projeto.id,
+            tipo: item.tipo,
+            nome: item.nome,
+            ordem: k + 1,
+            grupoPrazo: item.grupoPrazo,
+            peso: item.peso,
+            liberaGatilho: item.liberaGatilho,
+            marcoGarantia: item.marcoGarantia,
+            status,
+            inicioPrevisto: dia(fim - 3),
+            fimPrevisto: dia(fim),
+            provisoria: !medicaoConcluida,
+            inicioReal: encerrada || status === "EM_ANDAMENTO" ? dia(fim - 3) : null,
+            fimReal,
+            motivoBloqueioId: status === "BLOQUEADA" ? motivo?.id : null,
+            detalheBloqueio: status === "BLOQUEADA" ? "Demonstração: aguardando a alvenaria." : null,
+            responsavelId: usuario?.id,
+          },
+          select: { id: true },
+        });
+        etapas.push({ id: criada.id, liberaGatilho: item.liberaGatilho, concluida: encerrada, fimReal });
+      }
+
+      // Parcelas 50/25/25: a do sinal está aberta; as por gatilho abrem quando a etapa que as libera termina.
+      const total = 1_500_000 + i * 100_000;
+      const parcelas = [
+        { descricao: "Sinal", valorCentavos: Math.round(total / 2), gatilho: "CONFIRMACAO" as const },
+        { descricao: "Entrega do material", valorCentavos: Math.round(total / 4), gatilho: "ENTREGA_MATERIAL" as const },
+        { descricao: "Vidros e instalação", valorCentavos: total - Math.round(total / 2) - Math.round(total / 4), gatilho: "ENTREGA_E_INSTALACAO" as const },
+      ];
+      for (const [ordem, p] of parcelas.entries()) {
+        const etapa = etapas.find((e) => e.liberaGatilho === p.gatilho);
+        const aberta = p.gatilho === "CONFIRMACAO" || !!etapa?.concluida;
+        await tx.contaReceber.create({
+          data: { projetoId: projeto.id, clienteId: cliente.id, ordem: ordem + 1, ...p, status: aberta ? "ABERTA" : "AGUARDANDO_GATILHO", vencimento: aberta ? (etapa?.fimReal ?? dia(fimPrevisto(0))) : null, etapaProjetoId: aberta ? (etapa?.id ?? null) : null },
+        });
+      }
+
+      if (cenario.nome === "bloqueada com pausa" && motivo) {
+        await tx.pausaProjeto.create({ data: { projetoId: projeto.id, inicio: dia(-6), fim: dia(-4), motivoBloqueioId: motivo.id, justificada: true, observacao: "Demonstração: chuva forte." } });
+      }
+
+      // Assistência de demonstração nas obras concluídas: uma em garantia (regulagem) e uma fora (vidro, visita cobrada).
+      if (concluida) {
+        const [{ valor: numero }] = await tx.$queryRaw<{ valor: number }[]>`INSERT INTO "ContadorSequencia" ("chave", "valor", "atualizadoEm") VALUES ('chamado', 1, now()) ON CONFLICT ("chave") DO UPDATE SET "valor" = "ContadorSequencia"."valor" + 1, "atualizadoEm" = now() RETURNING "valor"`;
+        const foraDaGarantia = atraso > 0;
+        await tx.chamado.create({
+          data: {
+            numero: Number(numero),
+            clienteId: cliente.id,
+            projetoId: projeto.id,
+            descricao: foraDaGarantia ? "Demonstração: vidro com infiltração no encontro." : "Demonstração: janela raspando no trilho.",
+            tipoProblema: foraDaGarantia ? "VIDRO" : "REGULAGEM",
+            classificacaoSugerida: foraDaGarantia ? "FORA_DA_GARANTIA" : "EM_GARANTIA",
+            classificacao: foraDaGarantia ? "FORA_DA_GARANTIA" : "EM_GARANTIA",
+            motivoClassificacao: foraDaGarantia ? "A garantia dos vidros vale só até a instalação (demonstração)." : "Dentro da garantia de regulagem (demonstração).",
+            cobrarVisita: foraDaGarantia,
+          },
+        });
+      }
+    });
+  }
+  return Math.min(clientes.length, OBRAS_DE_DEMONSTRACAO.length);
 }
 
 async function criarProjetosDeDemonstracao() {

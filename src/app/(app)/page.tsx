@@ -12,6 +12,10 @@ import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
 import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
 import { resumoComercial } from "@/modules/comercial/resumo";
 import { resumoDePropostas } from "@/modules/propostas/resumo";
+import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
+import { montarConsulta } from "@/lib/listas/parametros";
+import { ROTULO_TIPO_EVENTO, type TipoEvento } from "@/modules/agenda/schemas";
+import { DIAS_DA_PONTUALIDADE_NO_PAINEL, resumoDeObras } from "@/modules/obras/resumo";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { formatarDataHora, formatarMoeda } from "@/lib/formatadores";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
@@ -30,7 +34,8 @@ type Cartao = {
 
 export default async function PaginaPainel() {
   const usuario = await exigirSessao();
-  const [resumo, proximas, cadastros, comercial, propostas] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros(), resumoComercial(), resumoDePropostas()]);
+  const [resumo, proximas, cadastros, comercial, propostas, obras] = await Promise.all([resumoDeTarefas(usuario.id), listarTarefas({ status: "abertas" }), resumoDeCadastros(), resumoComercial(), resumoDePropostas(), resumoDeObras()]);
+  const pontualidade = obras.pontualidade;
 
   const cartoes: Cartao[] = [
     {
@@ -114,7 +119,7 @@ export default async function PaginaPainel() {
 
   return (
     <>
-      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. Obras e financeiro chegam nas próximas etapas." />
+      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção. O financeiro chega na próxima etapa." />
 
       <section aria-label="Resumo de tarefas" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {cartoes.map((c) => {
@@ -190,6 +195,103 @@ export default async function PaginaPainel() {
         </div>
       </section>
 
+      <section aria-labelledby="titulo-obras" className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="titulo-obras" className="text-lg font-medium">
+            Obras
+          </h2>
+          <Link href="/obras" className="text-primary text-sm hover:underline">
+            Ver obras
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Link href="/obras" title="Como é calculado: obras aprovadas ou em execução (ainda não entregues)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Obras em andamento</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{obras.emAndamento}</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {obras.verdes} no prazo{obras.semPrazo > 0 ? ` · ${obras.semPrazo} sem prazo definido` : ""}
+            </p>
+          </Link>
+          <Link
+            href="/obras?semaforo=VERMELHO"
+            title="Como é calculado: obras em andamento com alguma etapa depois da data prevista, ou com o prazo prometido (já com as pausas justificadas) vencido."
+            className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", obras.vermelhas > 0 && "border-destructive/40 bg-destructive/5")}
+          >
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              {obras.vermelhas > 0 ? <TriangleAlert className="text-destructive size-4" aria-hidden /> : null}
+              Obras atrasadas
+            </p>
+            <p className={cn("mt-2 text-3xl font-semibold tabular-nums", obras.vermelhas > 0 && "text-destructive")}>{obras.vermelhas}</p>
+            <p className="text-muted-foreground mt-1 text-xs">Semáforo vermelho.</p>
+          </Link>
+          <Link href="/obras?semaforo=AMARELO" title="Como é calculado: obras em andamento com etapa ou prazo vencendo nos próximos dias (limite em Configurações)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
+            <p className="text-muted-foreground text-sm">Vencem em breve</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{obras.amarelas}</p>
+            <p className="text-muted-foreground mt-1 text-xs">Semáforo amarelo.</p>
+          </Link>
+          <Link
+            href={`/obras${montarConsulta({ situacao: "concluidas", de: obras.periodoDaPontualidade.de, ate: obras.periodoDaPontualidade.ate })}`}
+            title={`Como é calculado: obras concluídas nos últimos ${DIAS_DA_PONTUALIDADE_NO_PAINEL} dias que terminaram até o prazo prometido (já com as pausas justificadas) ÷ obras concluídas no período que tinham prazo. Sem considerar as pausas: ${pontualidade.pontualidadeSemPausasPct === null ? "—" : `${pontualidade.pontualidadeSemPausasPct.toLocaleString("pt-BR")}%`}.`}
+            className="hover:bg-accent rounded-xl border p-4 transition-colors"
+          >
+            <p className="text-muted-foreground text-sm">Pontualidade</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{pontualidade.pontualidadePct === null ? "—" : `${pontualidade.pontualidadePct.toLocaleString("pt-BR")}%`}</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {pontualidade.concluidas === 0
+                ? `Aparece quando houver obra concluída com prazo nos últimos ${DIAS_DA_PONTUALIDADE_NO_PAINEL} dias.`
+                : `${pontualidade.pontuais} de ${pontualidade.concluidas} no prazo (${DIAS_DA_PONTUALIDADE_NO_PAINEL} dias).`}
+            </p>
+          </Link>
+          <Link href="/obras/assistencia" title="Como é calculado: chamados de assistência ainda não resolvidos nem cancelados." className="hover:bg-accent col-span-2 rounded-xl border p-4 transition-colors lg:col-span-1">
+            <p className="text-muted-foreground text-sm">Chamados em aberto</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{obras.chamadosEmAberto}</p>
+            <p className="text-muted-foreground mt-1 text-xs">{obras.chamadosEmAberto > 0 ? `${obras.chamadosEmAbertoEmGarantia} em garantia.` : "Assistência e garantia."}</p>
+          </Link>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Obras por etapa</h3>
+            {obras.porEtapa.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhuma obra em andamento.</p>
+            ) : (
+              <ul className="grid gap-1 text-sm">
+                {obras.porEtapa.map((e) => (
+                  <li key={e.tipo} className="flex justify-between gap-2">
+                    <Link href={`/obras?etapa=${e.tipo}`} className="hover:underline">
+                      {ROTULO_TIPO_ETAPA[e.tipo]}
+                    </Link>
+                    <span className="tabular-nums">{e.quantidade}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Próximas instalações e entregas</h3>
+            {obras.proximasInstalacoes.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nada agendado. Veja o que falta agendar no calendário de instalação.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {obras.proximasInstalacoes.map((i) => (
+                  <li key={i.id} className="text-sm">
+                    <Link href={`/agenda/${i.id}`} className="hover:underline">
+                      <span className="font-medium">{i.clienteNome ?? i.projetoTitulo ?? ROTULO_TIPO_EVENTO[i.tipo as TipoEvento]}</span>
+                      <span className="text-muted-foreground block text-xs">
+                        {ROTULO_TIPO_EVENTO[i.tipo as TipoEvento]} · {formatarDataHora(i.inicio)}
+                        {i.equipeNome ? ` · ${i.equipeNome}` : ""}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link href="/obras/calendario" className="text-primary mt-2 inline-block text-xs hover:underline">
+              Abrir o calendário de instalação
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section aria-labelledby="titulo-atencao" className="mt-8">
         <h2 id="titulo-atencao" className="mb-3 text-lg font-medium">
           Atenção hoje
@@ -213,6 +315,31 @@ export default async function PaginaPainel() {
                     <Link href={`/agenda/${v.id}`} className="text-primary text-xs hover:underline">
                       Enviar lembrete
                     </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className={cn("rounded-xl border p-4 lg:col-span-2", obras.atrasadas.length > 0 && "border-destructive/40 bg-destructive/5")}>
+            <h3 className="mb-2 text-sm font-medium" title="Como é calculado: obras em andamento com etapa aberta depois da data prevista, as mais urgentes primeiro.">
+              Obras com etapa atrasada
+            </h3>
+            {obras.atrasadas.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhuma etapa atrasada nas obras em andamento.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {obras.atrasadas.map((o) => (
+                  <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <Link href={`/obras/${o.id}?aba=etapas`} className="min-w-0 hover:underline">
+                      <span className="font-medium">{o.titulo}</span>
+                      <span className="text-muted-foreground block text-xs">
+                        {o.clienteNome}
+                        {o.etapaAtual ? ` · etapa atual: ${o.etapaAtual}` : ""}
+                      </span>
+                    </Link>
+                    <span className="text-destructive text-xs">
+                      {o.etapasAtrasadas} {o.etapasAtrasadas === 1 ? "etapa atrasada" : "etapas atrasadas"}
+                    </span>
                   </li>
                 ))}
               </ul>

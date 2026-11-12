@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { capturar, entrarEEsperarPainel, semRolagemHorizontal } from "./ajudantes";
-import { buscarAuditoriaFeitaPeloE2E, prepararUsuarioE2E } from "./banco";
+import { buscarAuditoriaFeitaPeloE2E, contarProjetosDecididosForaDoE2E, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
@@ -64,8 +64,13 @@ test("o relatório de funil e origem conta o projeto, mostra as definições e l
   await expect(origem.getByRole("row", { name: /Google/ })).toContainText("1");
   await expect(page.getByRole("table", { name: "Projetos por fase atual" }).getByRole("row", { name: /Perdido/ })).toContainText("1");
   await expect(page.getByRole("heading", { name: "Por que se perdem" })).toBeVisible();
-  // Sem propostas/aprovações, taxa de fechamento não é inventada.
-  await expect(page.getByText(/Aparece quando houver projetos aprovados ou perdidos com proposta/)).toBeVisible();
+  // Sem propostas/aprovações, taxa de fechamento não é inventada. (O banco de desenvolvimento pode ter projetos reais
+  // aprovados, e aí a taxa existe de verdade: nesse caso só conferimos que o cartão está lá.)
+  if ((await contarProjetosDecididosForaDoE2E()) === 0) {
+    await expect(page.getByText(/Aparece quando houver projetos aprovados ou perdidos com proposta/)).toBeVisible();
+  } else {
+    await expect(page.getByText("Taxa de fechamento", { exact: true })).toBeVisible();
+  }
   await expect(page.getByText(/Como é calculado: conversão/)).toBeVisible();
   await semRolagemHorizontal(page);
   await capturar(page, "relatorio-funil");
@@ -85,12 +90,12 @@ test("filtro por origem sem projetos mostra o estado vazio; o CSV segue os mesmo
   expect(r.headers()["content-type"]).toContain("text/csv");
   const csv = await r.text();
   expect(csv).toContain("Origem;Projetos;Com visita");
-  expect(csv).toMatch(/Google;1;/);
+  expect(csv).toMatch(/Google;[1-9]\d*;/); // o projeto do teste (e, no banco de desenvolvimento, os reais com a mesma origem)
   // Só o início do arquivo leva a marca de codificação (BOM), não cada seção.
   expect(csv.slice(1)).not.toContain("﻿");
   expect(csv).toContain("Perdido");
   expect((await buscarAuditoriaFeitaPeloE2E("Relatorio", "EXPORTAR")).length).toBe(1);
 
   const vazio = await (await page.request.get("/api/exportar/relatorios/funil?origem=INSTAGRAM")).text();
-  expect(vazio).not.toMatch(/Google;1;/);
+  expect(vazio).not.toMatch(/Google;[1-9]\d*;/);
 });

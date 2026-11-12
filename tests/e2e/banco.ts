@@ -218,6 +218,19 @@ export async function contarTarefasForaDoE2E(): Promise<number> {
   });
 }
 
+/**
+ * Projetos que NÃO são dos testes (título sem "E2E ") e já foram aprovados ou perdidos: dado de verdade no banco de
+ * desenvolvimento, que faz a taxa de fechamento do relatório de funil deixar de ficar em branco.
+ */
+export async function contarProjetosDecididosForaDoE2E(): Promise<number> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "Projeto" WHERE "deletadoEm" IS NULL AND titulo NOT LIKE 'E2E %' AND status IN ('APROVADO', 'EM_EXECUCAO', 'CONCLUIDO', 'PERDIDO')`,
+    );
+    return r.rows[0].n;
+  });
+}
+
 /** Define os tipos de serviço do projeto de teste (alimentam a legenda sugerida da galeria). */
 export async function definirTiposDeServicoDaObra(projetoId: string, tipos: string[]): Promise<void> {
   await comConexao((c) => c.query(`UPDATE "Projeto" SET "tiposServico" = $2::"TipoServico"[] WHERE id = $1`, [projetoId, tipos]));
@@ -262,6 +275,17 @@ export async function concluirMarcoDaGarantia(projetoId: string, diasAtras: numb
       `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = CURRENT_DATE - $2::int, "fimReal" = CURRENT_DATE - $2::int
         WHERE "projetoId" = $1 AND "marcoGarantia" AND "deletadoEm" IS NULL`,
       [projetoId, diasAtras],
+    ),
+  );
+}
+
+/** Deixa a etapa do tipo informado da obra de teste com a data prevista de fim `diasAtras` dias no passado. */
+export async function atrasarEtapaDaObra(projetoId: string, tipo: string, diasAtras: number): Promise<void> {
+  await comConexao((c) =>
+    c.query(
+      `UPDATE "EtapaProjeto" SET "inicioPrevisto" = CURRENT_DATE - ($3::int + 2), "fimPrevisto" = CURRENT_DATE - $3::int
+        WHERE "projetoId" = $1 AND tipo::text = $2 AND "deletadoEm" IS NULL`,
+      [projetoId, tipo, diasAtras],
     ),
   );
 }

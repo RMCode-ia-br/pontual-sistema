@@ -123,6 +123,8 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Agenda e chamado não se sincronizam:** realizar a visita não resolve o chamado, e remarcar ou cancelar o compromisso não muda a situação "Visita agendada". Confirmar se ele quer a sincronização.
 - [ ] **Chamado cancelado ou resolvido com cobrança já gerada** mantém a conta a receber (nada é apagado); o estorno ou cancelamento da conta é do Financeiro (Fase 5).
 - [ ] **Numeração dos chamados é global** (`#0001`...), sem zerar por ano. Se ele preferir `NNNN-AA` como as propostas, ajustar.
+- [ ] **Relatório de obras: atraso por etapa só vale com data prevista definitiva.** Etapas com data provisória (antes de a medição exata ser concluída e de o gestor aplicar as datas) entram na conta como as demais; se isso distorcer, excluir as provisórias. O sistema também não guarda o histórico de bloqueios: o relatório mostra os bloqueios de agora e as pausas do período. Se o Marcelo quiser "quantas vezes e por quantos dias cada motivo bloqueou", é preciso registrar as datas de bloqueio.
+- [ ] **Pontualidade do painel usa 90 dias fixos** (como o funil). Se ele quiser mês, trimestre ou ano, o relatório já aceita qualquer período; falta só um seletor no painel.
 - [ ] **Dias de pausa e prazo "sem pausas":** o "sem considerar pausas" é o prazo contado do relógio sem nenhuma pausa; conferir com o Marcelo se é essa a versão que ele quer ver.
 
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)
