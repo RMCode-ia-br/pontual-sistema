@@ -31,6 +31,8 @@ export const authConfig = {
       if (user) {
         token.id = user.id;
         token.versaoSessao = user.versaoSessao;
+        // Identifica ESTE login (aparelho). "Sair" grava o sid em SessaoRevogada. O Web Crypto existe no Edge.
+        token.sid = crypto.randomUUID();
       }
       return token;
     },
@@ -38,6 +40,7 @@ export const authConfig = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.versaoSessao = token.versaoSessao as number;
+        session.user.sid = token.sid as string | undefined;
       }
       return session;
     },

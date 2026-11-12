@@ -141,6 +141,72 @@ test.describe("fluxo de acesso", () => {
   });
 });
 
+/**
+ * Bloco 0 da Fase 4. O proxy renova o cookie de sessão em TODA requisição que passa por ele
+ * (prefetch de links, Server Actions). Uma requisição iniciada antes do "Sair" e concluída depois
+ * devolvia o cookie ao navegador. Por isso o logout precisa revogar o token no servidor, e não só
+ * apagar o cookie: estes testes recolocam o cookie antigo (o que a corrida faz de forma intermitente).
+ */
+test.describe("sair revoga a sessão do aparelho", () => {
+  test.describe.configure({ mode: "serial" });
+  test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(11) } });
+
+  test.beforeAll(async () => {
+    await prepararUsuarioE2E({ senhaDefinitiva: true });
+  });
+
+  async function sair(page: Page) {
+    await page.getByRole("button", { name: /^Menu de / }).click();
+    await page.getByRole("menuitem", { name: "Sair" }).click();
+    await expect(page).toHaveURL(/\/login/);
+  }
+
+  test("o cookie de antes do logout deixa de valer (determinístico)", async ({ page, context }) => {
+    await entrar(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
+    await expect(page).toHaveURL(/\/$/);
+    const cookiesAntes = await context.cookies();
+    expect(cookiesAntes.some((c) => c.name.includes("session-token"))).toBe(true);
+
+    await sair(page);
+
+    await context.clearCookies();
+    await context.addCookies(cookiesAntes); // simula a resposta atrasada que devolve o cookie
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("sair logo depois de abrir o painel (com requisições em andamento) encerra a sessão", async ({ page }) => {
+    for (let i = 0; i < 3; i++) {
+      await entrar(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
+      await expect(page).toHaveURL(/\/$/);
+      await sair(page); // sem esperar a rede ficar ociosa, de propósito
+      await page.goto("/");
+      await expect(page).toHaveURL(/\/login/);
+    }
+  });
+
+  test("sair em um aparelho não derruba a sessão de outro", async ({ browser }) => {
+    const contextoA = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(11) } });
+    const contextoB = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(11) } });
+    try {
+      const a = await contextoA.newPage();
+      const b = await contextoB.newPage();
+      await entrar(a, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
+      await expect(a).toHaveURL(/\/$/);
+      await entrar(b, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
+      await expect(b).toHaveURL(/\/$/);
+
+      await sair(a);
+
+      await b.goto("/");
+      await expect(b).toHaveURL(/\/$/);
+    } finally {
+      await contextoA.close();
+      await contextoB.close();
+    }
+  });
+});
+
 test.describe("bloqueio por tentativas", () => {
   test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(20) } });
 

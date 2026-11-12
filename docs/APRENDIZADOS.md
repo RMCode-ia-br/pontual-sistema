@@ -76,3 +76,8 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **Convenção de arquivos do Next para ícones:** `src/app/icon.png`, `apple-icon.png` e `favicon.ico` viram as tags `<link>` sozinhos; o `matcher` do proxy precisa liberá-los para quem ainda não entrou. O iOS pinta de preto ícone transparente, e o Android exige fundo no ícone maskable.
 - **Caminhos do Windows em `node -e` dentro do bash:** a barra invertida some (`...scratchpad` + `contato.png` virou `scratchpadcontato.png`). Passe o caminho por variável de ambiente ou escreva o script em arquivo.
 - **Vitest só roda direito pelo PowerShell** (caixa da letra do drive); pelo bash o `describe` falha com `Cannot read properties of undefined (reading 'config')`.
+
+## Fase 4 (2026-11-12) — obras
+- **Auth.js v5 com JWT: o proxy renova o cookie de sessão em toda requisição** (`handleAuth` copia o `Set-Cookie` da sessão; o `@auth/core` re-assina o token a cada leitura, sem `updateAge`). Logo, apagar o cookie no logout não basta: qualquer resposta em andamento (prefetch, Server Action) o devolve. Revogue o token no servidor (`sid` no JWT + tabela de revogados conferida junto da checagem de usuário). `auth()` chamado em Server Components e Actions **não** reemite cookie; só o caminho do proxy.
+- **Teste de logout confiável:** em vez de depender da corrida, guarde `context.cookies()` antes de sair, saia e recoloque os cookies com `addCookies`; o painel não pode reabrir. É determinístico e falha de verdade quando o logout não revoga.
+- **`DATABASE_URL` no `.env.local` pode estar no Transaction pooler (6543):** para `migrate deploy`, troque só a porta para 5432 (Session pooler, mesmo host) no processo (`$env:DIRECT_URL`), sem imprimir a URL.

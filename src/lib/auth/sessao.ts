@@ -24,6 +24,7 @@ export const obterUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> =
   const id = sessao?.user?.id;
   if (!id) return null;
 
+  const sid = sessao.user.sid;
   const usuario = await prisma.usuario.findUnique({
     where: { id },
     select: {
@@ -36,11 +37,14 @@ export const obterUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> =
       deletadoEm: true,
       versaoSessao: true,
       precisaTrocarSenha: true,
+      // Mesma ida ao banco: o token deste aparelho foi revogado por "Sair"? (token antigo, sem sid, não é revogável)
+      sessoesRevogadas: sid ? { where: { sid }, select: { sid: true }, take: 1 } : false,
     },
   });
 
   if (!usuario || !usuario.ativo || usuario.deletadoEm) return null;
   if (usuario.versaoSessao !== sessao.user.versaoSessao) return null;
+  if (usuario.sessoesRevogadas && usuario.sessoesRevogadas.length > 0) return null;
 
   return {
     id: usuario.id,

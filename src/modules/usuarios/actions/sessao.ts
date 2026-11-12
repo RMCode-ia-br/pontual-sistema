@@ -7,7 +7,8 @@ import { z } from "zod";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp, resolverConta, statusBloqueioLogin } from "@/lib/auth/autenticar";
-import { signIn, signOut } from "@/lib/auth";
+import { auth, signIn, signOut } from "@/lib/auth";
+import { SESSAO_MAX_IDADE_SEGUNDOS } from "@/lib/auth/config";
 import { destinoSeguro } from "@/lib/auth/destino";
 import { conferirSenha, gerarHashSenha, validarPoliticaSenha } from "@/lib/auth/senha";
 import { exigirSessao } from "@/lib/auth/sessao";
@@ -55,7 +56,24 @@ export async function entrar(_anterior: EstadoFormulario, formData: FormData): P
   redirect(destinoSeguro(destino));
 }
 
+/**
+ * Apagar o cookie não basta: o proxy renova o cookie em toda requisição, e uma resposta que termina
+ * depois do logout o devolve ao navegador. Por isso o `sid` deste login é revogado no servidor
+ * (só este aparelho; os outros continuam). A falha em revogar não impede de sair.
+ */
 export async function sair(): Promise<void> {
+  try {
+    const sessao = await auth();
+    const sid = sessao?.user?.sid;
+    const usuarioId = sessao?.user?.id;
+    if (sid && usuarioId) {
+      // O token vale no máximo SESSAO_MAX_IDADE_SEGUNDOS a partir da última renovação: depois disso a linha é inútil.
+      const expiraEm = new Date(Date.now() + SESSAO_MAX_IDADE_SEGUNDOS * 1000);
+      await prisma.sessaoRevogada.upsert({ where: { sid }, create: { sid, usuarioId, expiraEm }, update: {} });
+    }
+  } catch (erro) {
+    console.error(JSON.stringify({ evento: "auth.sair_sem_revogar", tipo: erro instanceof Error ? erro.name : "desconhecido" }));
+  }
   await signOut({ redirectTo: "/login" });
 }
 

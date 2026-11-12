@@ -149,6 +149,7 @@ model Usuario {
   projetos           Projeto[]
   eventosAgenda      EventoAgenda[]
   feedsAgenda        FeedAgenda[]
+  sessoesRevogadas   SessaoRevogada[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -157,6 +158,21 @@ model Usuario {
   deletadoEm      DateTime?
 
   @@index([ativo])
+}
+
+/// "Sair" revoga só o aparelho que saiu: o `sid` (id da sessão, gravado no JWT ao entrar) vai para
+/// esta tabela e a conferência de banco de cada requisição o rejeita. Sem isso, uma resposta do proxy
+/// que chega depois do logout devolve o cookie renovado e a sessão ressuscita (docs/DECISOES.md, 92).
+/// Linhas com `expiraEm` passado já não servem (o token expirou) e podem ser varridas.
+model SessaoRevogada {
+  sid       String   @id
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  expiraEm  DateTime
+  criadoEm  DateTime @default(now())
+
+  @@index([expiraEm])
+  @@index([usuarioId])
 }
 
 model TentativaLogin {
