@@ -94,10 +94,7 @@ test.describe("área logada", () => {
     await expect(menu.getByRole("link", { name: "A receber" })).toBeVisible();
     await expect(menu.getByRole("link", { name: "Contas e lançamentos" })).toBeVisible();
     await expect(menu.getByRole("link", { name: "A pagar" })).toBeVisible();
-    // A "Visão geral e fluxo de caixa" ainda não foi construída: aparece desabilitada.
-    const visaoGeral = menu.getByText("Visão geral e fluxo de caixa");
-    await expect(visaoGeral).toBeVisible();
-    await expect(visaoGeral.locator("xpath=ancestor-or-self::*[@aria-disabled='true'][1]")).toHaveCount(1);
+    await expect(menu.getByRole("link", { name: "Visão geral e fluxo de caixa" })).toBeVisible(); // o Financeiro inteiro já existe
 
     await menu.getByRole("button", { name: "Configurações" }).click();
     await expect(menu.getByRole("link", { name: "Usuários" })).toBeVisible();
@@ -174,7 +171,11 @@ test.describe("área logada", () => {
     ["backup", "/configuracoes/backup"],
     ["financeiro-contas", "/financeiro/contas"],
     ["financeiro-receber", "/financeiro/receber"],
+    ["financeiro-visao-geral", "/financeiro"],
+    ["financeiro-dre", "/financeiro/dre"],
     ["financeiro-pagar", "/financeiro/pagar"],
+    ["relatorio-receber-por-idade", "/relatorios/financeiro/receber"],
+    ["relatorio-pagar-por-vencimento", "/relatorios/financeiro/pagar"],
     ["financeiro-recorrencias", "/financeiro/pagar/recorrencias"],
     ["primeiros-passos", "/primeiros-passos"],
   ] as const;

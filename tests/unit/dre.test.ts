@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detalharPorCategoria, mesesDoPeriodo, montarDre, type MovimentoParaDre } from "../../src/lib/dominio/dre";
+import { detalharPorCategoria, linhasDaDemonstracao, mesesDoPeriodo, montarDre, type MovimentoParaDre } from "../../src/lib/dominio/dre";
 
 const m = (data: string, tipo: "ENTRADA" | "SAIDA", valorCentavos: number, grupo: MovimentoParaDre["grupo"], categoriaId: string | null = null, categoriaNome: string | null = null): MovimentoParaDre => ({
   data,
@@ -98,5 +98,48 @@ describe("detalhe por categoria", () => {
     const sem = achar("Sem categoria");
     expect(sem.grupo).toBeNull();
     expect(sem.totalCentavos).toBe(-500);
+  });
+});
+
+describe("demonstração em linhas", () => {
+  const dre = montarDre(movimentos, MESES);
+  const linhas = linhasDaDemonstracao(dre);
+  const achar = (id: string) => linhas.find((l) => l.id === id)!;
+
+  it("segue a ordem de leitura e termina no resultado", () => {
+    expect(linhas.map((l) => l.id)).toEqual([
+      "receita",
+      "impostos",
+      "receitaLiquida",
+      "custos",
+      "margem",
+      "DESPESAS_FIXAS",
+      "DESPESAS_OPERACIONAIS",
+      "DESPESAS_COMERCIAIS",
+      "DESPESAS_ADMINISTRATIVAS",
+      "DESPESAS_FINANCEIRAS",
+      "despesas",
+      "outras",
+      "semCategoria",
+      "resultado",
+    ]);
+    expect(linhas.at(-1)!.tipo).toBe("resultado");
+  });
+
+  it("os valores por mês e o total conferem com o DRE (conta feita à mão acima)", () => {
+    expect(achar("receita").porMesCentavos).toEqual([10_000, 120_000, -1_000]);
+    expect(achar("receita").totalCentavos).toBe(129_000);
+    expect(achar("impostos").porMesCentavos).toEqual([0, 15_000, 0]);
+    expect(achar("margem").porMesCentavos).toEqual([6_000, 65_000, -1_000]);
+    expect(achar("DESPESAS_FIXAS").totalCentavos).toBe(8_000);
+    expect(achar("resultado").porMesCentavos).toEqual([6_000, 57_500, -1_000]);
+    expect(achar("resultado").totalCentavos).toBe(62_500);
+  });
+
+  it("a cadeia de subtotais fecha em cada coluna: receita − impostos − custos − despesas + outras + sem categoria = resultado", () => {
+    for (let i = 0; i < MESES.length; i++) {
+      const v = (id: string) => achar(id).porMesCentavos[i];
+      expect(v("receita") - v("impostos") - v("custos") - v("despesas") + v("outras") + v("semCategoria"), MESES[i]).toBe(v("resultado"));
+    }
   });
 });

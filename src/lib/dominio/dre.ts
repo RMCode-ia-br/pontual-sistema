@@ -189,3 +189,40 @@ export function detalharPorCategoria(movimentos: readonly MovimentoParaDre[], me
   }
   return [...linhas.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
+
+export type LinhaDaDemonstracao = {
+  id: string;
+  rotulo: string;
+  /** "item" (soma/detalhe), "subtotal" (resultado parcial) ou "resultado" (a última linha). */
+  tipo: "item" | "subtotal" | "resultado";
+  /** Sinal para quem lê: "−" para o que é dedução, "+" para o que soma, "=" para subtotais. */
+  marca: "+" | "−" | "=" | "";
+  /** Um valor por mês, na ordem de `meses`, e o total do período. Despesas e deduções aparecem como número positivo. */
+  porMesCentavos: number[];
+  totalCentavos: number;
+};
+
+/** Monta a demonstração (linhas na ordem de leitura) a partir do DRE mês a mês. */
+export function linhasDaDemonstracao(dre: { meses: DreDoMes[]; total: DreDoMes }): LinhaDaDemonstracao[] {
+  const linha = (id: string, rotulo: string, tipo: LinhaDaDemonstracao["tipo"], marca: LinhaDaDemonstracao["marca"], valor: (d: DreDoMes) => number): LinhaDaDemonstracao => ({
+    id,
+    rotulo,
+    tipo,
+    marca,
+    porMesCentavos: dre.meses.map(valor),
+    totalCentavos: valor(dre.total),
+  });
+  const linhas: LinhaDaDemonstracao[] = [
+    linha("receita", ROTULO_GRUPO_DRE.RECEITAS_OPERACIONAIS, "item", "+", (d) => d.receitaOperacionalCentavos),
+    linha("impostos", ROTULO_GRUPO_DRE.IMPOSTOS, "item", "−", (d) => d.impostosCentavos),
+    linha("receitaLiquida", "Receita líquida", "subtotal", "=", (d) => d.receitaLiquidaCentavos),
+    linha("custos", ROTULO_GRUPO_DRE.CUSTOS_DIRETOS, "item", "−", (d) => d.custosDiretosCentavos),
+    linha("margem", "Margem bruta", "subtotal", "=", (d) => d.margemBrutaCentavos),
+    ...GRUPOS_DE_DESPESA.map((g) => linha(g, ROTULO_GRUPO_DRE[g], "item", "−", (d) => d.despesasPorGrupoCentavos[g])),
+    linha("despesas", "Total de despesas", "subtotal", "=", (d) => d.despesasTotalCentavos),
+    linha("outras", ROTULO_GRUPO_DRE.OUTRAS_RECEITAS, "item", "+", (d) => d.outrasReceitasCentavos),
+    linha("semCategoria", "Sem categoria (entradas − saídas)", "item", "", (d) => d.semCategoriaCentavos),
+    linha("resultado", "Resultado", "resultado", "=", (d) => d.resultadoCentavos),
+  ];
+  return linhas;
+}

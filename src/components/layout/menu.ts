@@ -65,7 +65,7 @@ export const MENU: GrupoMenu[] = [
     titulo: "Financeiro",
     icone: Wallet,
     itens: [
-      { titulo: "Visão geral e fluxo de caixa", fase: 5 },
+      { titulo: "Visão geral e fluxo de caixa", href: "/financeiro" },
       { titulo: "A receber", href: "/financeiro/receber" },
       { titulo: "A pagar", href: "/financeiro/pagar" },
       { titulo: "Contas e lançamentos", href: "/financeiro/contas" },
