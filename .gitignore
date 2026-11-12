@@ -47,3 +47,6 @@ yarn-error.log*
 .pnpm-debug.log*
 .vercel
 .idea/
+
+# Capturas de tela da revisão visual (Fase 3.5): contêm dados do banco e imagens do site
+/.capturas/

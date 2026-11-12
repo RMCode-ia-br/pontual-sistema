@@ -83,3 +83,17 @@ Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que 
 | Desenho esquemático | `src/lib/dominio/desenho.ts` + `src/components/desenho-esquadria.tsx` | formas puras renderizadas em SVG e no PDF | nenhuma |
 | Editor com cálculo no servidor | `src/modules/propostas/components/*` | formulário grande em estado local, prévia de preço por ação do servidor, painel de totais | Server Actions |
 **Da Pontual (não reutilizável):** tipologias e templates de descrição, tabela de preços por linha/acabamento/vidro, modelos de condição de pagamento, regra do acréscimo da nota fiscal.
+
+## Blocos da Fase 3.5 (identidade visual) — reutilizáveis
+| Bloco | Onde | O que faz |
+| --- | --- | --- |
+| Tema derivado da cor da marca | `src/lib/tema/{cores,derivar}.ts` | Hex → tokens (`primary`, `ring`, `accent`, charts) em claro e escuro, com contraste WCAG AA garantido; OKLCH, contraste e mistura. Sem conhecimento do negócio. |
+| Injeção da cor no tema | `src/components/layout/estilo-da-marca.tsx` + layout raiz | `<style>` com `:root:root{…}` e `:root:root.dark{…}` vindos de Configurações; só hex validado. |
+| Campo de cor com prévia | `src/modules/configuracoes/components/campo-cor.tsx` | Seletor nativo + hex + prévia nos dois modos e aviso de ajuste. |
+| Fontes dos PDFs | `src/lib/pdf/fontes.ts` (+ TTF e licença) | Registra a família do sistema no react-pdf; exige `outputFileTracingIncludes` no deploy serverless. |
+| Gerador de ícones | `scripts/gerar-icones.ts` (`npm run icones`) | Logo circular, favicon (só símbolo), apple-icon opaco, PWA e maskable; ICO montado à mão. |
+| Extração de identidade | `scripts/identidade/extrair-site.ts` | Lê tokens CSS e estilos de um site com Playwright e grava um documento. |
+| Logo padrão pela seed | `prisma/seed-identidade.ts` | Envia a logo ao Storage e preenche `logoCaminho` só se vazio, em transação. |
+| Formato de imagem pelos bytes | `src/modules/propostas/pdf/logo.ts` | `formatoDaImagem`: PNG/JPEG pela assinatura. |
+
+**Para reaproveitar em outro projeto:** copie `src/lib/tema`, ajuste `SUPERFICIES` e o `:root`/`.dark` do `globals.css` (o teste `tests/unit/tema.test.ts` confere que os dois concordam e que a paleta passa em AA), meça no site do cliente as relações de `accent` e `chart-2` (ver `docs/IDENTIDADE_VISUAL.md`) e edite `CONFIG` em `scripts/gerar-icones.ts` para o disco e o símbolo da nova logo.

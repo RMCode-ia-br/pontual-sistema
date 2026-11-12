@@ -56,6 +56,8 @@ Confira o primeiro deploy: `/api/health` deve responder `{"status":"ok"}` e o lo
 npm run db:deploy        # aplica as migrações pendentes (usa DIRECT_URL)
 npm run seed             # dados iniciais, idempotente e seguro para produção
 npm run storage:setup    # cria o bucket privado de anexos (idempotente)
+npm run icones           # regenera logo circular, favicon, apple-icon e ícones do PWA a partir de public/logo-pontual.png
+npm run identidade:extrair  # relê os tokens de estilo do site da empresa (docs/IDENTIDADE_VISUAL.extraido.md)
 ```
 
 - **Banco novo, na ordem:** (1) `DIRECT_URL` = Session pooler; (2) `npm run db:deploy` (aplica também a migração de RLS); (3) defina `ADMIN_SENHA_INICIAL` e rode `npm run seed`; (4) `npm run storage:setup` (cria o bucket privado: o app **não** o cria sozinho); (5) confira que 0 tabelas estão expostas ao `anon` (`npm run test:integracao`, arquivo `seguranca-banco`). Foi assim que o banco de São Paulo foi preparado em 2026-11-11.
@@ -63,7 +65,7 @@ npm run storage:setup    # cria o bucket privado de anexos (idempotente)
 - **Nova migração:** altere `prisma/schema.prisma`, gere o SQL com `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script` (ou compare com o schema anterior), grave em `prisma/migrations/<AAAAMMDDHHMMSS>_<nome>/migration.sql` e aplique com `npm run db:deploy`. O `migrate dev` não funciona com o pooler do Supabase (precisa de banco-sombra).
 - **Usuário inicial:** o seed cria `admin` com troca de senha obrigatória no primeiro acesso. Em desenvolvimento a senha é a padrão pública `admin`; **em produção o seed recusa a senha padrão**: defina `ADMIN_SENHA_INICIAL` (mínimo 8 caracteres). No banco novo de São Paulo (2026-11-11) o `admin` foi criado com a senha de `ADMIN_SENHA_INICIAL` e a **troca no primeiro acesso ainda está pendente**: entre e troque. Em qualquer banco novo, confira isso antes de publicar o endereço. Depois de cadastrar as pessoas, desative esse usuário.
 - **Segurança do banco (RLS):** o Supabase expõe o schema `public` pela API de dados aos papéis `anon` e `authenticated`. A migração `20261111120000_seguranca_rls` fecha isso (RLS ligado, sem políticas, privilégios retirados). **Toda migração com tabela nova precisa de `ENABLE ROW LEVEL SECURITY`**; `npm run test:integracao` falha se alguma ficar sem.
-- O seed **nunca** redefine a senha de um usuário existente nem sobrescreve o que foi editado em Configurações.
+- O seed **nunca** redefine a senha de um usuário existente nem sobrescreve o que foi editado em Configurações. Ele também carrega a **logo padrão** (de `public/marca/logo-pontual.png`) e a cor `#0064b5` **só quando estão vazias** (ou na cor padrão antiga e nunca editada); exige o bucket criado por `npm run storage:setup`. Para trocar a logo depois, use Configurações > Empresa; ao receber a logo modernizada, troque `public/logo-pontual.png` e rode `npm run icones`.
 
 ## 5. Backup e restauração
 

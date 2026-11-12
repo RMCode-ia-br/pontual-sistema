@@ -25,7 +25,22 @@ export const obterMarca = cache(async (): Promise<Marca> => {
   }
 });
 
-/** Para o layout raiz e a tela de login: se o banco falhar, a página ainda abre com a marca padrão. */
+/**
+ * Só a cor da marca, sem tocar no Storage: o layout raiz, o viewport e o manifesto precisam dela em toda
+ * requisição, mas não da URL (assinada) da logo. Reaproveita a leitura de `obterConfiguracao`; se o banco falhar, null.
+ */
+export async function obterCorDaMarca(): Promise<string | null> {
+  try {
+    // Teto de 3 s: com o banco pausado (plano gratuito) ou a rede travada, a página abre com a cor padrão
+    // em vez de ficar presa esperando a conexão (esta leitura está no caminho de TODA página).
+    const cfg = await Promise.race([obterConfiguracao(), new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))]);
+    return cfg?.corPrimaria ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Para a tela de login e a área logada: se o banco falhar, a página ainda abre com a marca padrão. */
 export async function obterMarcaOuPadrao(): Promise<Marca> {
   try {
     return await obterMarca();

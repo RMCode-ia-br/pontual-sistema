@@ -93,8 +93,64 @@ describe.each(CORES_DIFICEIS)("contraste AA com a cor da marca %s", (marca) => {
     expect(contraste(tema.escuro["--chart-2"], fundo), "gráfico").toBeGreaterThanOrEqual(3);
   });
 
+  it("texto sobre o hover do botão e primária sobre o accent seguem em 4,5", () => {
+    expect(contraste(tema.claro["--primary-foreground"], tema.claro["--primary-hover"]), "claro: hover").toBeGreaterThanOrEqual(4.5);
+    expect(contraste(tema.escuro["--primary-foreground"], tema.escuro["--primary-hover"]), "escuro: hover").toBeGreaterThanOrEqual(4.5);
+    expect(contraste(tema.escuro["--primary"], tema.escuro["--accent"]), "escuro: primária sobre accent").toBeGreaterThanOrEqual(4.5);
+    expect(contraste(tema.claro["--primary"], tema.claro["--accent"]), "claro: primária sobre accent").toBeGreaterThanOrEqual(4.5);
+  });
+
   it("só gera hex #rrggbb (nada que permita injetar CSS)", () => {
     for (const v of [...Object.values(tema.claro), ...Object.values(tema.escuro)]) expect(v).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+/** Cores sem croma (preto, branco, cinzas) não têm matiz: o accent tem de sair cinza, não rosado ou amarelado. */
+describe.each(["#000000", "#ffffff", "#808080", "#fcfcfc"])("cor neutra %s", (marca) => {
+  const tema = derivarTemaDaMarca(marca)!;
+  it("gera accent e accent-foreground sem croma", () => {
+    for (const v of [tema.claro["--accent"], tema.claro["--accent-foreground"], tema.escuro["--accent"], tema.escuro["--accent-foreground"]]) {
+      expect(hexParaOklch(v).c, v).toBeLessThan(0.006);
+    }
+  });
+});
+
+/** Varredura em grade: o contraste vale para qualquer cor, não só para as que listei. */
+describe("varredura de cores em grade", () => {
+  it("todos os pares usados pelo app passam em AA para 729 cores (passo 32)", () => {
+    const falhas: string[] = [];
+    const passos = Array.from({ length: 9 }, (_, i) => Math.min(255, i * 32));
+    for (const r of passos) {
+      for (const g of passos) {
+        for (const b of passos) {
+          const marca = `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+          const t = derivarTemaDaMarca(marca)!;
+          const c = t.claro;
+          const e = t.escuro;
+          const { fundo: fc, secundaria, suave: sc } = SUPERFICIES.claro;
+          const { fundo: fe, cartao, suave: se } = SUPERFICIES.escuro;
+          const pares: Array<[string, number]> = [
+            ["claro texto/primária", contraste(c["--primary-foreground"], c["--primary"])],
+            ["claro primária/fundo", contraste(c["--primary"], fc)],
+            ["claro primária/secundária", contraste(c["--primary"], secundaria)],
+            ["claro primária/suave", contraste(c["--primary"], sc)],
+            ["claro primária/tinta", contraste(c["--primary"], misturar(c["--primary"], fc, 0.1))],
+            ["claro hover", contraste(c["--primary-foreground"], c["--primary-hover"])],
+            ["claro primária/accent", contraste(c["--primary"], c["--accent"])],
+            ["claro accent", contraste(c["--accent-foreground"], c["--accent"])],
+            ["escuro texto/primária", contraste(e["--primary-foreground"], e["--primary"])],
+            ["escuro primária/fundo", contraste(e["--primary"], fe)],
+            ["escuro primária/cartão", contraste(e["--primary"], cartao)],
+            ["escuro primária/suave", contraste(e["--primary"], se)],
+            ["escuro primária/accent", contraste(e["--primary"], e["--accent"])],
+            ["escuro hover", contraste(e["--primary-foreground"], e["--primary-hover"])],
+            ["escuro accent", contraste(e["--accent-foreground"], e["--accent"])],
+          ];
+          for (const [nome, valor] of pares) if (valor < 4.5) falhas.push(`${marca} ${nome} ${valor.toFixed(2)}`);
+        }
+      }
+    }
+    expect(falhas.slice(0, 10)).toEqual([]);
   });
 });
 

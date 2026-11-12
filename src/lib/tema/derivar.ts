@@ -27,6 +27,8 @@ const CONTRASTE_GRAFICO = 3;
 const PASSO = 0.004;
 /** No site, chart-2 tem matiz 7° mais perto do ciano que a cor primária (245 contra 252). */
 const DESLOCAMENTO_MATIZ_GRAFICO = 7;
+/** Quanto a luminosidade (OKLCH) muda no hover do botão primário. */
+const DESLOCAMENTO_HOVER = 0.04;
 
 export type TokensDeTema = Record<string, string>;
 
@@ -43,15 +45,20 @@ export type TemaDaMarca = {
 
 const limitar = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
+/** Croma do accent a partir do da marca; cor sem croma (preto, branco, cinza) gera accent cinza, não de matiz aleatório. */
+const cromaDoAccent = (c: number, fator: number, min: number, max: number) => (c < 0.01 ? 0 : limitar(c * fator, min, max));
+
+const todosPassam = (hex: string, fundos: string[], alvo: number) => fundos.every((fundo) => contraste(hex, fundo) >= alvo);
+
 /**
- * Anda na luminosidade (`direcao`) até que `cor` atinja `alvo` de contraste contra TODAS as `contra`.
+ * Anda na luminosidade (`direcao`) até que `passa(cor)` seja verdadeiro (ou acabe a escala).
  * Mantém matiz e croma (o croma encolhe sozinho se a cor sair do gamut).
  */
-function ajustar(cor: Oklch, direcao: "escurecer" | "clarear", alvo: number, contra: (hex: string) => string[]): string {
+function ajustar(cor: Oklch, direcao: "escurecer" | "clarear", passa: (hex: string) => boolean): string {
   let atual = { ...cor };
   for (let i = 0; i < 400; i++) {
     const hex = oklchParaHex(atual);
-    if (contra(hex).every((fundo) => contraste(hex, fundo) >= alvo)) return hex;
+    if (passa(hex)) return hex;
     const proximo = atual.l + (direcao === "escurecer" ? -PASSO : PASSO);
     if (proximo < 0 || proximo > 1) break;
     atual = { ...atual, l: proximo };
@@ -64,20 +71,25 @@ const melhorTexto = (fundo: string, ...opcoes: string[]) => opcoes.reduce((a, b)
 function derivarClaro(marca: string, o: Oklch) {
   const { fundo, secundaria, suave } = SUPERFICIES.claro;
   const texto = TEXTO_SOBRE_MARCA.claro;
-  const ok = (hex: string) => contraste(hex, texto) >= CONTRASTE_MINIMO && [fundo, secundaria, suave, misturar(hex, fundo, 0.1)].every((f) => contraste(hex, f) >= CONTRASTE_MINIMO);
+  const passa = (hex: string) =>
+    contraste(texto, hex) >= CONTRASTE_MINIMO &&
+    // a primária como texto/ícone nas superfícies, inclusive na tinta do item ativo (`bg-primary/10`)
+    todosPassam(hex, [fundo, secundaria, suave, misturar(hex, fundo, 0.1)], CONTRASTE_MINIMO);
   // Cor que já passa fica EXATAMENTE como o gestor digitou (sem erro de arredondamento do OKLCH).
-  const primaria = ok(marca)
-    ? marca
-    : ajustar(o, "escurecer", CONTRASTE_MINIMO, (hex) => [texto, fundo, secundaria, suave, misturar(hex, fundo, 0.1)]);
+  const primaria = passa(marca) ? marca : ajustar(o, "escurecer", passa);
   const p = hexParaOklch(primaria);
 
-  const accent = oklchParaHex({ l: 0.95, c: limitar(p.c * 0.133, 0.01, 0.03), h: p.h });
-  const accentFg = ajustar({ l: p.l - 0.12, c: p.c * 0.77, h: p.h }, "escurecer", CONTRASTE_ACENTO, () => [accent]);
-  const grafico2 = ajustar({ l: Math.min(0.85, p.l + 0.148), c: p.c * 0.667, h: p.h - DESLOCAMENTO_MATIZ_GRAFICO }, "escurecer", CONTRASTE_GRAFICO, () => [fundo]);
+  // Hover do botão primário: MAIS ESCURO, então o contraste com o texto claro só aumenta (antes era `primary/80`,
+  // que clareia a cor e fazia o texto cair abaixo de 4,5:1 em várias cores, inclusive no azul do site).
+  const hover = oklchParaHex({ l: Math.max(0, p.l - DESLOCAMENTO_HOVER), c: p.c, h: p.h });
+  const accent = oklchParaHex({ l: 0.95, c: cromaDoAccent(p.c, 0.133, 0.01, 0.03), h: p.h });
+  const accentFg = ajustar({ l: p.l - 0.12, c: cromaDoAccent(p.c, 0.77, 0, 1), h: p.h }, "escurecer", (hex) => contraste(hex, accent) >= CONTRASTE_ACENTO);
+  const grafico2 = ajustar({ l: Math.min(0.85, p.l + 0.148), c: p.c * 0.667, h: p.h - DESLOCAMENTO_MATIZ_GRAFICO }, "escurecer", (hex) => contraste(hex, fundo) >= CONTRASTE_GRAFICO);
 
   const tokens: TokensDeTema = {
     "--primary": primaria,
     "--primary-foreground": texto,
+    "--primary-hover": hover,
     "--ring": primaria,
     "--accent": accent,
     "--accent-foreground": accentFg,
@@ -92,27 +104,32 @@ function derivarClaro(marca: string, o: Oklch) {
 
 function derivarEscuro(marca: string, o: Oklch) {
   const { fundo, cartao, suave } = SUPERFICIES.escuro;
-  const ok = (hex: string) => [fundo, cartao, suave, misturar(hex, fundo, 0.1), misturar(hex, cartao, 0.1)].every((f) => contraste(hex, f) >= CONTRASTE_MINIMO);
-  const primaria = ok(marca)
-    ? marca
-    : ajustar(o, "clarear", CONTRASTE_MINIMO, (hex) => [fundo, cartao, suave, misturar(hex, fundo, 0.1), misturar(hex, cartao, 0.1)]);
+  // O accent do escuro vem do matiz e do croma da marca digitada (não do ajustado), para existir antes de a primária
+  // ser calculada: a primária também precisa de contraste sobre ele (hover de botões ghost/outline e links).
+  const accent = oklchParaHex({ l: 0.27, c: cromaDoAccent(o.c, 0.2, 0.02, 0.05), h: o.h });
+  const textoSobre = (hex: string) => melhorTexto(hex, TEXTO_SOBRE_MARCA.escuro, TEXTO_SOBRE_MARCA.claro);
+  const passa = (hex: string) =>
+    todosPassam(hex, [fundo, cartao, suave, accent, misturar(hex, fundo, 0.1), misturar(hex, cartao, 0.1)], CONTRASTE_MINIMO) &&
+    contraste(textoSobre(hex), hex) >= CONTRASTE_MINIMO;
+  const primaria = passa(marca) ? marca : ajustar(o, "clarear", passa);
   const p = hexParaOklch(primaria);
-  const textoSobre = melhorTexto(primaria, TEXTO_SOBRE_MARCA.escuro, TEXTO_SOBRE_MARCA.claro);
 
-  const accent = oklchParaHex({ l: 0.27, c: limitar(p.c * 0.2, 0.02, 0.05), h: p.h });
-  const accentFg = ajustar({ l: 0.88, c: limitar(p.c * 0.35, 0.02, 0.06), h: p.h }, "clarear", CONTRASTE_ACENTO, () => [accent]);
-  const grafico2 = ajustar({ l: Math.max(0.3, p.l - 0.12), c: p.c * 0.667, h: p.h - DESLOCAMENTO_MATIZ_GRAFICO }, "clarear", CONTRASTE_GRAFICO, () => [fundo]);
+  // Hover no escuro: MAIS CLARO, para o texto escuro do botão ganhar contraste (e não perder, como no `primary/80`).
+  const hover = oklchParaHex({ l: Math.min(1, p.l + DESLOCAMENTO_HOVER), c: p.c, h: p.h });
+  const accentFg = ajustar({ l: 0.88, c: cromaDoAccent(p.c, 0.35, 0.02, 0.06), h: o.h }, "clarear", (hex) => contraste(hex, accent) >= CONTRASTE_ACENTO);
+  const grafico2 = ajustar({ l: Math.max(0.3, p.l - 0.12), c: p.c * 0.667, h: p.h - DESLOCAMENTO_MATIZ_GRAFICO }, "clarear", (hex) => contraste(hex, fundo) >= CONTRASTE_GRAFICO);
 
   const tokens: TokensDeTema = {
     "--primary": primaria,
-    "--primary-foreground": textoSobre,
+    "--primary-foreground": textoSobre(primaria),
+    "--primary-hover": hover,
     "--ring": primaria,
     "--accent": accent,
     "--accent-foreground": accentFg,
     "--chart-1": primaria,
     "--chart-2": grafico2,
     "--sidebar-primary": primaria,
-    "--sidebar-primary-foreground": textoSobre,
+    "--sidebar-primary-foreground": textoSobre(primaria),
     "--sidebar-ring": primaria,
   };
   return { tokens, ajustada: primaria !== marca };

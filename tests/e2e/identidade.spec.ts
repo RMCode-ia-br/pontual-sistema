@@ -6,7 +6,7 @@ import { ipFalso, USUARIO_E2E } from "./dados";
 
 /**
  * Capturas da Fase 3.5 (identidade visual). Só rodam com CAPTURAS_IDENTIDADE=antes|depois.
- * Saída: test-results/identidade/<momento>/<projeto>-<tema>-<tela>.png (fora do Git: tem dados do banco
+ * Saída: .capturas/identidade/<momento>/<projeto>-<tema>-<tela>.png (fora do Git e fora de test-results, que o Playwright apaga a cada rodada: tem dados do banco
  * e imagens do site). Não afirma nada: é material para a revisão visual.
  */
 const momento = process.env.CAPTURAS_IDENTIDADE;
@@ -16,7 +16,7 @@ const TEMAS = ["light", "dark"] as const;
 async function salvar(page: Page, tema: string, tela: string) {
   await page.waitForLoadState("networkidle");
   const projeto = test.info().project.name;
-  await page.screenshot({ path: `test-results/identidade/${momento}/${projeto}-${tema}-${tela}.png`, fullPage: true });
+  await page.screenshot({ path: `.capturas/identidade/${momento}/${projeto}-${tema}-${tela}.png`, fullPage: true });
 }
 
 /** Primeiro link de detalhe (ex.: /clientes/<id>) da lista atual, se existir. */
@@ -97,6 +97,6 @@ test.describe("capturas do site de referência", () => {
     await page.goto(SITE, { waitUntil: "networkidle" });
     // Só a primeira tela (cabeçalho + herói): é o que importa para comparar tokens.
     const projeto = test.info().project.name;
-    await page.screenshot({ path: `test-results/identidade/${momento}/${projeto}-site.png`, fullPage: false });
+    await page.screenshot({ path: `.capturas/identidade/${momento}/${projeto}-site.png`, fullPage: false });
   });
 });

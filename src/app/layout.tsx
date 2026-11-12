@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { EstiloDaMarca } from "@/components/layout/estilo-da-marca";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca, SUPERFICIES } from "@/lib/tema/derivar";
-import { obterMarcaOuPadrao } from "@/modules/configuracoes/queries";
+import { obterCorDaMarca } from "@/modules/configuracoes/queries";
 
 import "./globals.css";
 
@@ -27,8 +27,7 @@ export const metadata: Metadata = {
 
 // A cor da barra do navegador acompanha a cor da marca de Configurações (no escuro, o fundo do sistema).
 export async function generateViewport(): Promise<Viewport> {
-  const marca = await obterMarcaOuPadrao();
-  const tema = derivarTemaDaMarca(marca.corPrimaria);
+  const tema = derivarTemaDaMarca(await obterCorDaMarca());
   return {
     themeColor: [
       { media: "(prefers-color-scheme: light)", color: tema?.claro["--primary"] ?? COR_PADRAO_DO_SISTEMA },
@@ -38,12 +37,12 @@ export async function generateViewport(): Promise<Viewport> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Uma leitura por requisição (cache): o mesmo resultado serve ao layout da área logada e ao login.
-  const marca = await obterMarcaOuPadrao();
+  // Uma leitura por requisição (cache), compartilhada com a área logada e o login; sem chamar o Storage.
+  const corDaMarca = await obterCorDaMarca();
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
-        <EstiloDaMarca cor={marca.corPrimaria} />
+        <EstiloDaMarca cor={corDaMarca} />
       </head>
       <body className="flex min-h-full flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>

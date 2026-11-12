@@ -52,6 +52,8 @@ O seed cria o usuário `admin` com senha inicial `admin`; a troca é obrigatóri
 | `npm run db:studio` | Prisma Studio |
 | `npm run seed` | dados iniciais |
 | `npm run storage:setup` | cria o bucket privado de anexos |
+| `npm run icones` | regenera a logo circular, o favicon e os ícones do PWA a partir de `public/logo-pontual.png` |
+| `npm run identidade:extrair` | relê os estilos do site da empresa (documento em `docs/`) |
 
 > **Windows:** rode `npm test` no **PowerShell** (ou no terminal do VS Code), com o drive em maiúsculo (`D:\...`). No Git Bash o Vitest falha por causa da caixa da letra do drive (veja `docs/APRENDIZADOS.md`).
 

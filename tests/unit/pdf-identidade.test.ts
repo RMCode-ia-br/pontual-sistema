@@ -5,7 +5,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { corDaMarca } from "@/modules/propostas/pdf/comum";
+import { COR_PDF, corDaMarca } from "@/modules/propostas/pdf/comum";
 import { formatoDaImagem } from "@/modules/propostas/pdf/logo";
 import { ProducaoPdf } from "@/modules/propostas/pdf/producao-pdf";
 import { PropostaPdf } from "@/modules/propostas/pdf/proposta-pdf";
@@ -54,6 +54,22 @@ describe("formatoDaImagem: pelos bytes, não pela extensão", () => {
     expect(formatoDaImagem(new TextEncoder().encode("RIFF....WEBPVP8 "))).toBeNull();
     expect(formatoDaImagem(new TextEncoder().encode("<svg></svg>"))).toBeNull();
     expect(formatoDaImagem(new Uint8Array())).toBeNull();
+  });
+});
+
+describe("neutros do PDF", () => {
+  it("COR_PDF usa os mesmos valores do globals.css (claro): uma só identidade", () => {
+    const css = fs.readFileSync(path.join(raiz, "src/app/globals.css"), "utf8");
+    const bloco = /(?:^|\n):root \{([^}]*)\}/.exec(css)![1];
+    const t = (nome: string) => new RegExp(`--${nome}:\\s*(#[0-9a-fA-F]{6});`).exec(bloco)![1].toLowerCase();
+    expect(COR_PDF.texto).toBe(t("foreground"));
+    expect(COR_PDF.suave).toBe(t("muted-foreground"));
+    expect(COR_PDF.borda).toBe(t("border"));
+    expect(COR_PDF.fundoSuave).toBe(t("muted"));
+    expect(COR_PDF.vidro).toBe(t("accent"));
+    expect(COR_PDF.alerta).toBe(t("destructive"));
+    expect(COR_PDF.linha).toBe(t("chart-5"));
+    expect(COR_PDF.textoForte).toBe(t("chart-4"));
   });
 });
 

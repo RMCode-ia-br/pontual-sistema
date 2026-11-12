@@ -21,16 +21,17 @@ Os valores medidos no site estão em [IDENTIDADE_VISUAL.extraido.md](IDENTIDADE_
 
 - `accent` = L 0,95 e C × 0,13; `accent-foreground` = L − 0,12 e C × 0,77 (escurecido até contraste ≥ 7);
 - `chart-2` = L + 0,15, C × 0,67 e matiz − 7°;
-- `ring`, `chart-1` e `sidebar-primary` = a própria cor da marca.
+- `ring`, `chart-1` e `sidebar-primary` = a própria cor da marca;
+- `primary-hover` (hover do botão primário) = L − 0,04 no claro e L + 0,04 no escuro, sempre no sentido que **aumenta** o contraste com o texto do botão (o `primary/80` de antes clareava a cor e derrubava o contraste abaixo de 4,5:1 em várias cores, inclusive no azul do site).
 
 O CSS é injetado no `<head>` por `EstiloDaMarca` como `:root:root{…}` (claro) e `:root:root.dark{…}` (escuro), que vencem o `globals.css` por especificidade. O `globals.css` traz como padrão exatamente o que a função gera para o azul do site, então a tela aparece certa mesmo sem cor configurada.
 
 ## Contraste WCAG AA (seção 11 da especificação)
 
-Regras garantidas por código e por testes, para **qualquer** cor digitada:
+Regras garantidas por código e por testes (uma varredura de 729 cores em grade confere todos os pares), para **qualquer** cor digitada:
 
 1. Texto sobre a cor da marca (botão primário): ≥ 4,5:1.
-2. A cor da marca como texto ou ícone sobre as superfícies (fundo, cartão, secundária, suave e a tinta `bg-primary/10` usada no menu ativo): ≥ 4,5:1.
+2. A cor da marca como texto ou ícone sobre as superfícies (fundo, cartão, secundária, suave, a tinta `bg-primary/10` e, no escuro, também o `accent`): ≥ 4,5:1. O texto do botão sobre a cor em repouso e sobre `primary-hover`: ≥ 4,5:1.
 3. `accent-foreground` sobre `accent`: ≥ 4,5:1 (alvo 7:1). Gráficos: ≥ 3:1 sobre o fundo.
 
 Quando a cor não passa, mantém-se matiz e croma e ajusta-se só a luminosidade; a cor que já passa fica **idêntica** à digitada. Configurações mostra o aviso "ajustada" quando isso acontece.
@@ -40,11 +41,11 @@ Para o azul do site (`#0064b5`):
 | Par | Claro | Escuro |
 | --- | --- | --- |
 | Marca original sobre o fundo | 6,02 (passa) | **3,20 (reprova)** |
-| Primária usada sobre o fundo | 6,02 (`#0064b5`) | 5,64 (`#3c8ee2`, **variante derivada**) |
-| Texto sobre a primária | 5,86 (`#fcfcfc`) | 5,76 (`#060c13`) |
-| Primária sobre secundária / suave | 5,45 / 5,03 | 5,24 (cartão) / 4,54 (suave) |
+| Primária usada sobre o fundo | 6,02 (`#0064b5`) | 5,80 (`#3f90e5`, **variante derivada**) |
+| Texto sobre a primária | 5,86 (`#fcfcfc`) | 5,92 (`#060c13`) |
+| Primária sobre secundária / suave | 5,45 / 5,03 | 5,39 (cartão) / 4,66 (suave) |
 | `accent-foreground` sobre `accent` | 8,67 | 10,59 |
-| `chart-2` sobre o fundo | 3,21 | 3,47 |
+| `chart-2` sobre o fundo | 3,21 | 3,58 |
 
 **Por que a variante clara no escuro:** `#0064b5` sobre o fundo escuro dá 3,20:1, abaixo do mínimo de 4,5:1 para texto. No tema escuro a função clareia o azul (mesmo matiz e croma) até passar; é o que acontece com as cores escuras em geral. Cores claras (amarelo, ciano) passam no escuro e, no claro, são escurecidas.
 

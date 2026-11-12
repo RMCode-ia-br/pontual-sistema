@@ -4,8 +4,10 @@ import { useState } from "react";
 
 import { ariaDoCampo, Campo } from "@/components/formulario";
 import { Input } from "@/components/ui/input";
-import { normalizarHex } from "@/lib/tema/cores";
-import { derivarTemaDaMarca, SUPERFICIES, type TokensDeTema } from "@/lib/tema/derivar";
+import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca, SUPERFICIES, type TokensDeTema } from "@/lib/tema/derivar";
+
+/** Mesmo formato que o servidor aceita (schemas/empresa.ts): a prévia não pode mostrar uma cor que o Salvar recusa. */
+const HEX_COMPLETO = /^#[0-9a-fA-F]{6}$/;
 
 type Props = { nome: string; rotulo: string; valorInicial: string; erro?: string };
 
@@ -30,8 +32,8 @@ function Amostra({ titulo, tokens, fundo, texto }: { titulo: string; tokens: Tok
  */
 export function CampoCor({ nome, rotulo, valorInicial, erro }: Props) {
   const [valor, setValor] = useState(valorInicial);
-  const hex = normalizarHex(valor);
-  const tema = derivarTemaDaMarca(valor);
+  const hex = HEX_COMPLETO.test(valor.trim()) ? valor.trim() : null;
+  const tema = derivarTemaDaMarca(hex);
   const dica = "Formato #0064b5. Vazio usa o azul padrão do sistema.";
 
   return (
@@ -40,7 +42,7 @@ export function CampoCor({ nome, rotulo, valorInicial, erro }: Props) {
         <input
           type="color"
           aria-label={`${rotulo}: escolher no seletor de cores`}
-          value={hex ?? "#0064b5"}
+          value={hex ?? COR_PADRAO_DO_SISTEMA}
           onChange={(e) => setValor(e.target.value)}
           className="border-input bg-background h-9 w-12 shrink-0 cursor-pointer rounded-lg border p-1"
         />
@@ -55,7 +57,7 @@ export function CampoCor({ nome, rotulo, valorInicial, erro }: Props) {
         />
       </div>
       {tema ? (
-        <div className="mt-1 grid gap-2 sm:grid-cols-2" aria-label="Prévia da cor nos modos claro e escuro">
+        <div role="group" className="mt-1 grid gap-2 sm:grid-cols-2" aria-label="Prévia da cor nos modos claro e escuro">
           <Amostra titulo="Claro" tokens={tema.claro} fundo={SUPERFICIES.claro.fundo} texto={SUPERFICIES.claro.texto} />
           <Amostra titulo="Escuro" tokens={tema.escuro} fundo={SUPERFICIES.escuro.fundo} texto={SUPERFICIES.escuro.texto} />
           {tema.ajustadaNoClaro || tema.ajustadaNoEscuro ? (
@@ -71,7 +73,7 @@ export function CampoCor({ nome, rotulo, valorInicial, erro }: Props) {
           ) : null}
         </div>
       ) : valor.trim() ? (
-        <p className="text-muted-foreground text-xs">Digite uma cor completa, como #0064b5.</p>
+        <p className="text-muted-foreground text-xs">Digite a cor completa com 6 dígitos, como #0064b5.</p>
       ) : null}
     </Campo>
   );

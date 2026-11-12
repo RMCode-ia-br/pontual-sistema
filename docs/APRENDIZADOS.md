@@ -65,3 +65,14 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **`AUTH_SECRET` vazio no `.env.local`** derruba o login no E2E (`MissingSecret`): passar um segredo aleatório só no processo (`$env:AUTH_SECRET`), sem tocar no arquivo.
 - **Regex em scripts gerados por heredoc/`node -e`:** as barras invertidas (`\d`, `\?`) somem; para testes, preferir classes (`[0-9]`) e a ferramenta Edit para a linha. Os arquivos do repositório estão em CRLF: scripts de edição precisam normalizar e devolver CRLF.
 - **Subagente revisor** achou 4 problemas altos que os testes não pegavam (concorrência entre revisões, contador editável, índice com excluídas, descrição copiada): vale rodar sempre, com o diff e a spec, antes de fechar a fase.
+
+## Fase 3.5 (2026-11-11) — identidade visual
+- **O Playwright apaga `test-results/` a cada rodada:** capturas e logs gravados lá somem quando o E2E começa (perdi as capturas "antes" assim). Material de revisão vai para `.capturas/` (ignorada pelo Git) e o log de uma rodada longa para fora do projeto.
+- **`tsx` injeta `__name` nas funções enviadas ao navegador por `page.evaluate`** (`ReferenceError: __name is not defined`): em scripts Playwright rodados com tsx, defina `window.__name = (f) => f` com `addInitScript`. Funciona, mas os testes (Playwright) não têm o problema.
+- **`tsx` não carrega o `@react-pdf/renderer`** (`ERR_PACKAGE_PATH_NOT_EXPORTED` em `@react-pdf/hyphenate/en-us`): para gerar PDFs de amostra, use um teste Vitest descartável. Para ver o PDF sem poppler, o pdf.js (CDN) dentro do Playwright rasteriza as páginas.
+- **O "PNG" da logo era um JPEG:** a extensão mente. Detectar imagem pelos bytes (`formatoDaImagem`), não pelo nome.
+- **O azul do site (`#0064b5`) dá 3,2:1 sobre fundo escuro:** não passa em AA. Por isso a cor da marca é derivada por modo, com contraste verificado em teste para 20 cores difíceis, e não colada nos dois temas.
+- **Layout raiz que lê o banco precisa de `export const dynamic = "force-dynamic"`**; do contrário, páginas estáticas gravam a cor do momento do build.
+- **Convenção de arquivos do Next para ícones:** `src/app/icon.png`, `apple-icon.png` e `favicon.ico` viram as tags `<link>` sozinhos; o `matcher` do proxy precisa liberá-los para quem ainda não entrou. O iOS pinta de preto ícone transparente, e o Android exige fundo no ícone maskable.
+- **Caminhos do Windows em `node -e` dentro do bash:** a barra invertida some (`...scratchpad` + `contato.png` virou `scratchpadcontato.png`). Passe o caminho por variável de ambiente ou escreva o script em arquivo.
+- **Vitest só roda direito pelo PowerShell** (caixa da letra do drive); pelo bash o `describe` falha com `Cannot read properties of undefined (reading 'config')`.
