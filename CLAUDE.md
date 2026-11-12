@@ -11,7 +11,7 @@ Sistema de gestão (CRM + obras + financeiro + estoque) da **Pontual Soluções 
 - Decidir com bom senso e registrar em `docs/DECISOES.md`. Dependências de pessoas vão para `docs/PENDENCIAS.md`.
 - Nunca inventar preços, fórmulas, alíquotas, margens ou prazos reais: campo vazio + aviso na interface + PENDENCIAS.
 - Nunca imprimir, logar ou commitar valores de `.env*`. Validar conexões mostrando só sucesso/falha e tipo do erro.
-- Nenhum dado real da Pontual em ambiente hospedado (Vercel Hobby = só demonstração). Ver `docs/OPERACAO.md`.
+- **Mês de teste com dados reais da Pontual** (poucos clientes, maioria pessoa física), inclusive no ambiente hospedado. Privacidade, segurança e vazamento **não** são preocupação agora (decisão 101): não criar bloqueios, avisos nem pendências por isso; tratar o repositório como privado (é público só por limitação do plano Hobby da Vercel). O que continua valendo é proteger os dados do Marcelo de serem **apagados ou poluídos**: nunca commitar `.env*`; testes automáticos só tocam registros com prefixo e nunca limpam nem resetam o banco; não rodar `seed:demo` em banco com dados reais; migração e seed no banco compartilhado só com OK do dono. Endurecimento (Vercel Pro, Supabase Pro, repositório privado, backup, LGPD) só no uso definitivo (Fase 8).
 
 ## Stack
 Next.js (App Router) + TypeScript estrito + Tailwind + shadcn/ui + lucide-react; PostgreSQL no Supabase (só banco e Storage) via Prisma; Auth.js v5 (Credentials, JWT 8 h); Zod; react-hook-form; TanStack Table; Recharts; dnd-kit; date-fns (America/Sao_Paulo); `@react-pdf/renderer`; Vitest; Playwright. Windows 11/PowerShell: scripts npm multiplataforma, usar `npm`.

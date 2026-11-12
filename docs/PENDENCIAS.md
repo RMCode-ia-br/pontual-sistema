@@ -13,8 +13,7 @@
 - [ ] **Link direto de avaliação do Google** (o link `share.google` pode não ser o de avaliação) e prints/texto do Perfil do Google e do Instagram, se a leitura automática não for possível.
 
 ## Da RM Code
-- [ ] **Hospedagem de produção:** a Vercel Hobby é restrita a uso pessoal não comercial. Enquanto não houver decisão (Vercel Pro, outro provedor ou confirmação da Vercel), **nenhum dado real** entra em ambiente hospedado; deploy só com dados de demonstração.
-- [ ] **Supabase:** plano gratuito não tem backup automático e pausa após 1 semana sem uso. Migrar para plano pago (backup diário, sem pausa) **antes** de operar com dados reais.
+- [ ] **Endurecimento antes do uso definitivo:** repositório privado, backup, separação de ambientes, segurança e LGPD (ver Fase 8). Inclui migrar para Vercel Pro e Supabase Pro. Não é necessário no mês de teste (decisão 101).
 - [x] **LGPD:** resolvida em 2026-11-11: o banco foi recriado em **São Paulo (`sa-east-1`)** e a região da Vercel ajustada para `gru1` (`docs/DECISOES.md`, item 25).
 - [ ] Usuário dedicado `prisma` no banco (hoje pode estar usando `postgres`).
 - [x] **Deploy na Vercel feito e variáveis cadastradas** (informado pela RM Code em 2026-11-11; eu não tenho acesso à Vercel para conferir). Conferir após o deploy: `/api/health` responde "ok", o login abre e as variáveis apontam para o **banco novo**. O `vercel link` da pasta local é opcional.

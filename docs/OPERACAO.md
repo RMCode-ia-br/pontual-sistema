@@ -6,11 +6,11 @@ Como configurar, publicar, monitorar e recuperar o sistema. Mantenha este arquiv
 
 | Ambiente | Para quê | Dados |
 | --- | --- | --- |
-| Local (`npm run dev`) | desenvolvimento | de teste/demonstração |
-| Vercel (time `rmcode1`, projeto `pontual-sistema`) | laboratório e testes | **só demonstração** |
-| Produção (a definir) | uso real da Pontual | reais |
+| Local (`npm run dev`) | desenvolvimento | de teste (o banco de desenvolvimento é o mesmo do sistema publicado) |
+| Vercel (time `rmcode1`, projeto `pontual-sistema`) | **mês de teste** | **reais da Pontual** (poucos clientes) |
+| Uso definitivo (a definir) | uso real, depois de validado | reais, com endurecimento |
 
-**Nenhum dado real de clientes, fornecedores, funcionários ou financeiro da Pontual pode entrar em ambiente hospedado enquanto a RM Code não decidir a hospedagem de produção.** O plano Hobby da Vercel é restrito a uso pessoal não comercial; a Vercel define uso comercial como qualquer deploy usado para ganho financeiro de alguém envolvido na produção do projeto. O sistema é um laboratório da RM Code para a Pontual, uma zona cinzenta que só a Vercel pode esclarecer. Veja o checklist da seção 9.
+**Regra do dono (decisão 101):** durante o desenvolvimento e o mês de teste o sistema usa dados reais da Pontual também no ambiente hospedado, e privacidade, segurança e vazamento de dados não são preocupação agora (o repositório é tratado como privado; é público só por limitação do plano Hobby da Vercel). O que continua valendo é proteger os dados de serem **apagados ou poluídos**: não commitar `.env*`; testes automáticos só tocam registros com prefixo e nunca limpam nem resetam o banco; não rodar `seed:demo` em banco com dados reais. Ao passar ao uso definitivo, migra-se para Vercel Pro e Supabase Pro e faz-se o endurecimento (seção 9).
 
 ## 2. Variáveis de ambiente
 
@@ -120,9 +120,9 @@ Os logs são linhas JSON (`{"evento": "...", ...}`) e nunca trazem senhas, chave
 - O bloqueio de login por IP usa `x-forwarded-for`: na Vercel esse cabeçalho é definido pela plataforma. Em outra hospedagem, só confie nele atrás de um proxy que o sobrescreva.
 - O driver `pg` conecta ao Supabase com TLS sem verificar a cadeia (`rejectUnauthorized: false`). Instalar a CA do Supabase é uma melhoria pendente.
 
-## 9. Checklist para a produção
+## 9. Checklist para o uso definitivo (endurecimento)
 
-Antes de colocar **qualquer dado real**:
+Não é necessário para o mês de teste. Antes de passar ao **uso definitivo**:
 
 - [ ] A RM Code decidiu a hospedagem (Vercel Pro, outro provedor, ou confirmação escrita da Vercel de que o uso é permitido).
 - [ ] O Supabase está em plano com **backup diário** e sem pausa (ou o backup do GitHub Actions está ativo **e a restauração foi testada**).
