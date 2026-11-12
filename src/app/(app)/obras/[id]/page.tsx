@@ -17,6 +17,7 @@ import { CartaoPrazo } from "@/modules/obras/components/cartao-prazo";
 import { EtapasDaObra } from "@/modules/obras/components/etapas-da-obra";
 import { FotosDaObra } from "@/modules/obras/components/fotos-da-obra";
 import { PainelPausas } from "@/modules/obras/components/painel-pausas";
+import { CustoDaObraAba } from "@/modules/obras/components/custo-da-obra";
 import { MateriaisDaObra } from "@/modules/obras/components/materiais-da-obra";
 import { ParcelasDaObra } from "@/modules/obras/components/parcelas-da-obra";
 import { ResumoDaObra } from "@/modules/obras/components/resumo-da-obra";
@@ -25,6 +26,7 @@ import { listarEquipesAtivas, listarMotivosDeBloqueio, obterObra, obterPedidoDeA
 import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
 import { listarChamados } from "@/modules/obras/queries-chamados";
 import { listarFotosDaObra } from "@/modules/obras/queries-fotos";
+import { carregarCustoDaObra } from "@/modules/obras/queries-custo";
 import { carregarMateriaisDaObra } from "@/modules/obras/queries-materiais";
 import { excluirInteracaoDoProjeto, registrarInteracaoDoProjeto } from "@/modules/projetos/actions/interacoes";
 import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
@@ -37,6 +39,7 @@ const ABAS = [
   { valor: "fotos", titulo: "Fotos" },
   { valor: "financeiro", titulo: "Parcelas" },
   { valor: "materiais", titulo: "Materiais e compras" },
+  { valor: "custo", titulo: "Custo e margem" },
   { valor: "assistencia", titulo: "Assistência" },
   { valor: "historico", titulo: "Diário e linha do tempo" },
 ] as const;
@@ -152,6 +155,8 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
       ) : null}
 
       {aba === "materiais" ? <MateriaisDaObra projetoId={obra.id} m={await carregarMateriaisDaObra(obra.id)} /> : null}
+
+      {aba === "custo" ? <CustoDaObraAba c={await carregarCustoDaObra(obra.id)} /> : null}
 
       {aba === "assistencia" ? (
         <div className="max-w-3xl">

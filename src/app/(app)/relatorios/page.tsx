@@ -1,4 +1,4 @@
-import { Banknote, Filter, HardHat, Landmark, Receipt, Scale } from "lucide-react";
+import { Banknote, Filter, HardHat, Landmark, Percent, Receipt, Scale } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -42,6 +42,7 @@ export default async function PaginaRelatorios() {
           { href: "/financeiro", icone: Landmark, titulo: "Fluxo de caixa", texto: "Realizado × projetado por mês e em 30, 60 e 90 dias, com o saldo das contas." },
           { href: "/financeiro/dre", icone: Scale, titulo: "DRE gerencial", texto: "Resultado por mês, por grupo e categoria, em regime de caixa ou de competência." },
           { href: "/relatorios/financeiro/receber", icone: Banknote, titulo: "A receber por idade e inadimplência", texto: "Quanto falta receber e há quanto tempo está atrasado, por cliente." },
+          { href: "/relatorios/margem-obras", icone: Percent, titulo: "Margem por obra", texto: "Receita da margem menos o custo real de cada obra, com a origem de cada custo; margem incompleta nunca aparece como zero." },
           { href: "/relatorios/financeiro/pagar", icone: Receipt, titulo: "A pagar por vencimento, fornecedor e categoria", texto: "O que vence e o que está atrasado, por faixa, fornecedor e categoria." },
         ].map((r) => (
           <li key={r.href}>
