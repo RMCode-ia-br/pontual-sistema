@@ -202,3 +202,116 @@ export const liberarParcelaSchema = z.object({
   contaReceberId: idObrigatorio("Conta inválida."),
   vencimento: dataObrigatoria("Vencimento"),
 });
+
+// ---------- Contas a pagar ----------
+
+export const MODOS_DE_LANCAMENTO = ["UNICA", "PARCELADA", "RECORRENTE"] as const;
+export const ROTULO_MODO_DE_LANCAMENTO: Record<(typeof MODOS_DE_LANCAMENTO)[number], string> = {
+  UNICA: "Única",
+  PARCELADA: "Parcelada",
+  RECORRENTE: "Recorrente (aluguel, energia, DAS, salário…)",
+};
+
+export const PERIODICIDADES = ["MENSAL", "TRIMESTRAL", "ANUAL"] as const;
+export const ROTULO_PERIODICIDADE: Record<(typeof PERIODICIDADES)[number], string> = { MENSAL: "Todo mês", TRIMESTRAL: "A cada 3 meses", ANUAL: "Todo ano" };
+
+const inteiroEntre = (rotulo: string, min: number, max: number, padrao: number) =>
+  bruto(3).transform((v, ctx): number => {
+    if (v === "") return padrao;
+    const n = Number(v);
+    if (!/^\d+$/.test(v) || n < min || n > max) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: informe um número inteiro de ${min} a ${max}.` });
+      return z.NEVER;
+    }
+    return n;
+  });
+
+const dataOpcional = (rotulo: string) =>
+  bruto(10).transform((v, ctx): string | null => {
+    if (v === "") return null;
+    if (!dataValida(v)) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: informe uma data válida.` });
+      return z.NEVER;
+    }
+    return v;
+  });
+
+/** Conta a pagar: única, parcelada (valor total dividido) ou recorrente (valor de cada ocorrência). */
+export const contaAPagarSchema = z
+  .object({
+    descricao: textoObrigatorio("Descrição", 2, 200),
+    modo: z.enum(MODOS_DE_LANCAMENTO, { message: "Escolha como lançar." }),
+    fornecedorId: idOpcional,
+    funcionarioId: idOpcional,
+    favorecido: textoOpcional(120),
+    categoriaId: idObrigatorio("Escolha a categoria."),
+    projetoId: idOpcional,
+    valor: dinheiro("Valor"),
+    vencimento: dataObrigatoria("Vencimento"),
+    parcelas: inteiroEntre("Parcelas", 2, 60, 2),
+    periodicidade: z.preprocess((v) => (v === "" || v === undefined ? "MENSAL" : v), z.enum(PERIODICIDADES, { message: "Escolha a periodicidade." })),
+    fimRecorrencia: dataOpcional("Fim da recorrência"),
+    forma,
+    observacao: textoOpcional(500),
+  })
+  .superRefine((d, ctx) => {
+    if (d.modo === "RECORRENTE" && d.fimRecorrencia !== null && d.fimRecorrencia < d.vencimento) {
+      ctx.addIssue({ code: "custom", path: ["fimRecorrencia"], message: "O fim da recorrência não pode ser antes do primeiro vencimento." });
+    }
+    if (d.modo === "PARCELADA" && d.valor < d.parcelas) {
+      ctx.addIssue({ code: "custom", path: ["valor"], message: "O valor é menor que o número de parcelas." });
+    }
+  });
+
+export type DadosDaContaAPagar = z.output<typeof contaAPagarSchema>;
+
+export const contaPagarIdSchema = z.object({ contaPagarId: idObrigatorio("Conta inválida.") });
+
+export const pagamentoSchema = z.object({
+  contaPagarId: idObrigatorio("Conta inválida."),
+  data: dataObrigatoria("Data do pagamento"),
+  valor: dinheiro("Valor pago"),
+  contaFinanceiraId: idObrigatorio("Escolha a conta de onde saiu o dinheiro."),
+  forma,
+  comNotaFiscal: campoCaixa,
+  observacao: textoOpcional(500),
+});
+
+export type DadosDoPagamento = z.output<typeof pagamentoSchema>;
+
+export const ajusteDeContaPagarSchema = z
+  .object({
+    contaPagarId: idObrigatorio("Conta inválida."),
+    valor: dinheiroOuVazio("Novo valor"),
+    vencimento: dataOpcional("Novo vencimento"),
+    motivo: textoObrigatorio("Motivo", 3, 300),
+  })
+  .superRefine((d, ctx) => {
+    if (d.valor === null && d.vencimento === null) ctx.addIssue({ code: "custom", path: ["valor"], message: "Informe o novo valor e/ou o novo vencimento." });
+  });
+
+export const cancelarContaPagarSchema = z.object({
+  contaPagarId: idObrigatorio("Conta inválida."),
+  motivo: textoObrigatorio("Motivo", 3, 300),
+});
+
+/** Edição de uma recorrência: vale para as ocorrências FUTURAS em aberto; o que já venceu ou foi pago não muda. */
+export const recorrenciaSchema = z.object({
+  recorrenciaId: idObrigatorio("Recorrência inválida."),
+  descricao: textoObrigatorio("Descrição", 2, 200),
+  fornecedorId: idOpcional,
+  funcionarioId: idOpcional,
+  favorecido: textoOpcional(120),
+  categoriaId: idObrigatorio("Escolha a categoria."),
+  valor: dinheiro("Valor"),
+  diaVencimento: inteiroEntre("Dia do vencimento", 1, 31, 1),
+  fim: dataOpcional("Fim da recorrência"),
+  forma,
+  observacao: textoOpcional(500),
+});
+
+export type DadosDaRecorrencia = z.output<typeof recorrenciaSchema>;
+
+export const encerrarRecorrenciaSchema = z.object({
+  recorrenciaId: idObrigatorio("Recorrência inválida."),
+});
