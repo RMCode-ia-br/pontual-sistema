@@ -124,6 +124,10 @@ enum OrigemPreco {
   MANUAL
   REAJUSTE_LOTE
   IMPORTACAO
+  /// Último custo da compra recebida (Fase 6).
+  COMPRA
+  /// Recalculado a partir do preço do kg do alumínio (Fase 6).
+  PRECO_KG
 }
 
 enum TipoImportacao {
@@ -426,30 +430,32 @@ model ModeloTexto {
 // ===================== Catálogos editáveis =====================
 
 model LinhaAluminio {
-  id              String         @id @default(cuid())
-  nome            String         @unique
-  ativo           Boolean        @default(true)
-  ordem           Int            @default(0)
+  id              String            @id @default(cuid())
+  nome            String            @unique
+  ativo           Boolean           @default(true)
+  ordem           Int               @default(0)
   produtos        Produto[]
   precos          TabelaPreco[]
   itensProposta   ItemProposta[]
-  criadoEm        DateTime       @default(now())
-  atualizadoEm    DateTime       @updatedAt
+  precosKg        PrecoKgAluminio[]
+  criadoEm        DateTime          @default(now())
+  atualizadoEm    DateTime          @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
 }
 
 model AcabamentoAluminio {
-  id              String         @id @default(cuid())
-  nome            String         @unique
-  ativo           Boolean        @default(true)
-  ordem           Int            @default(0)
+  id              String            @id @default(cuid())
+  nome            String            @unique
+  ativo           Boolean           @default(true)
+  ordem           Int               @default(0)
   produtos        Produto[]
   precos          TabelaPreco[]
   itensProposta   ItemProposta[]
-  criadoEm        DateTime       @default(now())
-  atualizadoEm    DateTime       @updatedAt
+  precosKg        PrecoKgAluminio[]
+  criadoEm        DateTime          @default(now())
+  atualizadoEm    DateTime          @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -462,6 +468,7 @@ model TipoVidro {
   ordem           Int            @default(0)
   precos          TabelaPreco[]
   itensProposta   ItemProposta[]
+  itensCompra     ItemCompra[]
   criadoEm        DateTime       @default(now())
   atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
@@ -680,8 +687,10 @@ model Fornecedor {
   contasPagar        ContaPagar[]
   recorrencias       RecorrenciaPagar[]
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  compras         Compra[]
+  precosKg        PrecoKgAluminio[]
+  criadoEm        DateTime          @default(now())
+  atualizadoEm    DateTime          @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -790,6 +799,14 @@ model Produto {
   historicoPrecos       HistoricoPreco[]
 
   insumosComposicao ComposicaoInsumo[]
+  /// Perfil cujo custo nasce do preço do kg do acabamento (Fase 6). Peso por metro e comprimento da barra continuam nos campos acima.
+  custoPorKg        Boolean            @default(false)
+  /// Cache da soma dos movimentos de estoque, atualizado na mesma transação do movimento (R14).
+  saldoCache        Decimal            @default(0) @db.Decimal(12, 3)
+  movimentosEstoque MovimentoEstoque[]
+  retalhos          Retalho[]
+  movimentosSucata  MovimentoSucata[]
+  itensCompra       ItemCompra[]
   criadoEm          DateTime           @default(now())
   atualizadoEm      DateTime           @updatedAt
   criadoPorId       String?
@@ -819,6 +836,8 @@ model HistoricoPreco {
   /// Descrição curta do reajuste em lote ("+5% — Fornecedor X").
   observacao            String?
 
+  compraId        String?
+  compra          Compra?   @relation(fields: [compraId], references: [id], onDelete: Restrict)
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   criadoPorId     String?
@@ -1046,11 +1065,16 @@ model Projeto {
   pausas         PausaProjeto[]
   chamados       Chamado[]
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
-  criadoPorId     String?
-  atualizadoPorId String?
-  deletadoEm      DateTime?
+  movimentosEstoque  MovimentoEstoque[]
+  retalhosDeOrigem   Retalho[]          @relation("RetalhoOrigem")
+  retalhosConsumidos Retalho[]          @relation("RetalhoConsumo")
+  movimentosSucata   MovimentoSucata[]
+  compras            Compra[]
+  criadoEm           DateTime           @default(now())
+  atualizadoEm       DateTime           @updatedAt
+  criadoPorId        String?
+  atualizadoPorId    String?
+  deletadoEm         DateTime?
 
   @@index([deletadoEm, status, ultimaMovimentacaoEm])
   @@index([clienteId])
@@ -1530,11 +1554,13 @@ model OpcaoProposta {
   descontoCentavos Int            @default(0)
   itens            ItemProposta[]
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
-  criadoPorId     String?
-  atualizadoPorId String?
-  deletadoEm      DateTime?
+  /// Custo de material informado à mão (vindo do programa de corte do fornecedor), total da opção. SÓ interno: nunca entra no snapshot nem no PDF.
+  custoMaterialInformadoCentavos Int?
+  criadoEm                       DateTime  @default(now())
+  atualizadoEm                   DateTime  @updatedAt
+  criadoPorId                    String?
+  atualizadoPorId                String?
+  deletadoEm                     DateTime?
 
   @@index([propostaId, deletadoEm, ordem])
 }
@@ -1601,11 +1627,14 @@ model ItemProposta {
   avisoPreco            String?
   medidas               ItemPropostaMedida[]
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
-  criadoPorId     String?
-  atualizadoPorId String?
-  deletadoEm      DateTime?
+  /// Custo de material informado à mão (do programa de corte) para este item. SÓ interno: nunca entra no snapshot nem no PDF.
+  custoMaterialInformadoCentavos Int?
+  itensCompra                    ItemCompra[]
+  criadoEm                       DateTime     @default(now())
+  atualizadoEm                   DateTime     @updatedAt
+  criadoPorId                    String?
+  atualizadoPorId                String?
+  deletadoEm                     DateTime?
 
   @@index([propostaId, deletadoEm, ordem])
   @@index([opcaoId, deletadoEm, ordem])
@@ -1623,8 +1652,9 @@ model ItemPropostaMedida {
   local      String?
   ordem      Int          @default(0)
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
+  itensCompra     ItemCompra[]
+  criadoEm        DateTime     @default(now())
+  atualizadoEm    DateTime     @updatedAt
   criadoPorId     String?
   atualizadoPorId String?
   deletadoEm      DateTime?
@@ -2013,11 +2043,12 @@ model Lancamento {
   motivoEstorno     String?
   observacao        String?
 
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
-  criadoPorId     String?
-  atualizadoPorId String?
-  deletadoEm      DateTime?
+  movimentosSucata MovimentoSucata[]
+  criadoEm         DateTime          @default(now())
+  atualizadoEm     DateTime          @updatedAt
+  criadoPorId      String?
+  atualizadoPorId  String?
+  deletadoEm       DateTime?
 
   @@index([contaFinanceiraId, data])
   @@index([data])
@@ -2058,6 +2089,9 @@ model ContaPagar {
   observacao        String?
   lancamentos       Lancamento[]
 
+  /// Compra que gerou esta conta (Fase 6). O custo real da obra lê a COMPRA, nunca esta conta, para não contar o mesmo custo duas vezes.
+  compraId        String?
+  compra          Compra?   @relation(fields: [compraId], references: [id], onDelete: Restrict)
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   criadoPorId     String?
@@ -2104,4 +2138,305 @@ model RecorrenciaPagar {
   deletadoEm      DateTime?
 
   @@index([deletadoEm, ativo])
+}
+
+// ===================== Fase 6 (Estoque e compras) =====================
+// Quantidades em Decimal(12,3) (milésimos); dinheiro em centavos (Int). Nunca se inventa custo, peso por metro, preço do kg,
+// retalho mínimo nem estoque inicial: campo vazio = "não informado" e a margem fica "incompleta", nunca zero.
+
+enum TipoMovimentoEstoque {
+  /// Contagem inicial opcional: nunca com valor inventado (custo vazio = "sem custo").
+  INVENTARIO_INICIAL
+  ENTRADA_COMPRA
+  SAIDA_OBRA
+  /// Volta da obra para o estoque.
+  DEVOLUCAO
+  AJUSTE
+  PERDA
+}
+
+enum StatusRetalho {
+  DISPONIVEL
+  CONSUMIDO
+  DESCARTADO
+}
+
+enum TipoMovimentoSucata {
+  GERACAO
+  VENDA
+  AJUSTE
+}
+
+enum TipoCompra {
+  MATERIAL
+  VIDRO
+}
+
+/// ESTOQUE gera entrada no estoque; OBRA é custo direto da obra, sem passar pelo estoque (caso típico dos vidros sob medida).
+enum DestinoCompra {
+  ESTOQUE
+  OBRA
+}
+
+enum StatusCompra {
+  RASCUNHO
+  PEDIDO
+  RECEBIDO_PARCIAL
+  RECEBIDO
+  CANCELADO
+}
+
+/// Preço do kg do alumínio por acabamento (e, se quiser, por linha). A linha específica vale mais que a genérica.
+/// Vazio = "sem preço do kg". Único por (acabamento, linha) entre os não excluídos (índice parcial na migração).
+model PrecoKgAluminio {
+  id              String             @id @default(cuid())
+  acabamentoId    String
+  acabamento      AcabamentoAluminio @relation(fields: [acabamentoId], references: [id], onDelete: Restrict)
+  linhaId         String?
+  linha           LinhaAluminio?     @relation(fields: [linhaId], references: [id], onDelete: Restrict)
+  fornecedorId    String?
+  fornecedor      Fornecedor?        @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  custoKgCentavos Int?
+  observacao      String?
+  historico       HistoricoPrecoKg[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([acabamentoId])
+  @@index([linhaId])
+}
+
+/// Toda mudança do preço do kg. Só se acrescenta.
+model HistoricoPrecoKg {
+  id                    String          @id @default(cuid())
+  precoKgId             String
+  precoKg               PrecoKgAluminio @relation(fields: [precoKgId], references: [id], onDelete: Restrict)
+  custoAnteriorCentavos Int?
+  custoNovoCentavos     Int?
+  origem                OrigemPreco
+  compraId              String?
+  compra                Compra?         @relation(fields: [compraId], references: [id], onDelete: Restrict)
+  usuarioId             String?
+  observacao            String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([precoKgId, criadoEm])
+  @@index([compraId])
+}
+
+/// Todo movimento de estoque (R14). `quantidade` tem sinal (entrada +, saída −), na unidade do produto. O saldo do produto é a
+/// soma dos movimentos; `Produto.saldoCache` é atualizado na mesma transação. Estorno = movimento inverso (`estornoDeId`).
+model MovimentoEstoque {
+  id                    String               @id @default(cuid())
+  produtoId             String
+  produto               Produto              @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  tipo                  TipoMovimentoEstoque
+  quantidade            Decimal              @db.Decimal(12, 3)
+  /// Custo unitário congelado na data do movimento; vazio = "sem custo" (a margem da obra fica incompleta).
+  custoUnitarioCentavos Int?
+  data                  DateTime             @db.Date
+  projetoId             String?
+  projeto               Projeto?             @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  itemRecebimentoId     String?
+  itemRecebimento       ItemRecebimento?     @relation(fields: [itemRecebimentoId], references: [id], onDelete: Restrict)
+  /// Movimento que este desfaz (um movimento só é estornado uma vez).
+  estornoDeId           String?              @unique
+  estornoDe             MovimentoEstoque?    @relation("EstornoDeMovimento", fields: [estornoDeId], references: [id], onDelete: Restrict)
+  estornadoPor          MovimentoEstoque?    @relation("EstornoDeMovimento")
+  /// Saída maior que o saldo: confirmada de propósito, com justificativa.
+  semSaldoConfirmado    Boolean              @default(false)
+  justificativa         String?
+  retalhosGerados       Retalho[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([produtoId, data])
+  @@index([projetoId])
+  @@index([itemRecebimentoId])
+}
+
+/// Sobra de perfil aproveitável (≥ retalhoMinimoMm de Configurações). Menor que isso vira sucata (MovimentoSucata).
+model Retalho {
+  id                 String            @id @default(cuid())
+  produtoId          String
+  produto            Produto           @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  comprimentoMm      Int
+  local              String?
+  status             StatusRetalho     @default(DISPONIVEL)
+  origemProjetoId    String?
+  origemProjeto      Projeto?          @relation("RetalhoOrigem", fields: [origemProjetoId], references: [id], onDelete: Restrict)
+  origemMovimentoId  String?
+  origemMovimento    MovimentoEstoque? @relation(fields: [origemMovimentoId], references: [id], onDelete: Restrict)
+  consumidoProjetoId String?
+  consumidoProjeto   Projeto?          @relation("RetalhoConsumo", fields: [consumidoProjetoId], references: [id], onDelete: Restrict)
+  consumidoEm        DateTime?
+  observacao         String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([produtoId, status])
+  @@index([origemProjetoId])
+}
+
+/// Sucata acumulada para venda: saldo em kg. Sem peso por metro no perfil, guarda só o comprimento ("peso não informado").
+model MovimentoSucata {
+  id            String              @id @default(cuid())
+  tipo          TipoMovimentoSucata
+  data          DateTime            @db.Date
+  pesoKg        Decimal?            @db.Decimal(10, 3)
+  comprimentoMm Int?
+  /// Venda de sucata: valor digitado (nunca inventado).
+  valorCentavos Int?
+  lancamentoId  String?
+  lancamento    Lancamento?         @relation(fields: [lancamentoId], references: [id], onDelete: Restrict)
+  projetoId     String?
+  projeto       Projeto?            @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  produtoId     String?
+  produto       Produto?            @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  observacao    String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([data])
+  @@index([projetoId])
+}
+
+/// Pedido de compra (material ou vidro). O recebimento gera a entrada no estoque (destino ESTOQUE) ou o custo direto da obra
+/// (destino OBRA) e, opcionalmente, a conta a pagar (`ContaPagar.compraId`).
+model Compra {
+  id                String              @id @default(cuid())
+  /// Sequencial global (`C-0001`), pelo contador atômico "compra".
+  numero            Int                 @unique
+  fornecedorId      String
+  fornecedor        Fornecedor          @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  tipo              TipoCompra          @default(MATERIAL)
+  destino           DestinoCompra       @default(ESTOQUE)
+  /// Obrigatório quando o destino é OBRA.
+  projetoId         String?
+  projeto           Projeto?            @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  status            StatusCompra        @default(RASCUNHO)
+  dataPedido        DateTime?           @db.Date
+  previsaoEntrega   DateTime?           @db.Date
+  condicoes         String?
+  observacao        String?
+  itens             ItemCompra[]
+  recebimentos      RecebimentoCompra[]
+  contasPagar       ContaPagar[]
+  historicoPrecos   HistoricoPreco[]
+  historicoPrecosKg HistoricoPrecoKg[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([status, previsaoEntrega])
+  @@index([fornecedorId])
+  @@index([projetoId])
+}
+
+model ItemCompra {
+  id                    String              @id @default(cuid())
+  compraId              String
+  compra                Compra              @relation(fields: [compraId], references: [id], onDelete: Restrict)
+  ordem                 Int
+  /// Produto do cadastro, ou só a descrição (vidro sob medida, item avulso).
+  produtoId             String?
+  produto               Produto?            @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  descricao             String?
+  /// Unidade em que se compra e se paga (perfil: KG ou BARRA; os demais, a do produto).
+  unidadeCompra         UnidadeProduto      @default(UN)
+  quantidade            Decimal             @db.Decimal(12, 3)
+  /// Cache da soma dos recebimentos, na unidade de compra.
+  quantidadeRecebida    Decimal             @default(0) @db.Decimal(12, 3)
+  /// Preço por unidade de compra; vazio = sem preço ("sem custo").
+  precoUnitarioCentavos Int?
+  // Vidro sob medida
+  larguraMm             Int?
+  alturaMm              Int?
+  espessuraMm           Int?
+  tipoVidroId           String?
+  tipoVidro             TipoVidro?          @relation(fields: [tipoVidroId], references: [id], onDelete: Restrict)
+  beneficiamentos       String?
+  itemPropostaId        String?
+  itemProposta          ItemProposta?       @relation(fields: [itemPropostaId], references: [id], onDelete: Restrict)
+  itemPropostaMedidaId  String?
+  itemPropostaMedida    ItemPropostaMedida? @relation(fields: [itemPropostaMedidaId], references: [id], onDelete: Restrict)
+  recebimentos          ItemRecebimento[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@unique([compraId, ordem])
+  @@index([produtoId])
+  @@index([itemPropostaId])
+}
+
+model RecebimentoCompra {
+  id         String            @id @default(cuid())
+  compraId   String
+  compra     Compra            @relation(fields: [compraId], references: [id], onDelete: Restrict)
+  data       DateTime          @db.Date
+  observacao String?
+  itens      ItemRecebimento[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([compraId])
+}
+
+/// O que chegou de cada item, com o valor CONGELADO na hora: é daqui (e não da conta a pagar) que o custo real da obra lê.
+model ItemRecebimento {
+  id                    String             @id @default(cuid())
+  recebimentoId         String
+  recebimento           RecebimentoCompra  @relation(fields: [recebimentoId], references: [id], onDelete: Restrict)
+  itemCompraId          String
+  itemCompra            ItemCompra         @relation(fields: [itemCompraId], references: [id], onDelete: Restrict)
+  /// Quantidade na unidade de compra (o que foi cobrado: kg ou barras).
+  quantidadeCompra      Decimal            @db.Decimal(12, 3)
+  /// Quantidade na unidade do produto (o que entra no estoque: ex. barras).
+  quantidadeEstoque     Decimal            @db.Decimal(12, 3)
+  /// Valor pago por esta entrega; vazio = sem preço ("sem custo").
+  valorCentavos         Int?
+  /// Custo por unidade do produto (valor ÷ quantidadeEstoque), arredondado; vazio quando não há preço.
+  custoUnitarioCentavos Int?
+  movimentos            MovimentoEstoque[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([recebimentoId])
+  @@index([itemCompraId])
 }

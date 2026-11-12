@@ -205,3 +205,14 @@ Corrigidos na fase: tarefa de cobrança que não voltava depois de concluir, rea
 - [ ] **A cobrança é uma tarefa, não uma notificação** (lembrete antes do vencimento, parâmetro de Configurações): o aviso no sino e o lembrete automático por cron são da Fase 8.
 - [ ] **`seed:demo` com financeiro fictício não foi executado** (o banco tem dados reais; regra do dono). Rodar só em banco de desenvolvimento sem dados reais.
 - [ ] **Teste de integração do Route Handler dos CSVs financeiros:** só o E2E exercita (status, tipo e bloqueio sem sessão).
+
+## Surgidas na Fase 6 (estoque e compras)
+
+- [ ] **Preço do kg do alumínio por acabamento** (e por linha, se o Marcelo quiser). Nada foi preenchido: o perfil por kg mostra "sem preço do kg" e o custo derivado fica "não informado" até o Marcelo informar na tela "Preço do kg do alumínio".
+- [ ] **Peso por metro e comprimento da barra de cada perfil.** Nunca inventados: sem peso por metro não há custo por metro/barra nem conversão kg ↔ barras (a interface avisa em cada perfil). A tabela de pesos costuma vir no catálogo da linha ou no programa de corte.
+- [ ] **Retalho mínimo aproveitável (mm)** em Configurações. Vazio: ao baixar um perfil, o sistema pergunta "retalho ou sucata?" em vez de decidir.
+- [ ] **Custo de mão de obra por m²** em Configurações (a tela traz o botão "Sugerir a partir dos salários", que só preenche com a sua confirmação). Vazio: a margem de toda obra fica "incompleta".
+- [ ] **Estoque inicial (contagem inicial):** opcional e nunca com valor inventado; o Marcelo conta e lança quando quiser (custo vazio = "sem custo").
+- [ ] **Custos dos produtos:** produto sem custo mostra "sem custo" e deixa a margem das obras que o usam "incompleta" até a primeira compra recebida com preço (ou o cadastro do custo).
+- [ ] **Arquivos de exemplo do programa da linha Suprema (pedido ao dono):** (1) exemplos das saídas do programa para uma ou duas janelas reais (lista de corte, lista de pedido de perfis, medida do vidro, sobras), no formato que ele gerar (PDF, CSV, XLS, TXT ou print); (2) nome e versão do programa e se ele exporta arquivo; (3) tabela de pesos por metro dos perfis e a tabela de preço do kg por acabamento do fornecedor. Guardar em `docs/referencias/` (fora do Git).
+- [ ] **EVOLUÇÃO FUTURA — importar do programa da linha Suprema a lista de corte e a lista de pedido** (plano de corte, medida do vidro, perfis, quantidades e sobras), alimentando a compra de perfis, o pedido de vidro e o retalho/sucata. Fora do escopo da Fase 6 (decisão 108-j); depende dos arquivos de exemplo acima.

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 import type { ItemDoHistorico } from "../queries";
 
-const ROTULO_ORIGEM = { MANUAL: "Digitado", REAJUSTE_LOTE: "Reajuste em lote", IMPORTACAO: "Importação" } as const;
+const ROTULO_ORIGEM = { MANUAL: "Digitado", REAJUSTE_LOTE: "Reajuste em lote", IMPORTACAO: "Importação", COMPRA: "Compra recebida", PRECO_KG: "Preço do kg" } as const;
 
 /** Variação em % entre dois custos, só para leitura rápida ("+5,0%"); o valor exato está nas colunas. */
 function variacao(anterior: number | null, novo: number): { texto: string; sobe: boolean } | null {

@@ -206,7 +206,7 @@ export type ItemDoHistorico = {
   quando: string;
   anteriorCentavos: number | null;
   novoCentavos: number;
-  origem: "MANUAL" | "REAJUSTE_LOTE" | "IMPORTACAO";
+  origem: "MANUAL" | "REAJUSTE_LOTE" | "IMPORTACAO" | "COMPRA" | "PRECO_KG";
   observacao: string | null;
   fornecedor: string | null;
   autor: string | null;

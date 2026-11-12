@@ -10,6 +10,10 @@ import { ErroFormula, avaliarFormula } from "./formulas";
 import { MAXIMO_CENTAVOS, type Medida } from "./preco";
 
 export type InsumoComposicao = {
+  /** Produto do cadastro (para a lista de materiais da obra); vazio quando o insumo é só texto. */
+  produtoId?: string | null;
+  /** Unidade em que a fórmula devolve a quantidade (M, UN, M2, KG...). */
+  unidade?: string;
   descricao: string;
   formulaQuantidade: string;
   /** Pontos-base (5% = 500). */
@@ -32,6 +36,15 @@ export type ResultadoCustoComposicao =
 
 export type ParametrosItem = { folhas: number | null };
 
+/**
+ * Quantidade de um insumo para UMA medida (com a quantidade de peças e a perda de corte), na unidade da fórmula.
+ * É a mesma conta do custo e da lista de materiais: uma só regra. Lança ErroFormula se a fórmula não avalia.
+ */
+export function quantidadeDoInsumo(insumo: Pick<InsumoComposicao, "formulaQuantidade" | "perdaPb">, m: Medida, folhas: number | null): number {
+  const quantidadePorPeca = avaliarFormula(insumo.formulaQuantidade, { L: m.larguraMm, A: m.alturaMm, F: folhas ?? 1, Q: m.quantidade });
+  return quantidadePorPeca * m.quantidade * (1 + insumo.perdaPb / 10000);
+}
+
 /** Custo total do item (todas as medidas) = materiais (com perda) + mão de obra de fábrica e de instalação. */
 export function custoDaComposicao(
   insumos: InsumoComposicao[],
@@ -53,14 +66,14 @@ export function custoDaComposicao(
       continue;
     }
     for (const m of medidas) {
-      let quantidadePorPeca: number;
+      let quantidade: number;
       try {
-        quantidadePorPeca = avaliarFormula(insumo.formulaQuantidade, { L: m.larguraMm, A: m.alturaMm, F: item.folhas ?? 1, Q: m.quantidade });
+        quantidade = quantidadeDoInsumo(insumo, m, item.folhas);
       } catch (erro) {
         const motivo = erro instanceof ErroFormula ? erro.message : "fórmula inválida";
         return { ok: false, erro: `Fórmula de "${insumo.descricao}": ${motivo}`, faltando: [] };
       }
-      materiais += quantidadePorPeca * m.quantidade * (1 + insumo.perdaPb / 10000) * insumo.custoUnitarioCentavos;
+      materiais += quantidade * insumo.custoUnitarioCentavos;
     }
   }
 
