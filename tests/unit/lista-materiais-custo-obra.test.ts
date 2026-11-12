@@ -101,7 +101,7 @@ describe("custo real e margem por obra (R15)", () => {
     retalhosUsados: [{ id: "r1", descricao: "Retalho de 1.800 mm", origem: "Retalho da obra P-0001" }],
     outrasDespesas: [{ id: "d1", descricao: "Frete", origem: "Conta a pagar sem compra", valorCentavos: 100_000 }],
     maoDeObra: { areaM2: 10, custoPorM2Centavos: 16_000 }, // R$ 1.600
-    estimadoCentavos: 580_000,
+    estimadoCentavos: 330_000,
   };
 
   it("opção B: margem = (fechado − acréscimo de nota) − custos = R$ 10.000 − R$ 6.000 = R$ 4.000 (40%)", () => {
@@ -110,7 +110,23 @@ describe("custo real e margem por obra (R15)", () => {
     expect(r.receitaDaMargemCentavos).toBe(1_000_000);
     expect(r.repasseDeImpostoCentavos).toBe(50_000);
     expect(r).toMatchObject({ incompleto: false, margemCentavos: 400_000, margemPb: 4000, faltando: [] });
-    expect(r.diferencaParaEstimadoCentavos).toBe(600_000 - 580_000);
+    // O estimado é só material: compara com compras da obra + saídas do estoque (R$ 3.400), não com o custo total.
+    expect(r.diferencaParaEstimadoCentavos).toBe(340_000 - 330_000);
+  });
+
+  it("saída e devolução da mesma quantidade se anulam, mesmo com meio centavo (arredondamento simétrico)", () => {
+    // 1,5 un a R$ 3,33 = R$ 4,995: a saída e a devolução arredondam igual, sem resíduo de R$ 0,01 na obra.
+    const r = calcularCustoDaObra({
+      ...base,
+      comprasDaObra: [],
+      outrasDespesas: [],
+      maoDeObra: { areaM2: 0, custoPorM2Centavos: 0 },
+      movimentosDeEstoque: [
+        { id: "a", produto: "P", origem: "Saída", quantidadeMilesimos: -1_500, custoUnitarioCentavos: 333 },
+        { id: "b", produto: "P", origem: "Devolução", quantidadeMilesimos: 1_500, custoUnitarioCentavos: 333 },
+      ],
+    });
+    expect(r.custoConhecidoCentavos).toBe(0);
   });
 
   it("cada linha traz a origem e o retalho usado é só informativo (R$ 0, não soma)", () => {

@@ -216,3 +216,24 @@ Corrigidos na fase: tarefa de cobrança que não voltava depois de concluir, rea
 - [ ] **Custos dos produtos:** produto sem custo mostra "sem custo" e deixa a margem das obras que o usam "incompleta" até a primeira compra recebida com preço (ou o cadastro do custo).
 - [ ] **Arquivos de exemplo do programa da linha Suprema (pedido ao dono):** (1) exemplos das saídas do programa para uma ou duas janelas reais (lista de corte, lista de pedido de perfis, medida do vidro, sobras), no formato que ele gerar (PDF, CSV, XLS, TXT ou print); (2) nome e versão do programa e se ele exporta arquivo; (3) tabela de pesos por metro dos perfis e a tabela de preço do kg por acabamento do fornecedor. Guardar em `docs/referencias/` (fora do Git).
 - [ ] **EVOLUÇÃO FUTURA — importar do programa da linha Suprema a lista de corte e a lista de pedido** (plano de corte, medida do vidro, perfis, quantidades e sobras), alimentando a compra de perfis, o pedido de vidro e o retalho/sucata. Fora do escopo da Fase 6 (decisão 108-j); depende dos arquivos de exemplo acima.
+
+
+## Da revisão sênior da Fase 6 (o que NÃO foi corrigido, e por quê)
+
+Corrigidos na própria revisão: leitura de quantidade com ponto ("2.5" virava 25), promessa de pagamento velha depois de corrigir o vencimento, estorno de material de obra cancelada, "falta" da lista de materiais que ignorava o que já foi entregue à obra, comparação "estimado × real" (agora só material), data do estorno em UTC, arredondamento assimétrico da devolução, data inválida na URL das movimentações e peso por metro zero na sucata. O que ficou (nenhum tem cenário explorável hoje, com um gestor e mês de teste):
+
+- [ ] **Devolução entra pelo custo atual do produto**, não pelo da saída original (a tela avisa "custo atual"). Se o custo subiu entre a saída e a devolução, a margem da obra fica um pouco acima do real. Correção conhecida: devolução "referente à saída X" herdando o custo.
+- [ ] **Devolução de obra cancelada ou perdida** continua recusada (só o estorno foi liberado); o material volta por ajuste sem obra.
+- [ ] **Mão de obra rateada × conta a pagar com obra e sem compra** (ex.: instalador terceirizado): as duas entram no custo da obra e a tela não avisa; o Marcelo decide se terceirizado entra no rateio ou à parte.
+- [ ] **Custo de mão de obra por m² é sempre o valor atual de Configurações:** mudar o valor reescreve a margem de obras concluídas. Congelar na conclusão da obra é a correção.
+- [ ] **Compra de vidro:** nada no servidor impede duas compras ativas para a mesma medida (só a interface esconde o botão); receber as duas dobraria o custo.
+- [ ] **Recebimento só com valor total** (sem preço unitário) grava o custo no movimento mas não atualiza o custo do produto (o "último custo" só se atualiza com preço unitário).
+- [ ] **Estorno de recebimento com saldo já consumido** deixa o saldo negativo em silêncio (sem aviso na tela).
+- [ ] **Peso por metro igual a zero** ainda é aceito pelo cadastro do produto (a sucata já o trata como "sem peso"); recusar `<= 0` no esquema.
+- [ ] **Teto de valores nas compras** (preço, valor total e quantidade): sem limite, números absurdos viram erro genérico do banco.
+- [ ] **Relatório de estoque:** os recebimentos por fornecedor leem até 5.000 itens sem avisar truncamento, e o valor do estoque considera só produtos ativos (produto inativo com saldo fica de fora).
+- [ ] **Cadastro rápido de perfil em barra sem comprimento** assume 6.000 mm (padrão da spec), o que torna inalcançável o aviso "barra sem comprimento" para produtos novos.
+- [ ] **Lista de materiais converte metros em barras pela soma total**, sem plano de corte (três peças de 4 m dão 2 barras; na prática precisam de 3). É a evolução futura com o programa da linha Suprema.
+- [ ] **Testes de integração que alteram o singleton de Configurações** (mão de obra por m², retalho mínimo) restauram no fim; se o processo morrer no meio, o valor real fica trocado. Passar a gravar e restaurar em transação ou a usar um valor fixo de teste lido de volta.
+- [ ] **Teste de integração da importação (`importacao.test.ts`) depende de fornecedores semeados** ("Pontimac" e "Dafel" pelo nome): o Marcelo excluiu um e renomeou outro, e o teste passou a falhar (não é regressão de código). Fazer o teste criar os fornecedores de que precisa, com prefixo "Int ".
+- [ ] **`seed:demo` de estoque e compras foi escrito, mas não executado** (banco com dados reais); validar num banco de desenvolvimento vazio antes de usar.

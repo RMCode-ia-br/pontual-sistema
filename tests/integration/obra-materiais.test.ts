@@ -144,6 +144,18 @@ describe("lista de materiais da obra", () => {
     expect(m.linhas).toHaveLength(3); // o item da outra opção (9 peças) não entrou
   });
 
+  it("o que já foi entregue à obra (saída do estoque) conta como atendido: a falta não vira pedido em dobro", async () => {
+    const saida = await prisma.movimentoEstoque.create({ data: { produtoId: roldanaId, tipo: "SAIDA_OBRA", quantidade: "-2", data: new Date("2026-11-19T00:00:00Z"), projetoId } });
+    try {
+      const roldana = (await carregarMateriaisDaObra(projetoId)).linhas.find((l) => l.produtoId === roldanaId)!;
+      // Precisa de 8, há 5 no estoque e 2 já saíram para esta obra: faltam 8 − (5 + 2) = 1 (e não 3).
+      expect(roldana).toMatchObject({ necessario: 8, saldo: 5, jaNaObra: 2, falta: 1 });
+    } finally {
+      await prisma.movimentoEstoque.delete({ where: { id: saida.id } });
+    }
+    expect((await carregarMateriaisDaObra(projetoId)).linhas.find((l) => l.produtoId === roldanaId)).toMatchObject({ jaNaObra: 0, falta: 3 });
+  });
+
   it("item sem tipologia ou com tipologia sem composição vira aviso, nunca quantidade", async () => {
     const m = await carregarMateriaisDaObra(projetoId);
     expect(m.semComposicao.map((s) => [s.proposta, s.itemNumero, s.motivo.includes("não tem composição") ? "sem composição" : s.motivo])).toEqual([

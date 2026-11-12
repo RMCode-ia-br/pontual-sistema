@@ -24,7 +24,7 @@ export type ResultadoDoCorte =
 
 /** Peso da sucata de `comprimentoMm` mm do perfil; null sem peso por metro. */
 export function pesoDaSucata(comprimentoMm: number, pesoMilesimosKgPorMetro: number | null): number | null {
-  if (pesoMilesimosKgPorMetro === null) return null;
+  if (pesoMilesimosKgPorMetro === null || pesoMilesimosKgPorMetro <= 0) return null;
   return Math.round((comprimentoMm * pesoMilesimosKgPorMetro) / 1000);
 }
 

@@ -16,7 +16,14 @@ describe("estoque", () => {
     expect(lerQuantidade("1,5")).toBe(1_500);
     expect(lerQuantidade("12")).toBe(12_000);
     expect(lerQuantidade("0,001")).toBe(1);
-    for (const ruim of ["", "-1", "1,2345", "abc", "1,,5", "1e3"]) expect(lerQuantidade(ruim)).toBeNull();
+    for (const ruim of ["", "-1", "1,2345", "abc", "1,,5", "1e3", "2.5000", "1.23.4"]) expect(lerQuantidade(ruim)).toBeNull();
+  });
+
+  it("ponto só é milhar com agrupamento válido: '2.5' é 2,5 (nunca 25) e '1.234' é mil duzentos e trinta e quatro", () => {
+    expect(lerQuantidade("2.5")).toBe(2_500);
+    expect(lerQuantidade("0.75")).toBe(750);
+    expect(lerQuantidade("1.234")).toBe(1_234_000);
+    expect(lerQuantidade("1.234.567,5")).toBe(1_234_567_500);
     expect(formatarQuantidade(1_500)).toBe("1,5");
     expect(formatarQuantidade(12_000)).toBe("12");
   });
@@ -93,6 +100,7 @@ describe("retalhos e sucata (R14)", () => {
   it("sem peso por metro, a sucata guarda só o comprimento (peso null)", () => {
     expect(destinoDaSobra({ ...barra, pesoMilesimosKgPorMetro: null, usadoMm: 5400 })).toEqual({ ok: true, destino: "SUCATA", sobraMm: 600, pesoMilesimosKg: null });
     expect(pesoDaSucata(600, null)).toBeNull();
+    expect(pesoDaSucata(600, 0)).toBeNull(); // peso por metro zero não é peso: a sucata guarda o comprimento
     expect(pesoDaSucata(1000, 627)).toBe(627);
   });
   it("saldo de sucata: geração soma, venda subtrai; o que não tem peso fica à parte em mm", () => {

@@ -68,6 +68,7 @@ export function MateriaisDaObra({ projetoId, m }: { projetoId: string; m: Materi
                       {l.saldo !== null && l.unidadeProduto ? (
                         <p className="tabular-nums">
                           Em estoque: {nf(l.saldo)} {sigla(l.unidadeProduto)}
+                          {l.jaNaObra > 0 ? ` · já entregue à obra: ${nf(l.jaNaObra)} ${sigla(l.unidadeProduto)}` : ""}
                         </p>
                       ) : null}
                       {l.falta === null ? (

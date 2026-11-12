@@ -13,7 +13,7 @@ import {
   sinalDoTipo,
   type TipoDeMovimento,
 } from "@/lib/dominio/estoque";
-import { formatarMoeda } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 
 import { saldoDaSucata, travarSucata } from "./sucata-base";
 
@@ -126,6 +126,9 @@ export async function registrarMovimentoDeEstoque(
         projetoId: "Escolha a obra.",
       });
     obra = await conferirObra(tx, e.projetoId);
+  } else if (e.projetoId && e.estornoDeId) {
+    // Estorno devolve o que o movimento original já fez à obra (que foi validada na época), mesmo se ela foi cancelada depois.
+    obra = await tx.projeto.findFirst({ where: { id: e.projetoId, deletadoEm: null }, select: { codigo: true } });
   } else if (e.projetoId) {
     obra = await conferirObra(tx, e.projetoId);
   }
@@ -284,7 +287,7 @@ export async function estornarMovimentoDeEstoque(
       tipo: "AJUSTE",
       sentido: delta > 0 ? -1 : 1,
       quantidadeMilesimos: quantidade,
-      data: (ctx.agora ?? new Date()).toISOString().slice(0, 10),
+      data: dataLocalDoInstante(ctx.agora ?? new Date()),
       projetoId: original.projetoId,
       custoUnitarioCentavos: original.custoUnitarioCentavos,
       confirmarSemSaldo: true,
@@ -304,7 +307,7 @@ export async function estornarMovimentoDeEstoque(
     await tx.movimentoSucata.create({
       data: {
         tipo: "AJUSTE",
-        data: comoData((ctx.agora ?? new Date()).toISOString().slice(0, 10)),
+        data: comoData(dataLocalDoInstante(ctx.agora ?? new Date())),
         pesoKg: s.pesoKg ? (-Number(s.pesoKg.toString())).toFixed(3) : null,
         comprimentoMm: s.pesoKg ? null : s.comprimentoMm !== null ? -s.comprimentoMm : null,
         produtoId: s.produtoId,

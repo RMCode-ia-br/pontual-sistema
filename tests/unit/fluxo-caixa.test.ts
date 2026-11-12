@@ -146,6 +146,10 @@ describe("dataEsperadaDoRecebimento", () => {
     expect(dataEsperadaDoRecebimento({ vencimento: "2026-11-01", dataPrometida: null }, HOJE)).toEqual({ data: "2026-11-01", vencidoNoOriginal: true, prometido: false });
     expect(dataEsperadaDoRecebimento({ vencimento: "2026-12-01", dataPrometida: null }, HOJE)).toEqual({ data: "2026-12-01", vencidoNoOriginal: false, prometido: false });
   });
+  it("promessa que ficou antes do vencimento corrigido é velha: vale o vencimento", () => {
+    // Vencimento 10/11, promessa 20/11; o vencimento foi corrigido para 30/11: o dinheiro não é esperado antes dele.
+    expect(dataEsperadaDoRecebimento({ vencimento: "2026-11-30", dataPrometida: "2026-11-20" }, HOJE)).toEqual({ data: "2026-11-30", vencidoNoOriginal: false, prometido: false });
+  });
   it("promessa de hoje em diante vale no lugar do vencimento, que continua sendo o original", () => {
     expect(dataEsperadaDoRecebimento({ vencimento: "2026-11-01", dataPrometida: "2026-11-20" }, HOJE)).toEqual({ data: "2026-11-20", vencidoNoOriginal: true, prometido: true });
     expect(dataEsperadaDoRecebimento({ vencimento: "2026-11-01", dataPrometida: HOJE }, HOJE).prometido).toBe(true);

@@ -32,9 +32,17 @@ export function sinalDoTipo(tipo: TipoDeMovimento): 1 | -1 | null {
 export const paraMilesimos = (n: number): number => Math.round(n * 1000);
 export const deMilesimos = (m: number): number => m / 1000;
 
-/** "1.234,5" digitado → milésimos; vazio, negativo ou inválido → null. Aceita até 3 casas decimais. */
+/**
+ * "1.234,5" digitado → milésimos; vazio, negativo ou inválido → null. Aceita até 3 casas decimais. O ponto só é separador de
+ * milhar quando o agrupamento é válido ("1.234", "1.234.567,5"); "2.5" e "0.75" (ponto com 1 ou 2 casas) são decimais — nunca
+ * "25" ou "75" por engano. Ambíguo de outro jeito ("2.5000", "1.23.4") → null.
+ */
 export function lerQuantidade(texto: string): number | null {
-  const limpo = texto.trim().replace(/\./g, "").replace(",", ".");
+  const bruto = texto.trim();
+  let limpo: string;
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(bruto)) limpo = bruto.replace(/\./g, "").replace(",", ".");
+  else if (/^\d+\.\d{1,2}$/.test(bruto)) limpo = bruto;
+  else limpo = bruto.replace(",", ".");
   if (!/^\d+(\.\d{1,3})?$/.test(limpo)) return null;
   const n = Number(limpo);
   return Number.isFinite(n) ? paraMilesimos(n) : null;

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { inputParaData } from "@/lib/formatadores";
 import type { TipoDeMovimento } from "@/lib/dominio/estoque";
 import {
   calcularPaginacao,
@@ -41,7 +42,7 @@ export type FiltrosMovimentos = {
 const um = (v: string | string[] | undefined): string | undefined =>
   Array.isArray(v) ? v[0] : v;
 const dataOuNada = (v: string | undefined): string | undefined =>
-  v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+  v && /^\d{4}-\d{2}-\d{2}$/.test(v) && inputParaData(v) ? v : undefined;
 const idOuNada = (v: string | undefined): string | undefined =>
   v ? v.slice(0, 64) : undefined;
 

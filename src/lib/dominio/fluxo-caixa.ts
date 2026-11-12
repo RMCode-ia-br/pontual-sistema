@@ -33,7 +33,8 @@ export type MovimentoDoFluxo = {
  */
 export function dataEsperadaDoRecebimento(t: { vencimento: string; dataPrometida: string | null }, hoje: string): Pick<MovimentoDoFluxo, "data" | "vencidoNoOriginal" | "prometido"> {
   const vencidoNoOriginal = t.vencimento < hoje;
-  if (t.dataPrometida && t.dataPrometida >= hoje) return { data: t.dataPrometida, vencidoNoOriginal, prometido: true };
+  // Promessa anterior ou igual ao vencimento (o vencimento foi corrigido depois dela) é velha: vale o vencimento.
+  if (t.dataPrometida && t.dataPrometida >= hoje && t.dataPrometida > t.vencimento) return { data: t.dataPrometida, vencidoNoOriginal, prometido: true };
   return { data: t.vencimento, vencidoNoOriginal, prometido: false };
 }
 

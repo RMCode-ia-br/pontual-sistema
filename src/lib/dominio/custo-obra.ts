@@ -76,7 +76,8 @@ export function calcularCustoDaObra(e: EntradaDoCustoDaObra): ResultadoDoCustoDa
   }
   for (const m of e.movimentosDeEstoque) {
     // saída (quantidade negativa) custa; devolução (positiva) abate.
-    const valor = m.custoUnitarioCentavos === null ? null : Math.round((-m.quantidadeMilesimos * m.custoUnitarioCentavos) / 1000);
+    const bruto = m.custoUnitarioCentavos === null ? null : (-m.quantidadeMilesimos * m.custoUnitarioCentavos) / 1000;
+    const valor = bruto === null ? null : Math.sign(bruto) * Math.round(Math.abs(bruto));
     linhas.push({ grupo: "ESTOQUE", id: m.id, descricao: m.produto, valorCentavos: valor, origem: m.origem });
     if (valor === null) faltando.push(`custo de "${m.produto}" (${m.origem})`);
   }
@@ -105,6 +106,8 @@ export function calcularCustoDaObra(e: EntradaDoCustoDaObra): ResultadoDoCustoDa
 
   const custoConhecido = linhas.filter((l) => !l.informativo).reduce((s, l) => s + (l.valorCentavos ?? 0), 0);
   const incompleto = faltando.length > 0;
+  const linhasDeMaterial = linhas.filter((l) => l.grupo === "COMPRAS_DA_OBRA" || l.grupo === "ESTOQUE");
+  const materialReal = linhasDeMaterial.some((l) => l.valorCentavos === null) ? null : linhasDeMaterial.reduce((s, l) => s + (l.valorCentavos ?? 0), 0);
   const margemComOQueSeSabe = receitaDaMargem === null ? null : receitaDaMargem - custoConhecido;
   const margemCentavos = incompleto ? null : margemComOQueSeSabe;
   const margemPb = margemCentavos !== null && receitaDaMargem !== null && receitaDaMargem > 0 ? Math.round((margemCentavos * 10000) / receitaDaMargem) : null;
@@ -120,7 +123,9 @@ export function calcularCustoDaObra(e: EntradaDoCustoDaObra): ResultadoDoCustoDa
     margemPb,
     margemComOQueSeSabeCentavos: margemComOQueSeSabe,
     estimadoCentavos: e.estimadoCentavos,
-    diferencaParaEstimadoCentavos: !incompleto && e.estimadoCentavos !== null ? custoConhecido - e.estimadoCentavos : null,
+    // O estimado da proposta é só MATERIAL: compara com o material real (compras da obra + saídas do estoque), nunca com o total
+    // (que inclui mão de obra e despesas). Só quando todo o material tem custo.
+    diferencaParaEstimadoCentavos: materialReal !== null && e.estimadoCentavos !== null ? materialReal - e.estimadoCentavos : null,
   };
 }
 

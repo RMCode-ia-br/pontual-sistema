@@ -19,6 +19,8 @@ export type LinhaDeMaterialDaObra = {
   equivalencias: EquivalenciasDoPerfil | null;
   /** Saldo em estoque, na unidade do produto. */
   saldo: number | null;
+  /** Já entregue a ESTA obra (saídas do estoque − devoluções + recebido de compras para a obra), na unidade do produto. */
+  jaNaObra: number;
   /** O que falta, na unidade do produto; null quando não dá para comparar (insumo só texto ou unidades sem conversão). */
   falta: number | null;
   semCusto: boolean;
@@ -113,10 +115,22 @@ export async function carregarMateriaisDaObra(projetoId: string): Promise<Materi
   const ids = [...new Set(agrupadas.map((l) => l.produtoId).filter((x): x is string => !!x))];
   const produtos = ids.length ? await prisma.produto.findMany({ where: { id: { in: ids } }, select: { id: true, codigo: true, descricao: true, unidade: true, saldoCache: true, comprimentoBarraMm: true, pesoKgPorMetro: true, custoUnitarioCentavos: true } }) : [];
   const porId = new Map(produtos.map((p) => [p.id, p]));
+  // Já entregue a esta obra (por produto, na unidade do produto): não pode contar de novo como "falta" nem virar pedido em dobro.
+  const jaNaObra = new Map<string, number>();
+  if (ids.length > 0) {
+    const movimentos = await prisma.movimentoEstoque.findMany({ where: { projetoId, deletadoEm: null, produtoId: { in: ids }, tipo: { notIn: ["INVENTARIO_INICIAL", "ENTRADA_COMPRA"] } }, select: { produtoId: true, quantidade: true } });
+    for (const m of movimentos) jaNaObra.set(m.produtoId, (jaNaObra.get(m.produtoId) ?? 0) - num(m.quantidade));
+    const recebidos = await prisma.itemRecebimento.findMany({
+      where: { deletadoEm: null, recebimento: { deletadoEm: null }, itemCompra: { deletadoEm: null, produtoId: { in: ids }, compra: { projetoId, destino: "OBRA", deletadoEm: null, status: { not: "CANCELADO" } } } },
+      select: { quantidadeEstoque: true, itemCompra: { select: { produtoId: true } } },
+    });
+    for (const r of recebidos) if (r.itemCompra.produtoId) jaNaObra.set(r.itemCompra.produtoId, (jaNaObra.get(r.itemCompra.produtoId) ?? 0) + num(r.quantidadeEstoque));
+  }
   const linhas: LinhaDeMaterialDaObra[] = agrupadas.map((l, n) => {
     const p = l.produtoId ? porId.get(l.produtoId) : undefined;
     const equiv = p ? equivalenciasDoPerfil(l.quantidade, l.unidade, { comprimentoBarraMm: p.comprimentoBarraMm, pesoMilesimosKgPorMetro: p.pesoKgPorMetro ? Math.round(num(p.pesoKgPorMetro) * 1000) : null }) : null;
     const saldo = p ? num(p.saldoCache) : null;
+    const jaEntregue = Math.max(0, l.produtoId ? (jaNaObra.get(l.produtoId) ?? 0) : 0);
     return {
       chave: `${l.produtoId ?? "txt"}-${l.unidade}-${n}`,
       produtoId: l.produtoId,
@@ -127,7 +141,9 @@ export async function carregarMateriaisDaObra(projetoId: string): Promise<Materi
       necessario: l.quantidade,
       equivalencias: equiv && (l.unidade === "M" || l.unidade === "BARRA" || l.unidade === "KG") ? equiv : null,
       saldo,
-      falta: p && saldo !== null && equiv ? faltaDoProduto(l.quantidade, l.unidade, p.unidade, saldo, equiv) : null,
+      jaNaObra: jaEntregue,
+      // O que já foi entregue à obra conta como atendido (como se estivesse no estoque).
+      falta: p && saldo !== null && equiv ? faltaDoProduto(l.quantidade, l.unidade, p.unidade, saldo + jaEntregue, equiv) : null,
       semCusto: p ? p.custoUnitarioCentavos === null : false,
     };
   });

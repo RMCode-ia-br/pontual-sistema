@@ -64,7 +64,7 @@ export function CustoDaObraAba({ c }: { c: CustoDaObra }) {
             {r.estimadoCentavos !== null ? (
               <p className="text-muted-foreground text-xs">
                 Estimado na proposta (material): {formatarMoeda(r.estimadoCentavos)}
-                {r.diferencaParaEstimadoCentavos !== null ? ` · custo real ${r.diferencaParaEstimadoCentavos >= 0 ? "acima" : "abaixo"} do estimado em ${formatarMoeda(Math.abs(r.diferencaParaEstimadoCentavos))}` : ""}.
+                {r.diferencaParaEstimadoCentavos !== null ? ` · material real ${r.diferencaParaEstimadoCentavos >= 0 ? "acima" : "abaixo"} do estimado em ${formatarMoeda(Math.abs(r.diferencaParaEstimadoCentavos))}` : ""}.
               </p>
             ) : null}
           </dl>

@@ -164,6 +164,20 @@ describe("estorno de movimento", () => {
     expect(await saldo(p.id)).toBe(10);
   });
 
+  it("o estorno funciona mesmo se a obra foi cancelada depois da saída (o material não fica preso na obra)", async () => {
+    const p = await novoProduto("Estorno obra cancelada");
+    await mover({ produtoId: p.id, tipo: "ENTRADA_COMPRA", quantidadeMilesimos: 10_000 });
+    const clienteId = (await prisma.cliente.findFirstOrThrow({ where: { nome: `${PREFIXO} Cliente` } })).id;
+    const obra = await prisma.projeto.create({ data: { codigo: `P-0000-${randomUUID().slice(0, 8)}`, titulo: `${PREFIXO} Obra cancelada`, clienteId, status: "APROVADO", responsavelId: usuario.id } });
+    const s = await mover({ produtoId: p.id, tipo: "SAIDA_OBRA", quantidadeMilesimos: 4_000, projetoId: obra.id });
+    await prisma.projeto.update({ where: { id: obra.id }, data: { status: "CANCELADO" } });
+    // Nova saída para a obra cancelada continua recusada; o estorno da que já existia é permitido.
+    await expect(mover({ produtoId: p.id, tipo: "SAIDA_OBRA", quantidadeMilesimos: 1_000, projetoId: obra.id })).rejects.toThrow();
+    const e = await tx((t) => estornarMovimentoDeEstoque(t, s.id, "Obra cancelada", ctx()));
+    expect(await saldo(p.id)).toBe(10);
+    expect((await prisma.movimentoEstoque.findUniqueOrThrow({ where: { id: e.id } })).projetoId).toBe(obra.id);
+  });
+
   it("estornar uma entrada retira do saldo e não trava mesmo se já foi usada (o estorno é intencional e justificado)", async () => {
     const p = await novoProduto("Estorno entrada");
     const entrada = await mover({ produtoId: p.id, tipo: "ENTRADA_COMPRA", quantidadeMilesimos: 4_000 });
