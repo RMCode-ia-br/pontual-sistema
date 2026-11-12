@@ -5,7 +5,8 @@
  * SÓ para desenvolvimento: recusa rodar com NODE_ENV=production ou sem ALLOW_DEMO_SEED=true, para nunca
  * misturar dados inventados com os reais. Tudo que cria é identificado ("[Demo]" no nome, "DEMO-" no
  * código) e a limpeza só apaga isso. Fase 2: projetos em todas as fases do funil (com histórico, perdas com motivo e
- * visitas na agenda). Fase 4: obras. Fase 5: financeiro (contas, lançamentos, contas a pagar e recorrência).
+ * visitas na agenda). Fase 4: obras. Fase 5: financeiro (contas, lançamentos, contas a pagar e recorrência). Fase 6: estoque
+ * (saldos, abaixo do mínimo, sem custo), retalhos, sucata e compras. ESTE SCRIPT NUNCA É RODADO em banco com dados reais.
  */
 import { config } from "dotenv";
 
@@ -28,6 +29,7 @@ const ORIGENS = ["GOOGLE", "INDICACAO_CLIENTE", "INSTAGRAM", "WHATSAPP", "SITE",
 const FASES = ["NOVO_LEAD", "VISITA_AGENDADA", "ELABORANDO_PROPOSTA", "PROPOSTA_ENVIADA", "NEGOCIACAO", "PERDIDO"] as const;
 
 async function limpar() {
+  await limparEstoqueDeDemonstracao();
   const clientes = await prisma.cliente.findMany({ where: { nome: { startsWith: "[Demo] " } }, select: { id: true } });
   const ids = clientes.map((c) => c.id);
   const projetos = (await prisma.projeto.findMany({ where: { clienteId: { in: ids } }, select: { id: true } })).map((p) => p.id);
@@ -115,7 +117,8 @@ async function criar() {
   await criarProjetosDeDemonstracao();
   const obras = await criarObrasDeDemonstracao();
   await criarFinanceiroDeDemonstracao();
-  console.log(`Demonstração criada: 40 clientes, 30 projetos com visitas, ${obras} obras com etapas, financeiro (2 contas, lançamentos, contas a pagar e uma recorrência), 4 fornecedores e 60 produtos (todos fictícios).`);
+  await criarEstoqueDeDemonstracao();
+  console.log(`Demonstração criada: 40 clientes, 30 projetos com visitas, ${obras} obras com etapas, financeiro (2 contas, lançamentos, contas a pagar e uma recorrência), estoque com retalhos, sucata e 4 compras, 4 fornecedores e 60 produtos (todos fictícios).`);
 }
 
 /**
@@ -365,6 +368,90 @@ async function criarFinanceiroDeDemonstracao() {
     const v = new Date(Date.UTC(venc.getUTCFullYear(), venc.getUTCMonth() + k, Math.min(venc.getUTCDate(), 28)));
     await prisma.contaPagar.create({ data: { descricao: "[Demo] Aluguel da oficina", valorCentavos: 250_000, vencimento: v, competencia: new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), 1)), categoriaId: aluguel, recorrenciaId: recorrencia.id } });
   }
+}
+
+/**
+ * Estoque e compras de demonstração (Fase 6): saldos, um produto abaixo do mínimo, um sem custo, retalhos, sucata e compras em
+ * todas as situações (rascunho, pedido atrasado, pedido a vencer, recebida). Valores FICTÍCIOS, só para ver o painel e os
+ * relatórios com volume; tudo usa produtos "DEMO-" e fornecedores "[Demo]", e a limpeza remove só isso e devolve o contador.
+ */
+async function criarEstoqueDeDemonstracao() {
+  const hoje = new Date();
+  hoje.setUTCHours(0, 0, 0, 0);
+  const dia = (deslocamento: number) => new Date(hoje.getTime() + deslocamento * 86_400_000);
+  const fornecedores = await prisma.fornecedor.findMany({ where: { razaoSocial: { startsWith: "[Demo] " } }, orderBy: { razaoSocial: "asc" }, select: { id: true } });
+  const produtos = await prisma.produto.findMany({ where: { codigo: { in: ["DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DEMO-012"] } }, select: { id: true, codigo: true, custoUnitarioCentavos: true } });
+  const p = (codigo: string) => {
+    const achado = produtos.find((x) => x.codigo === codigo);
+    if (!achado) throw new Error("produto de demonstração ausente");
+    return achado;
+  };
+  const entrada = async (codigo: string, quantidade: number, tipo: "INVENTARIO_INICIAL" | "ENTRADA_COMPRA", extra: { itemRecebimentoId?: string; custo?: number | null } = {}) => {
+    const produto = p(codigo);
+    const custo = extra.custo === undefined ? produto.custoUnitarioCentavos : extra.custo;
+    const movimento = await prisma.movimentoEstoque.create({ data: { produtoId: produto.id, tipo, quantidade: String(quantidade), custoUnitarioCentavos: custo, data: dia(-20), itemRecebimentoId: extra.itemRecebimentoId, justificativa: tipo === "INVENTARIO_INICIAL" ? "Demonstração: contagem inicial" : null } });
+    await prisma.produto.update({ where: { id: produto.id }, data: { saldoCache: { increment: quantidade } } });
+    return movimento;
+  };
+
+  await entrada("DEMO-001", 4, "INVENTARIO_INICIAL");
+  await prisma.produto.update({ where: { id: p("DEMO-001").id }, data: { estoqueMinimo: "10" } }); // abaixo do mínimo
+  await entrada("DEMO-002", 20, "INVENTARIO_INICIAL");
+  await entrada("DEMO-003", 12, "INVENTARIO_INICIAL");
+  await entrada("DEMO-004", 5, "INVENTARIO_INICIAL", { custo: null }); // contagem sem custo: aparece como "sem custo"
+  await entrada("DEMO-012", 3, "INVENTARIO_INICIAL", { custo: null }); // produto sem custo cadastrado
+
+  const barra = p("DEMO-003");
+  await prisma.retalho.create({ data: { produtoId: barra.id, comprimentoMm: 1800, local: "Prateleira 2 (demonstração)", status: "DISPONIVEL", observacao: "Demonstração" } });
+  await prisma.retalho.create({ data: { produtoId: barra.id, comprimentoMm: 650, status: "DESCARTADO", observacao: "Demonstração: empenado" } });
+  await prisma.movimentoSucata.create({ data: { tipo: "GERACAO", data: dia(-15), pesoKg: "2.4", produtoId: barra.id, observacao: "Demonstração" } });
+  await prisma.movimentoSucata.create({ data: { tipo: "GERACAO", data: dia(-8), pesoKg: "1.1", produtoId: barra.id, observacao: "Demonstração" } });
+
+  const proximo = async () => {
+    const linhas = await prisma.$queryRaw<{ valor: number }[]>`INSERT INTO "ContadorSequencia" ("chave", "valor", "atualizadoEm") VALUES ('compra', 1, now()) ON CONFLICT ("chave") DO UPDATE SET "valor" = "ContadorSequencia"."valor" + 1, "atualizadoEm" = now() RETURNING "valor"`;
+    return Number(linhas[0].valor);
+  };
+  const compra = async (i: number, status: "RASCUNHO" | "PEDIDO" | "RECEBIDO", codigo: string, quantidade: number, preco: number | null, previsao: number | null) => {
+    const produto = p(codigo);
+    const criada = await prisma.compra.create({
+      data: {
+        numero: await proximo(),
+        fornecedorId: fornecedores[i % fornecedores.length].id,
+        tipo: "MATERIAL",
+        destino: "ESTOQUE",
+        status,
+        dataPedido: status === "RASCUNHO" ? null : dia(-14),
+        previsaoEntrega: previsao === null ? null : dia(previsao),
+        observacao: "Demonstração",
+      },
+    });
+    const item = await prisma.itemCompra.create({ data: { compraId: criada.id, produtoId: produto.id, descricao: "Demonstração", unidadeCompra: "UN", quantidade: String(quantidade), quantidadeRecebida: status === "RECEBIDO" ? String(quantidade) : "0", precoUnitarioCentavos: preco, ordem: 1 } });
+    return { criada, item };
+  };
+  await compra(0, "RASCUNHO", "DEMO-002", 10, 4_500, null);
+  await compra(1, "PEDIDO", "DEMO-001", 8, 12_000, -4); // entrega atrasada
+  await compra(2, "PEDIDO", "DEMO-003", 6, 15_000, 5); // a vencer
+  const recebida = await compra(3, "RECEBIDO", "DEMO-005", 10, 8_000, -10);
+  const recebimento = await prisma.recebimentoCompra.create({ data: { compraId: recebida.criada.id, data: dia(-10), observacao: "Demonstração" } });
+  const itemRecebido = await prisma.itemRecebimento.create({ data: { recebimentoId: recebimento.id, itemCompraId: recebida.item.id, quantidadeCompra: "10", quantidadeEstoque: "10", valorCentavos: 80_000, custoUnitarioCentavos: 8_000 } });
+  await entrada("DEMO-005", 10, "ENTRADA_COMPRA", { itemRecebimentoId: itemRecebido.id, custo: 8_000 });
+}
+
+/** Remove o estoque e as compras de demonstração e devolve o contador de compras ao maior número que sobrou. */
+async function limparEstoqueDeDemonstracao() {
+  const produtos = (await prisma.produto.findMany({ where: { codigo: { startsWith: "DEMO-" } }, select: { id: true } })).map((x) => x.id);
+  const compras = (await prisma.compra.findMany({ where: { fornecedor: { razaoSocial: { startsWith: "[Demo] " } } }, select: { id: true } })).map((x) => x.id);
+  await prisma.retalho.deleteMany({ where: { produtoId: { in: produtos } } });
+  await prisma.movimentoSucata.deleteMany({ where: { produtoId: { in: produtos } } });
+  await prisma.$executeRaw`UPDATE "MovimentoEstoque" SET "estornoDeId" = NULL WHERE "produtoId" = ANY(${produtos})`;
+  await prisma.movimentoEstoque.deleteMany({ where: { produtoId: { in: produtos } } });
+  await prisma.historicoPreco.deleteMany({ where: { compraId: { in: compras } } });
+  await prisma.itemRecebimento.deleteMany({ where: { itemCompra: { compraId: { in: compras } } } });
+  await prisma.recebimentoCompra.deleteMany({ where: { compraId: { in: compras } } });
+  await prisma.itemCompra.deleteMany({ where: { compraId: { in: compras } } });
+  await prisma.compra.deleteMany({ where: { id: { in: compras } } });
+  await prisma.$executeRaw`UPDATE "ContadorSequencia" SET "valor" = coalesce((SELECT max("numero") FROM "Compra"), 0) WHERE "chave" = 'compra'`;
+  await prisma.produto.updateMany({ where: { id: { in: produtos } }, data: { saldoCache: 0, estoqueMinimo: null } });
 }
 
 (process.argv.includes("--limpar") ? limpar() : criar())
