@@ -13,11 +13,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import type { ResultadoAcao } from "@/lib/acoes";
 import { FORMAS_PAGAMENTO, ROTULO_FORMA } from "@/lib/dominio/parcelas";
-import { formatarMoeda } from "@/lib/formatadores";
+import { formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { mascararMoeda } from "@/lib/formatadores/mascaras";
 import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 
-import { ajustarContaReceber, cancelarContaReceber, liberarParcela, reabrirContaReceber, receber } from "../actions/receber";
+import { ajustarContaReceber, cancelarContaReceber, liberarParcela, prorrogarContaReceber, reabrirContaReceber, receber } from "../actions/receber";
 
 import { CampoDinheiro } from "./dialogos-financeiros";
 
@@ -34,6 +34,7 @@ export type ResumoParaAcoes = {
   valorPagoCentavos: number;
   saldoCentavos: number;
   vencimento: string | null;
+  dataPrometida: string | null;
   forma: string | null;
   comNotaFiscal: boolean;
   categoriaFinanceiraId: string | null;
@@ -41,7 +42,7 @@ export type ResumoParaAcoes = {
 
 type Cobranca = { texto: string | null; link: string | null; faltando: string[] };
 
-type Dialogo = "receber" | "ajustar" | "liberar" | "cancelar" | "reabrir" | null;
+type Dialogo = "receber" | "prorrogar" | "ajustar" | "liberar" | "cancelar" | "reabrir" | null;
 
 function ErroGeral({ estado }: { estado: ResultadoAcao<unknown> | null }) {
   if (!estado || estado.ok) return null;
@@ -165,6 +166,36 @@ function DialogoRecebimento({ conta, opcoes, hoje, aoFechar }: { conta: ResumoPa
   );
 }
 
+function DialogoProrrogar({ conta, hoje, aoFechar }: { conta: ResumoParaAcoes; hoje: string; aoFechar: () => void }) {
+  const { estado, pendente, aoEnviar, erros } = useDialogo((fd) => prorrogarContaReceber(null, fd), aoFechar);
+  // Só vale depois do vencimento original e de hoje em diante.
+  const minimo = conta.vencimento && conta.vencimento >= hoje ? conta.vencimento : hoje;
+  return (
+    <Dialog open onOpenChange={(a) => !a && !pendente && aoFechar()}>
+      <DialogContent>
+        <form onSubmit={aoEnviar} className="grid gap-4" noValidate>
+          <DialogHeader>
+            <DialogTitle>Cliente pediu mais prazo</DialogTitle>
+            <DialogDescription>
+              Registre até que dia o cliente prometeu pagar. O <strong>vencimento original{conta.vencimento ? ` (${formatarDataCalendario(conta.vencimento)})` : ""} não muda</strong>: ele continua valendo para o atraso e a inadimplência. A data prometida só ajusta quando o dinheiro entra no fluxo de caixa projetado.
+              {conta.dataPrometida ? ` Promessa atual: ${formatarDataCalendario(conta.dataPrometida)}.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <input type="hidden" name="contaReceberId" value={conta.id} />
+          <Campo id="pro-data" rotulo="Cliente prometeu pagar até" erro={erros.dataPrometida} obrigatorio>
+            <Input id="pro-data" name="dataPrometida" type="date" required min={minimo} defaultValue={conta.dataPrometida && conta.dataPrometida >= hoje ? conta.dataPrometida : ""} {...ariaDoCampo("pro-data", erros.dataPrometida)} />
+          </Campo>
+          <Campo id="pro-obs" rotulo="Observação (opcional)" erro={erros.observacao}>
+            <AreaTexto id="pro-obs" name="observacao" rows={2} maxLength={300} placeholder="Ex.: disse que recebe do cliente dele na sexta." />
+          </Campo>
+          <ErroGeral estado={estado} />
+          <Rodape pendente={pendente} aoFechar={aoFechar} rotulo="Registrar prazo" />
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DialogoAjuste({ conta, aoFechar }: { conta: ResumoParaAcoes; aoFechar: () => void }) {
   const { estado, pendente, aoEnviar, erros } = useDialogo((fd) => ajustarContaReceber(null, fd), aoFechar);
   const podeVencimento = conta.status === "ABERTA" || conta.status === "PARCIAL";
@@ -173,10 +204,10 @@ function DialogoAjuste({ conta, aoFechar }: { conta: ResumoParaAcoes; aoFechar: 
       <DialogContent>
         <form onSubmit={aoEnviar} className="grid gap-4" noValidate>
           <DialogHeader>
-            <DialogTitle>Ajustar a conta</DialogTitle>
+            <DialogTitle>Corrigir valor ou vencimento</DialogTitle>
             <DialogDescription>
               Valor atual {formatarMoeda(conta.valorCentavos)}
-              {conta.valorPagoCentavos > 0 ? `, já recebido ${formatarMoeda(conta.valorPagoCentavos)} (o novo valor não pode ser menor)` : ""}. Deixe em branco o que não quer mudar. O ajuste fica na auditoria com o motivo.
+              {conta.valorPagoCentavos > 0 ? `, já recebido ${formatarMoeda(conta.valorPagoCentavos)} (o novo valor não pode ser menor)` : ""}. Deixe em branco o que não quer mudar. O ajuste fica na auditoria com o motivo. Se o cliente pediu mais prazo, use “Cliente pediu mais prazo”: ela não apaga o atraso.
             </DialogDescription>
           </DialogHeader>
           <input type="hidden" name="contaReceberId" value={conta.id} />
@@ -192,7 +223,7 @@ function DialogoAjuste({ conta, aoFechar }: { conta: ResumoParaAcoes; aoFechar: 
             <AreaTexto id="aj-motivo" name="motivo" rows={2} maxLength={300} required {...ariaDoCampo("aj-motivo", erros.motivo)} />
           </Campo>
           <ErroGeral estado={estado} />
-          <Rodape pendente={pendente} aoFechar={aoFechar} rotulo="Ajustar" />
+          <Rodape pendente={pendente} aoFechar={aoFechar} rotulo="Corrigir" />
         </form>
       </DialogContent>
     </Dialog>
@@ -297,6 +328,11 @@ export function AcoesDeReceber({ conta, opcoes, hoje, cobranca }: { conta: Resum
           </Button>
         ) : null}
         {aberta ? (
+          <Button type="button" variant="outline" onClick={() => setDialogo("prorrogar")}>
+            <CalendarClock aria-hidden /> Cliente pediu mais prazo
+          </Button>
+        ) : null}
+        {aberta ? (
           cobranca.link ? (
             <a href={cobranca.link} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline" })}>
               <MessageCircle aria-hidden /> Cobrar no WhatsApp
@@ -314,7 +350,7 @@ export function AcoesDeReceber({ conta, opcoes, hoje, cobranca }: { conta: Resum
         ) : null}
         {conta.status !== "CANCELADA" && conta.status !== "PAGA" ? (
           <Button type="button" variant="outline" onClick={() => setDialogo("ajustar")}>
-            {aberta ? <CalendarClock aria-hidden /> : <PencilLine aria-hidden />} Ajustar valor ou vencimento
+            <PencilLine aria-hidden /> {aberta ? "Corrigir valor ou vencimento" : "Ajustar valor"}
           </Button>
         ) : null}
         {conta.status === "PAGA" ? (
@@ -363,6 +399,7 @@ export function AcoesDeReceber({ conta, opcoes, hoje, cobranca }: { conta: Resum
       ) : null}
 
       {dialogo === "receber" ? <DialogoRecebimento conta={conta} opcoes={opcoes} hoje={hoje} aoFechar={fechar} /> : null}
+      {dialogo === "prorrogar" ? <DialogoProrrogar conta={conta} hoje={hoje} aoFechar={fechar} /> : null}
       {dialogo === "ajustar" ? <DialogoAjuste conta={conta} aoFechar={fechar} /> : null}
       {dialogo === "liberar" ? <DialogoLiberar conta={conta} hoje={hoje} aoFechar={fechar} /> : null}
       {dialogo === "cancelar" ? <DialogoCancelar conta={conta} aoFechar={fechar} /> : null}

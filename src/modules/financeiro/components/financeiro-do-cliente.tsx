@@ -42,6 +42,7 @@ export function FinanceiroDoClienteSecao({ clienteId, dados }: { clienteId: stri
               <p className="text-muted-foreground text-xs">
                 {c.projetoCodigo ? `${c.projetoCodigo} · ` : ""}
                 {c.vencimento ? `vence em ${formatarDataCalendario(c.vencimento)}` : "sem vencimento"}
+                {c.dataPrometida && (c.status === "ABERTA" || c.status === "PARCIAL") ? ` · prometido para ${formatarDataCalendario(c.dataPrometida)}` : ""}
                 {c.valorPagoCentavos > 0 ? ` · recebido ${formatarMoeda(c.valorPagoCentavos)}` : ""}
               </p>
             </div>

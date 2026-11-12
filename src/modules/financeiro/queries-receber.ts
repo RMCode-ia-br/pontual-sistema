@@ -93,6 +93,8 @@ export type ContaAReceberDaLista = {
   valorCentavos: number;
   valorPagoCentavos: number;
   vencimento: string | null;
+  /** Data que o cliente prometeu pagar ("pediu até o dia X"). O atraso (`resumo`) segue o vencimento original. */
+  dataPrometida: string | null;
   status: StatusDoTitulo;
   comNotaFiscal: boolean;
   forma: string | null;
@@ -120,6 +122,7 @@ const selecaoDaLista = {
   valorCentavos: true,
   valorPagoCentavos: true,
   vencimento: true,
+  dataPrometida: true,
   status: true,
   comNotaFiscal: true,
   forma: true,
@@ -142,6 +145,7 @@ function paraLista(r: Registro, hoje: string): ContaAReceberDaLista {
     valorCentavos: r.valorCentavos,
     valorPagoCentavos: r.valorPagoCentavos,
     vencimento,
+    dataPrometida: comoTexto(r.dataPrometida),
     status: r.status,
     comNotaFiscal: r.comNotaFiscal,
     forma: r.forma,
@@ -201,7 +205,11 @@ export type RecebimentoDaConta = {
   motivoEstorno: string | null;
 };
 
+export type ProrrogacaoDaConta = { id: string; criadoEm: Date; dataAnterior: string | null; dataPrometida: string; observacao: string | null };
+
 export type ContaAReceberDetalhe = ContaAReceberDaLista & {
+  /** Vezes em que o cliente pediu mais prazo, da mais recente para a mais antiga. */
+  prorrogacoes: ProrrogacaoDaConta[];
   ordem: number;
   percentualPb: number | null;
   gatilho: string | null;
@@ -221,6 +229,7 @@ export async function obterContaAReceber(id: string, hoje: string): Promise<Cont
       cliente: { select: { id: true, nome: true, nomeFantasia: true, telefone: true, whatsapp: true } },
       projeto: { select: { codigo: true, titulo: true } },
       chamado: { select: { id: true } },
+      prorrogacoes: { where: { deletadoEm: null }, orderBy: [{ criadoEm: "desc" }, { id: "desc" }], select: { id: true, criadoEm: true, dataAnterior: true, dataPrometida: true, observacao: true } },
       lancamentos: { orderBy: [{ data: "asc" }, { criadoEm: "asc" }], select: { id: true, data: true, valorCentavos: true, forma: true, comNotaFiscal: true, estornadoEm: true, motivoEstorno: true, contaFinanceira: { select: { nome: true } } } },
     },
   });
@@ -240,6 +249,8 @@ export async function obterContaAReceber(id: string, hoje: string): Promise<Cont
     valorCentavos: r.valorCentavos,
     valorPagoCentavos: r.valorPagoCentavos,
     vencimento,
+    dataPrometida: comoTexto(r.dataPrometida),
+    prorrogacoes: r.prorrogacoes.map((x) => ({ id: x.id, criadoEm: x.criadoEm, dataAnterior: comoTexto(x.dataAnterior), dataPrometida: x.dataPrometida.toISOString().slice(0, 10), observacao: x.observacao })),
     status: r.status,
     comNotaFiscal: r.comNotaFiscal,
     forma: r.forma,

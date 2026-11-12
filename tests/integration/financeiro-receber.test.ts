@@ -8,7 +8,7 @@ import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { montarCobrancaDaConta, listarContasAReceber, lerListaAReceber, obterContaAReceber } from "@/modules/financeiro/queries-receber";
 import { listarContasFinanceiras } from "@/modules/financeiro/queries";
 import { estornarLancamento } from "@/modules/financeiro/servico-lancamentos";
-import { ajustarContaAReceber, cancelarContaAReceber, liberarParcelaAntesDaEtapa, reabrirContaAReceber, registrarRecebimento } from "@/modules/financeiro/servico-receber";
+import { ajustarContaAReceber, cancelarContaAReceber, liberarParcelaAntesDaEtapa, prorrogarContaAReceber, reabrirContaAReceber, registrarRecebimento } from "@/modules/financeiro/servico-receber";
 
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
 
@@ -36,6 +36,7 @@ async function limpar() {
     await c.query(`DELETE FROM "Lancamento" WHERE "contaReceberId" IN (${contas}) OR "contaFinanceiraId" IN (SELECT id FROM "ContaFinanceira" WHERE nome LIKE $1)`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Tarefa" WHERE "chaveUnica" IN (SELECT 'cobranca:' || id FROM "ContaReceber" WHERE descricao LIKE '${PREFIXO}%')`);
     await c.query(`DELETE FROM "Interacao" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE $1)`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "ProrrogacaoReceber" WHERE "contaReceberId" IN (${contas})`);
     await c.query(`DELETE FROM "ContaReceber" WHERE descricao LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
@@ -299,5 +300,75 @@ describe("cobrança por WhatsApp", () => {
     expect(r.texto).toMatch(/R\$\s?750,00/);
     expect(r.texto).toContain("30/11/2026");
     expect(r.link).toMatch(/^https:\/\/wa\.me\/5522999583288\?text=/);
+  });
+});
+
+describe("cliente pediu mais prazo (prorrogação): o vencimento original continua mandando no atraso", () => {
+  const prorrogar = (id: string, dataPrometida: string, observacao: string | null = null) => tx((t) => prorrogarContaAReceber(t, { contaReceberId: id, dataPrometida, observacao }, ctx()));
+
+  it("grava a promessa e o histórico, não mexe no vencimento, mantém o atraso, move a tarefa e audita", async () => {
+    const c = await nova("Prorrogar", 80000, { vencimento: new Date("2026-11-10T00:00:00Z") }); // venceu há 10 dias
+    await prorrogar(c.id, "2026-11-28", "Cliente disse que recebe na sexta");
+
+    const depois = await de(c.id);
+    expect(dia(depois.vencimento)).toBe("2026-11-10"); // INTACTO
+    expect(dia(depois.dataPrometida)).toBe("2026-11-28");
+    expect(depois.status).toBe("ABERTA");
+
+    const detalhe = await obterContaAReceber(c.id, HOJE);
+    expect(detalhe?.dataPrometida).toBe("2026-11-28");
+    expect(detalhe?.resumo).toMatchObject({ situacao: "ATRASADO", diasEmAtraso: 10 }); // atraso e inadimplência pelo original
+    expect(detalhe?.prorrogacoes).toHaveLength(1);
+    expect(detalhe?.prorrogacoes[0]).toMatchObject({ dataAnterior: null, dataPrometida: "2026-11-28", observacao: "Cliente disse que recebe na sexta" });
+
+    expect(dia((await tarefaDe(c.id)).vencimento)).toBe("2026-11-28");
+    expect(await prisma.logAuditoria.count({ where: { entidade: "ContaReceber", entidadeId: c.id, acao: "PRORROGAR" } })).toBe(1);
+    expect(await prisma.interacao.count({ where: { clienteId, projetoId, texto: { contains: "pediu mais prazo" } } })).toBeGreaterThanOrEqual(1);
+  });
+
+  it("uma segunda promessa guarda a anterior no histórico; recebimento parcial continua permitido", async () => {
+    const c = await nova("Prorrogar duas", 50000, { vencimento: new Date("2026-11-10T00:00:00Z") });
+    await prorrogar(c.id, "2026-11-25");
+    await prorrogar(c.id, "2026-12-03");
+    await receber(c.id, 10000);
+    const detalhe = await obterContaAReceber(c.id, HOJE);
+    expect(detalhe?.status).toBe("PARCIAL");
+    expect(detalhe?.dataPrometida).toBe("2026-12-03");
+    expect(detalhe?.prorrogacoes.map((x) => [x.dataAnterior, x.dataPrometida])).toEqual([
+      ["2026-11-25", "2026-12-03"],
+      [null, "2026-11-25"],
+    ]);
+    await prorrogar(c.id, "2026-12-10"); // parcial também aceita
+    expect(dia((await de(c.id)).dataPrometida)).toBe("2026-12-10");
+  });
+
+  it("recusa data de ontem, data até o vencimento, a mesma data, parcela paga, aguardando etapa e cancelada; nada é gravado", async () => {
+    const c = await nova("Prorrogar recusas", 30000, { vencimento: new Date("2026-11-10T00:00:00Z") });
+    await expect(prorrogar(c.id, "2026-11-19")).rejects.toThrow(/anterior a hoje/);
+    const futura = await nova("Prorrogar futura", 30000, { vencimento: new Date("2026-11-25T00:00:00Z") });
+    await expect(prorrogar(futura.id, "2026-11-25")).rejects.toThrow(/depois do vencimento original/);
+    await prorrogar(c.id, "2026-11-30");
+    await expect(prorrogar(c.id, "2026-11-30")).rejects.toThrow(/já é a data prometida/);
+
+    const paga = await nova("Prorrogar paga", 1000);
+    await receber(paga.id, 1000);
+    await expect(prorrogar(paga.id, "2026-12-30")).rejects.toThrow(/em aberto/);
+    const aguardando = await nova("Prorrogar aguardando", 1000, { status: "AGUARDANDO_GATILHO", vencimento: null, gatilho: "ENTREGA_MATERIAL" });
+    await expect(prorrogar(aguardando.id, "2026-12-30")).rejects.toThrow(/em aberto/);
+    await tx((t) => cancelarContaAReceber(t, futura.id, "teste", ctx()));
+    await expect(prorrogar(futura.id, "2026-12-30")).rejects.toThrow(/em aberto/);
+
+    expect(await prisma.prorrogacaoReceber.count({ where: { contaReceberId: { in: [futura.id, paga.id, aguardando.id] } } })).toBe(0);
+    expect(await prisma.prorrogacaoReceber.count({ where: { contaReceberId: c.id } })).toBe(1);
+  });
+
+  it("duas promessas simultâneas não se perdem: o histórico tem as duas e o cache fica com uma delas", async () => {
+    const c = await nova("Prorrogar concorrente", 20000, { vencimento: new Date("2026-11-10T00:00:00Z") });
+    const r = await Promise.allSettled([prorrogar(c.id, "2026-12-01"), prorrogar(c.id, "2026-12-02")]);
+    expect(r.every((x) => x.status === "fulfilled")).toBe(true);
+    const hist = await prisma.prorrogacaoReceber.findMany({ where: { contaReceberId: c.id }, orderBy: { id: "asc" } });
+    expect(hist).toHaveLength(2);
+    expect(dia(hist[1].dataAnterior)).toBe(dia(hist[0].dataPrometida)); // encadeadas, graças ao FOR UPDATE
+    expect(dia((await de(c.id)).dataPrometida)).toBe(dia(hist[1].dataPrometida));
   });
 });

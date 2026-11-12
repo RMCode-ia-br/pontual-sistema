@@ -6,6 +6,7 @@ import type { UsuarioSessao } from "@/lib/auth/sessao";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { linhasDaDemonstracao, montarDre } from "@/lib/dominio/dre";
 import { carregarMovimentosDoDre, lerPeriodoDoDre } from "@/modules/financeiro/queries-dre";
+import { janelasDeDias, projetarFluxo } from "@/lib/dominio/fluxo-caixa";
 import { carregarDadosDoFluxo } from "@/modules/financeiro/queries-fluxo";
 import { agingDoPagar, agingDoReceber } from "@/modules/financeiro/queries-aging";
 import { criarTransferencia } from "@/modules/financeiro/servico-lancamentos";
@@ -187,6 +188,28 @@ describe("fluxo de caixa projetado (comparado antes e depois, para não depender
     const cancelada = await carregarDadosDoFluxo(HOJE, opcoes);
     expect(cancelada.recorrenciasVirtuais - antes.recorrenciasVirtuais).toBe(2);
     expect(soma(cancelada.aPagar) - soma(antes.aPagar)).toBe(10000 + 2 * 5000);
+  });
+
+  it("a receber VENCIDO entra no primeiro período; com promessa do cliente, entra na data prometida; o atraso (resumo) segue o vencimento original", async () => {
+    const janelas = janelasDeDias(HOJE, [30, 60]);
+    const projetar = (d: Awaited<ReturnType<typeof carregarDadosDoFluxo>>) => projetarFluxo({ hoje: HOJE, saldoAtualCentavos: d.saldoAtualCentavos, periodos: janelas, aReceber: d.aReceber, aPagar: d.aPagar });
+    const antes = await carregarDadosDoFluxo(HOJE, opcoes);
+    const fAntes = projetar(antes);
+
+    // 3.000 vencidos sem promessa; 5.000 vencidos com promessa para 05/01 (2º período, até 19/01); 700 vencidos com promessa já vencida (volta para hoje).
+    await prisma.contaReceber.create({ data: { projetoId, clienteId, ordem: 11, descricao: `${PREFIXO} Vencida sem promessa`, valorCentavos: 3000, vencimento: dia("2026-11-05"), status: "ABERTA" } });
+    await prisma.contaReceber.create({ data: { projetoId, clienteId, ordem: 12, descricao: `${PREFIXO} Vencida prometida`, valorCentavos: 5000, vencimento: dia("2026-11-05"), dataPrometida: dia("2027-01-05"), status: "ABERTA" } });
+    await prisma.contaReceber.create({ data: { projetoId, clienteId, ordem: 13, descricao: `${PREFIXO} Promessa vencida`, valorCentavos: 700, vencimento: dia("2026-11-05"), dataPrometida: dia("2026-11-10"), status: "ABERTA" } });
+
+    const depois = await carregarDadosDoFluxo(HOJE, opcoes);
+    const fDepois = projetar(depois);
+    expect(fDepois.linhas[0].entradasCentavos - fAntes.linhas[0].entradasCentavos).toBe(3000 + 700); // hoje
+    expect(fDepois.linhas[0].entradasVencidasCentavos - fAntes.linhas[0].entradasVencidasCentavos).toBe(3000 + 700);
+    expect(fDepois.linhas[1].entradasCentavos - fAntes.linhas[1].entradasCentavos).toBe(5000); // na data prometida
+    expect(fDepois.vencidos.aReceberCentavos - fAntes.vencidos.aReceberCentavos).toBe(3000 + 5000 + 700);
+    expect(fDepois.vencidos.aReceberPrometidoCentavos - fAntes.vencidos.aReceberPrometidoCentavos).toBe(5000);
+    // Atraso e inadimplência (resumo do a receber) ignoram a promessa: as três continuam vencidas no original.
+    expect(depois.resumoReceber.vencidoCentavos - antes.resumoReceber.vencidoCentavos).toBe(3000 + 5000 + 700);
   });
 
   it("as contas ativas sem saldo informado são listadas (aviso no fluxo e no DRE)", async () => {

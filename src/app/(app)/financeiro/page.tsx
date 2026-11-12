@@ -178,7 +178,11 @@ export default async function PaginaDoFluxo({ searchParams }: { searchParams: Pr
             {projetado.linhas.map((l) => (
               <li key={l.inicio} className="grid gap-1 rounded-xl border p-3 text-sm">
                 <p className="font-medium">{l.rotulo}</p>
-                <p className="text-muted-foreground">Entradas: {formatarMoeda(l.entradasCentavos)}{l.entradasPrevistasPorEtapaCentavos > 0 ? ` (${formatarMoeda(l.entradasPrevistasPorEtapaCentavos)} pela previsão da etapa)` : ""}</p>
+                <p className="text-muted-foreground">
+                  Entradas: {formatarMoeda(l.entradasCentavos)}
+                  {l.entradasPrevistasPorEtapaCentavos > 0 ? ` (${formatarMoeda(l.entradasPrevistasPorEtapaCentavos)} pela previsão da etapa)` : ""}
+                  {l.entradasVencidasCentavos > 0 ? ` (${formatarMoeda(l.entradasVencidasCentavos)} já vencidos, esperados para hoje)` : ""}
+                </p>
                 <p className="text-muted-foreground">Saídas: {formatarMoeda(l.saidasCentavos)}</p>
                 <p>
                   Saldo projetado: <strong><ValorEmReais centavos={l.saldoProjetadoCentavos} /></strong>
@@ -205,6 +209,7 @@ export default async function PaginaDoFluxo({ searchParams }: { searchParams: Pr
                     <td className="py-2 pr-3 text-right tabular-nums">
                       {formatarMoeda(l.entradasCentavos)}
                       {l.entradasPrevistasPorEtapaCentavos > 0 ? <span className="text-muted-foreground block text-xs">{formatarMoeda(l.entradasPrevistasPorEtapaCentavos)} pela previsão da etapa</span> : null}
+                      {l.entradasVencidasCentavos > 0 ? <span className="text-muted-foreground block text-xs">{formatarMoeda(l.entradasVencidasCentavos)} já vencidos, esperados para hoje</span> : null}
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{formatarMoeda(l.saidasCentavos)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">
@@ -224,8 +229,9 @@ export default async function PaginaDoFluxo({ searchParams }: { searchParams: Pr
               <p className="flex items-start gap-1">
                 <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden />
                 <span>
-                  Já venceram: <Link href="/financeiro/receber?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aReceberCentavos)} a receber</Link> (fora do fluxo: ninguém sabe se entra na data) e{" "}
-                  <Link href="/financeiro/pagar?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aPagarCentavos)} a pagar</Link> (já descontados das saídas do primeiro período, porque são dívida certa). Trate-os nas listas.
+                  Já venceram: <Link href="/financeiro/receber?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aReceberCentavos)} a receber</Link> (entram no fluxo como esperados para hoje
+                  {projetado.vencidos.aReceberPrometidoCentavos > 0 ? `; ${formatarMoeda(projetado.vencidos.aReceberPrometidoCentavos)} na data que o cliente prometeu` : ""}; o atraso continua contado pelo vencimento original) e{" "}
+                  <Link href="/financeiro/pagar?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aPagarCentavos)} a pagar</Link> (já descontados das saídas do primeiro período, porque são dívida certa). Se o cliente pediu mais prazo, registre na parcela (“Cliente pediu mais prazo”).
                 </span>
               </p>
             ) : null}
@@ -237,7 +243,7 @@ export default async function PaginaDoFluxo({ searchParams }: { searchParams: Pr
             <details>
               <summary className="cursor-pointer">Como é calculado</summary>
               <p className="mt-1">
-                Saldo projetado = saldo atual das contas + entradas previstas − saídas previstas, período a período. Entradas: parcelas a receber pelo vencimento (as que aguardam etapa, pela data prevista de fim da etapa) pelo que ainda falta receber. Saídas: contas a pagar pelo vencimento e as
+                Saldo projetado = saldo atual das contas + entradas previstas − saídas previstas, período a período. Entradas: parcelas a receber pelo que ainda falta receber, na data que o cliente prometeu (“pediu até o dia X”) ou, sem promessa, pelo vencimento; a que já venceu entra como esperada para hoje, e as que aguardam etapa entram pela data prevista de fim da etapa. O atraso e a inadimplência não mudam: seguem o vencimento original. Saídas: contas a pagar pelo vencimento e as
                 recorrências ainda não geradas. O realizado vem só dos lançamentos (transferências entre contas ficam de fora).
               </p>
             </details>

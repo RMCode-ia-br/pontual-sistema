@@ -28,6 +28,7 @@ export async function GET(requisicao: NextRequest) {
     c.clienteNome,
     c.projetoCodigo ? `${c.projetoCodigo} ${c.projetoTitulo ?? ""}`.trim() : "",
     data(c.vencimento),
+    data(c.dataPrometida),
     textoDaSituacao(c.resumo),
     formatarMoeda(c.valorCentavos),
     formatarMoeda(c.valorPagoCentavos),
@@ -37,7 +38,7 @@ export async function GET(requisicao: NextRequest) {
   ]);
   if (truncado) registros.push([`AVISO: exportação limitada às primeiras ${LIMITE_EXPORTACAO_A_RECEBER} contas. Use os filtros para obter o restante.`]);
 
-  const csv = gerarCsv(["Parcela", "Cliente", "Obra", "Vencimento", "Situação", "Valor", "Recebido", "Saldo", "Forma", "Nota fiscal"], registros);
+  const csv = gerarCsv(["Parcela", "Cliente", "Obra", "Vencimento", "Prometido para", "Situação", "Valor", "Recebido", "Saldo", "Forma", "Nota fiscal"], registros);
   await registrarAuditoria(prisma, { usuario, entidade: "ContaReceber", entidadeId: "exportacao-receber", acao: "EXPORTAR", depois: { linhas: linhas.length, truncado, filtros } });
 
   return new NextResponse(csv, {

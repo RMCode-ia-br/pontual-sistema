@@ -31,6 +31,8 @@ function paraLinha(c: ContaAReceberDaLista): LinhaLista {
   const marcas: { texto: string; variante?: "default" | "secondary" | "outline" | "destructive" }[] = [
     { texto: textoDaSituacao(r), variante: r.situacao === "ATRASADO" ? "destructive" : r.situacao === "VENCE_HOJE" ? "default" : r.situacao === "PAGO" ? "secondary" : "outline" },
   ];
+  // "Cliente pediu até o dia X": o atraso acima continua pelo vencimento original; a promessa é só uma marca a mais.
+  if (c.dataPrometida && (c.status === "ABERTA" || c.status === "PARCIAL")) marcas.push({ texto: `Prometido para ${formatarDataCalendario(c.dataPrometida)}`, variante: "secondary" });
   return {
     id: c.id,
     href: `/financeiro/receber/${c.id}`,

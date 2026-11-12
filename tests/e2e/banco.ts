@@ -73,6 +73,8 @@ async function limpar(c: Client): Promise<void> {
   // Fase 3 (propostas): tudo que os testes criam usa nome/título "E2E " (filhos antes dos pais).
   const projetosDaFase3 = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
   const propostasE2E = `SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetosDaFase3})`;
+  // Fase 6: o histórico de prorrogações aponta para a conta (FK restrita): sai antes dela.
+  await c.query(`DELETE FROM "ProrrogacaoReceber" WHERE "contaReceberId" IN (SELECT id FROM "ContaReceber" WHERE "propostaId" IN (${propostasE2E}) OR "projetoId" IN (${projetosDaFase3}))`);
   await c.query(`DELETE FROM "ContaReceber" WHERE "propostaId" IN (${propostasE2E}) OR "projetoId" IN (${projetosDaFase3})`);
   await c.query(`DELETE FROM "ItemPropostaMedida" WHERE "itemId" IN (SELECT id FROM "ItemProposta" WHERE "propostaId" IN (${propostasE2E}))`);
   await c.query(`DELETE FROM "ItemProposta" WHERE "propostaId" IN (${propostasE2E})`);
@@ -525,5 +527,25 @@ export async function recebidoDaObra(projetoId: string): Promise<number> {
   return comConexao(async (c) => {
     const r = await c.query(`SELECT COALESCE(SUM("valorCentavos"), 0)::int AS total FROM "Lancamento" WHERE "projetoId" = $1 AND tipo = 'ENTRADA' AND "estornadoEm" IS NULL`, [projetoId]);
     return r.rows[0].total;
+  });
+}
+
+/** Deixa a parcela da obra de teste vencida há `diasAtras` dias (o vencimento original é o que manda no atraso). */
+export async function vencerParcelaDaObra(projetoId: string, ordem: number, diasAtras: number): Promise<void> {
+  await comConexao(async (c) => {
+    await c.query(`UPDATE "ContaReceber" SET vencimento = CURRENT_DATE - $3::int WHERE "projetoId" = $1 AND ordem = $2`, [projetoId, ordem, diasAtras]);
+  });
+}
+
+/** Vencimento original, data prometida (dd/mm não: aaaa-mm-dd) e quantidade de pedidos de prazo da parcela. */
+export async function prazoDaParcela(projetoId: string, ordem: number): Promise<{ vencimento: string | null; dataPrometida: string | null; pedidos: number }> {
+  return comConexao(async (c) => {
+    const r = await c.query(
+      `SELECT to_char(vencimento, 'YYYY-MM-DD') AS vencimento, to_char("dataPrometida", 'YYYY-MM-DD') AS "dataPrometida",
+              (SELECT count(*)::int FROM "ProrrogacaoReceber" p WHERE p."contaReceberId" = cr.id) AS pedidos
+         FROM "ContaReceber" cr WHERE cr."projetoId" = $1 AND cr.ordem = $2`,
+      [projetoId, ordem],
+    );
+    return r.rows[0];
   });
 }

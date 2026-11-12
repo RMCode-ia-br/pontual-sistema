@@ -203,6 +203,13 @@ export const liberarParcelaSchema = z.object({
   vencimento: dataObrigatoria("Vencimento"),
 });
 
+/** "Cliente pediu até o dia X": nova data prometida (o vencimento original não muda). */
+export const prorrogacaoSchema = z.object({
+  contaReceberId: idObrigatorio("Conta inválida."),
+  dataPrometida: dataObrigatoria("Data prometida"),
+  observacao: textoOpcional(300),
+});
+
 // ---------- Contas a pagar ----------
 
 export const MODOS_DE_LANCAMENTO = ["UNICA", "PARCELADA", "RECORRENTE"] as const;

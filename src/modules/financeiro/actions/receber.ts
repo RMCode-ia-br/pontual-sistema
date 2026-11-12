@@ -5,8 +5,8 @@ import { exigirSessao } from "@/lib/auth/sessao";
 import { can } from "@/lib/permissoes";
 
 import { rodarFinanceiro } from "../rodar";
-import { ajusteDeContaSchema, cancelarContaSchema, contaReceberIdSchema, liberarParcelaSchema, recebimentoSchema } from "../schemas";
-import { ajustarContaAReceber, cancelarContaAReceber, liberarParcelaAntesDaEtapa, reabrirContaAReceber, registrarRecebimento } from "../servico-receber";
+import { ajusteDeContaSchema, cancelarContaSchema, contaReceberIdSchema, liberarParcelaSchema, prorrogacaoSchema, recebimentoSchema } from "../schemas";
+import { ajustarContaAReceber, cancelarContaAReceber, liberarParcelaAntesDaEtapa, prorrogarContaAReceber, reabrirContaAReceber, registrarRecebimento } from "../servico-receber";
 
 /** Recebimento total ou parcial de uma conta a receber (cria o lançamento de entrada e recalcula a conta). */
 export async function receber(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
@@ -41,6 +41,18 @@ export async function ajustarContaReceber(_anterior: ResultadoAcao | null, formD
   return rodarFinanceiro("financeiro.receber.ajustar", async (tx, ip) => {
     await ajustarContaAReceber(tx, { contaReceberId: dados.data.contaReceberId, valorCentavos: dados.data.valor, vencimento: dados.data.vencimento, motivo: dados.data.motivo }, { usuario: sessao, ip });
     return { mensagem: "Conta ajustada." };
+  });
+}
+
+/** "Cliente pediu até o dia X": registra a data prometida sem mexer no vencimento original (auditado). */
+export async function prorrogarContaReceber(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
+  const sessao = await exigirSessao();
+  if (!can(sessao, "editar", "contaReceber")) return falha("Sem permissão.");
+  const dados = prorrogacaoSchema.safeParse(formDataParaObjeto(formData));
+  if (!dados.success) return falhaDeValidacao(dados.error);
+  return rodarFinanceiro("financeiro.receber.prorrogar", async (tx, ip) => {
+    await prorrogarContaAReceber(tx, { contaReceberId: dados.data.contaReceberId, dataPrometida: dados.data.dataPrometida, observacao: dados.data.observacao }, { usuario: sessao, ip });
+    return { mensagem: "Prazo extra registrado. O vencimento original continua valendo para o atraso." };
   });
 }
 

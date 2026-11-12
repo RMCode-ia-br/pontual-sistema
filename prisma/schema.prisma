@@ -1688,7 +1688,11 @@ model ContaReceber {
   /// Categoria sugerida/escolhida para a receita (Fase 5); o recebimento pode trocá-la.
   categoriaFinanceiraId String?
   categoriaFinanceira   CategoriaFinanceira? @relation(fields: [categoriaFinanceiraId], references: [id], onDelete: Restrict)
+  /// Data que o cliente prometeu pagar ("pediu até o dia X", Fase 6). Só alimenta o fluxo projetado: o `vencimento` original
+  /// nunca muda por causa dela e continua mandando no atraso, no aging e na inadimplência.
+  dataPrometida         DateTime?            @db.Date
   lancamentos           Lancamento[]
+  prorrogacoes          ProrrogacaoReceber[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1701,6 +1705,25 @@ model ContaReceber {
   @@index([projetoId, deletadoEm])
   @@index([status, vencimento])
   @@index([clienteId])
+}
+
+/// Histórico (só se acrescenta) das vezes em que o cliente pediu mais prazo para uma parcela (Fase 6).
+model ProrrogacaoReceber {
+  id             String       @id @default(cuid())
+  contaReceberId String
+  contaReceber   ContaReceber @relation(fields: [contaReceberId], references: [id], onDelete: Restrict)
+  /// Promessa anterior (vazio na primeira vez).
+  dataAnterior   DateTime?    @db.Date
+  dataPrometida  DateTime     @db.Date
+  observacao     String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([contaReceberId, criadoEm])
 }
 
 // ===================== Fase 4 (Obras) =====================

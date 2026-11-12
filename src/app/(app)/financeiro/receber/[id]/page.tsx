@@ -82,6 +82,7 @@ export default async function PaginaDaContaAReceber({ params }: { params: Promis
             valorPagoCentavos: c.valorPagoCentavos,
             saldoCentavos: resumo.saldoCentavos,
             vencimento: c.vencimento,
+            dataPrometida: c.dataPrometida,
             forma: c.forma,
             comNotaFiscal: c.comNotaFiscal,
             categoriaFinanceiraId: c.categoriaFinanceiraId ?? config.categoriaReceitaPadraoId,
@@ -93,6 +94,12 @@ export default async function PaginaDaContaAReceber({ params }: { params: Promis
 
         <dl className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-3">
           <Item rotulo="Vencimento">{c.vencimento ? formatarDataCalendario(c.vencimento) : c.status === "AGUARDANDO_GATILHO" ? "Ainda sem data (aguarda a etapa)" : "Sem vencimento definido"}</Item>
+          {c.dataPrometida ? (
+            <Item rotulo="Cliente prometeu pagar até">
+              {formatarDataCalendario(c.dataPrometida)}
+              <span className="text-muted-foreground block text-xs">O atraso continua contado pelo vencimento original.</span>
+            </Item>
+          ) : null}
           <Item rotulo="Gatilho">{c.gatilho ? (ROTULO_GATILHO[c.gatilho as Gatilho] ?? c.gatilho) : "Cobrança avulsa"}</Item>
           <Item rotulo="Forma">{c.forma ? (ROTULO_FORMA[c.forma as FormaPagamento] ?? c.forma) : "—"}</Item>
           <Item rotulo="Cliente">
@@ -129,6 +136,28 @@ export default async function PaginaDaContaAReceber({ params }: { params: Promis
             </div>
           ) : null}
         </dl>
+
+        {c.prorrogacoes.length > 0 ? (
+          <section aria-labelledby="titulo-prorrogacoes" className="grid gap-3">
+            <h2 id="titulo-prorrogacoes" className="font-medium">
+              Pedidos de mais prazo
+            </h2>
+            <ul className="grid gap-2">
+              {c.prorrogacoes.map((x) => (
+                <li key={x.id} className="grid gap-0.5 rounded-xl border p-3 text-sm">
+                  <span>
+                    Prometeu pagar até <strong>{formatarDataCalendario(x.dataPrometida)}</strong>
+                    {x.dataAnterior ? ` (antes: ${formatarDataCalendario(x.dataAnterior)})` : ""}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    Registrado em {formatarData(x.criadoEm)}
+                    {x.observacao ? ` · ${x.observacao}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section aria-labelledby="titulo-recebimentos" className="grid gap-3">
           <h2 id="titulo-recebimentos" className="font-medium">

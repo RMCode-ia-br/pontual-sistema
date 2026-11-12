@@ -5,7 +5,7 @@ import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { dataDoLembreteDeCobranca } from "@/lib/dominio/cobranca";
 import { ajustarValor, aplicarPagamento, podeCancelar, saldoDoTitulo, statusParaValores, type StatusDoTitulo } from "@/lib/dominio/titulos";
-import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
 
 import { registrarLancamento, type ContextoFinanceiro } from "./servico-lancamentos";
@@ -156,6 +156,53 @@ export async function ajustarContaAReceber(tx: Tx, e: { contaReceberId: string; 
   await registrarInteracao(tx, {
     tipo: "SISTEMA",
     texto: `Conta “${conta.descricao}” ajustada. Motivo: ${e.motivo}`,
+    clienteId: conta.clienteId,
+    projetoId: conta.projetoId,
+    usuarioId: ctx.usuario.id,
+  });
+}
+
+/**
+ * "Cliente pediu até o dia X": registra a nova data prometida (histórico + cache) SEM mexer no vencimento original, que
+ * continua mandando no atraso, no aging e na inadimplência. A data prometida só alimenta o fluxo projetado. Só em parcela
+ * em aberto ou parcial; a data é de hoje em diante e depois do vencimento original. Auditado, com a tarefa de cobrança
+ * acompanhando a promessa.
+ */
+export async function prorrogarContaAReceber(tx: Tx, e: { contaReceberId: string; dataPrometida: string; observacao: string | null }, ctx: ContextoFinanceiro): Promise<void> {
+  const conta = await travarConta(tx, e.contaReceberId);
+  if (conta.status !== "ABERTA" && conta.status !== "PARCIAL") throw new ErroNegocio("Só se registra prazo extra em parcela em aberto ou parcialmente recebida.");
+  const vencimento = comoTexto(conta.vencimento);
+  if (!vencimento) throw new ErroNegocio("A parcela não tem vencimento.");
+  const agora = ctx.agora ?? new Date();
+  const hoje = dataLocalDoInstante(agora);
+  if (e.dataPrometida < hoje) throw new ErroNegocio("A data prometida não pode ser anterior a hoje.", { dataPrometida: "Use uma data de hoje em diante." });
+  if (e.dataPrometida <= vencimento) throw new ErroNegocio("A data prometida precisa ser depois do vencimento original.", { dataPrometida: "Precisa ser depois do vencimento original." });
+  const anterior = comoTexto(conta.dataPrometida);
+  if (anterior === e.dataPrometida) throw new ErroNegocio("Essa já é a data prometida.", { dataPrometida: "Essa já é a data prometida." });
+
+  await tx.prorrogacaoReceber.create({
+    data: { contaReceberId: conta.id, dataAnterior: conta.dataPrometida, dataPrometida: comoData(e.dataPrometida), observacao: e.observacao, criadoPorId: ctx.usuario.id, atualizadoPorId: ctx.usuario.id },
+  });
+  await tx.contaReceber.update({ where: { id: conta.id }, data: { dataPrometida: comoData(e.dataPrometida), atualizadoPorId: ctx.usuario.id } });
+  await registrarAuditoria(tx, {
+    usuario: ctx.usuario,
+    entidade: "ContaReceber",
+    entidadeId: conta.id,
+    acao: "PRORROGAR",
+    antes: { dataPrometida: anterior, vencimento },
+    depois: { dataPrometida: e.dataPrometida, vencimento, observacao: e.observacao },
+    ip: ctx.ip,
+  });
+
+  // A tarefa de cobrança ainda aberta passa a lembrar na data prometida (o vencimento original não muda).
+  const dias = (await tx.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { diasLembreteCobranca: true } }))?.diasLembreteCobranca ?? 0;
+  await tx.tarefa.updateMany({
+    where: { chaveUnica: `cobranca:${conta.id}`, status: "ABERTA", deletadoEm: null },
+    data: { vencimento: comoData(dataDoLembreteDeCobranca(e.dataPrometida, dias, hoje)) },
+  });
+  await registrarInteracao(tx, {
+    tipo: "SISTEMA",
+    texto: `Cliente pediu mais prazo em “${conta.descricao}”: promete pagar até ${formatarDataCalendario(e.dataPrometida)} (vencimento original ${formatarDataCalendario(vencimento)}).${e.observacao ? ` ${e.observacao}` : ""}`,
     clienteId: conta.clienteId,
     projetoId: conta.projetoId,
     usuarioId: ctx.usuario.id,

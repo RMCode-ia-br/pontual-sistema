@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { somarDias } from "@/lib/dominio/calendario";
-import type { LancamentoDoFluxo, MovimentoDoFluxo } from "@/lib/dominio/fluxo-caixa";
+import { dataEsperadaDoRecebimento, type LancamentoDoFluxo, type MovimentoDoFluxo } from "@/lib/dominio/fluxo-caixa";
 import { ocorrenciasDaRecorrencia } from "@/lib/dominio/parcelamento";
 import { contasSemSaldoInformado } from "@/lib/dominio/saldo";
 
@@ -21,7 +21,10 @@ export type DadosDoFluxo = {
   contas: ContaComSaldo[];
   saldoAtualCentavos: number;
   contasSemSaldo: string[];
-  /** Entradas previstas: parcelas em aberto (data = vencimento) e as que aguardam etapa (data = previsão da etapa). */
+  /**
+   * Entradas previstas: parcelas em aberto (data = a que o cliente prometeu, se valer, senão o vencimento; o vencido sem
+   * promessa o fluxo leva para hoje) e as que aguardam etapa (data = previsão da etapa).
+   */
   aReceber: MovimentoDoFluxo[];
   /** Saídas previstas: contas em aberto e as ocorrências de recorrência ainda não geradas. */
   aPagar: MovimentoDoFluxo[];
@@ -58,7 +61,7 @@ export async function carregarDadosDoFluxo(hoje: string, opcoes: { desde: string
     }),
     prisma.contaReceber.findMany({
       where: { deletadoEm: null, status: { in: ["ABERTA", "PARCIAL", "AGUARDANDO_GATILHO"] } },
-      select: { projetoId: true, gatilho: true, status: true, vencimento: true, valorCentavos: true, valorPagoCentavos: true },
+      select: { projetoId: true, gatilho: true, status: true, vencimento: true, dataPrometida: true, valorCentavos: true, valorPagoCentavos: true },
     }),
     prisma.contaPagar.findMany({
       where: { deletadoEm: null, status: { in: ["ABERTA", "PARCIAL"] } },
@@ -95,7 +98,8 @@ export async function carregarDadosDoFluxo(hoje: string, opcoes: { desde: string
     }
     const vencimento = comoTexto(t.vencimento);
     if (!vencimento) continue;
-    aReceber.push({ data: vencimento, valorCentavos: saldo });
+    aReceber.push({ ...dataEsperadaDoRecebimento({ vencimento, dataPrometida: comoTexto(t.dataPrometida) }, hoje), valorCentavos: saldo });
+    // Atraso e inadimplência seguem SEMPRE o vencimento original, nunca a data prometida.
     emAbertoReceber.push({ data: vencimento, saldo });
   }
 

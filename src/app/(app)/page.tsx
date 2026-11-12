@@ -360,7 +360,7 @@ export default async function PaginaPainel() {
               </span>
             </p>
           </Link>
-          <Link href="/financeiro" title="Como é calculado: saldo atual + entradas previstas − saídas previstas até cada data. O que já venceu fica de fora." className="hover:bg-accent col-span-2 rounded-xl border p-4 transition-colors lg:col-span-1">
+          <Link href="/financeiro" title="Como é calculado: saldo atual + entradas previstas − saídas previstas até cada data. O a receber vencido entra como esperado para hoje (ou na data que o cliente prometeu) e o a pagar vencido sai já no primeiro período." className="hover:bg-accent col-span-2 rounded-xl border p-4 transition-colors lg:col-span-1">
             <p className="text-muted-foreground text-sm">Saldo projetado</p>
             <p className={cn("mt-2 text-2xl font-semibold tabular-nums", fin.projetado.em30Centavos < 0 && "text-destructive")}>{formatarMoeda(fin.projetado.em30Centavos)}</p>
             <p className="text-muted-foreground mt-1 grid text-xs">

@@ -35,7 +35,8 @@ export type ResumoFinanceiro = {
  * Números financeiros do painel. Definições (mostradas na tela):
  * - saldo: soma dos saldos das contas financeiras ativas hoje (conta sem saldo informado soma só o movimento);
  * - a receber / a pagar: o que falta receber/pagar das contas em aberto, em vencido, vence hoje e próximos N dias (Configurações);
- * - projetado: saldo atual + entradas previstas − saídas previstas em 30, 60 e 90 dias (vencidos ficam de fora);
+ * - projetado: saldo atual + entradas previstas − saídas previstas em 30, 60 e 90 dias (o a receber vencido entra como esperado
+ *   para hoje, ou na data que o cliente prometeu; o a pagar vencido sai já no primeiro período);
  * - recebido no mês: recebimentos de parcelas e cobranças pela data do pagamento, sem estornos.
  */
 export async function resumoFinanceiro(agora: Date = new Date()): Promise<ResumoFinanceiro> {
