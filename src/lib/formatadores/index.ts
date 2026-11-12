@@ -1,5 +1,7 @@
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
+import { lerEscalado } from "../validadores/numero-br";
+
 export const FUSO_PADRAO = "America/Sao_Paulo";
 
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -10,15 +12,12 @@ export function formatarMoeda(centavos: number): string {
 }
 
 /**
- * "1.234,56", "1234,5", "R$ 12,00" ou "12" → centavos inteiros, sem usar ponto flutuante.
- * Devolve null se o texto não for um valor monetário válido (ou for negativo).
+ * "1.234,56", "1234,5", "2.5", "R$ 12,00" ou "12" → centavos inteiros, sem usar ponto flutuante.
+ * Devolve null se o texto não for um valor monetário válido (ou for negativo). A regra de leitura é única
+ * (`lerNumeroBr`): "2.5" é R$ 2,50; "1.500" é mil e quinhentos reais; "0.125" é recusado (centavos têm 2 casas).
  */
 export function parseMoedaParaCentavos(texto: string): number | null {
-  const limpo = texto.replace(/[R$\s ]/g, "");
-  if (!/^\d{1,3}(\.\d{3})*(,\d{1,2})?$|^\d+(,\d{1,2})?$/.test(limpo)) return null;
-  const [inteiro, fracao = ""] = limpo.replace(/\./g, "").split(",");
-  const centavos = Number(inteiro) * 100 + Number(fracao.padEnd(2, "0"));
-  return Number.isSafeInteger(centavos) ? centavos : null;
+  return lerEscalado(texto, { casas: 2, moeda: true });
 }
 
 /** Instante (UTC) → "dd/mm/aaaa" no fuso de São Paulo. */

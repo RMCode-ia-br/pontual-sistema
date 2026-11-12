@@ -12,7 +12,7 @@ import { AreaTexto, CaixaMarcacao, Campo, Selecao } from "@/components/formulari
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { formatarQuantidade } from "@/lib/dominio/estoque";
+import { formatarQuantidade, lerQuantidade } from "@/lib/dominio/estoque";
 import { barrasInteirasSugeridas } from "@/lib/dominio/perfil-kg";
 import { formatarMoeda } from "@/lib/formatadores";
 import { mascararMoeda } from "@/lib/formatadores/mascaras";
@@ -83,7 +83,7 @@ function DialogoDeRecebimento({ compra, categoriasDeDespesa, hoje, aoFechar }: {
             {pendentes.map((i) => {
               const v = valores[i.id];
               const restante = i.quantidadeMilesimos - i.recebidaMilesimos;
-              const kgDigitado = Math.round(Number((v.quantidade || "0").replace(/\./g, "").replace(",", ".")) * 1000);
+              const kgDigitado = lerQuantidade(v.quantidade || "0") ?? 0;
               const sugestao = precisaEstoque(i) && i.unidadeCompra === "KG" && i.unidadeProduto === "BARRA" ? barrasInteirasSugeridas(kgDigitado, { pesoMilesimosKgPorMetro: i.pesoMilesimosKgPorMetro, comprimentoBarraMm: i.comprimentoBarraMm }) : null;
               const e = (c: string) => erros[`item:${compra.itens.findIndex((x) => x.id === i.id)}:${c}`];
               return (

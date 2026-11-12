@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mascararCep, mascararCnpj, mascararCpf, mascararMoeda, mascararTelefone } from "@/lib/formatadores/mascaras";
+import { aoColarMoeda, colarMoeda, mascararCep, mascararCnpj, mascararCpf, mascararMoeda, mascararTelefone } from "@/lib/formatadores/mascaras";
 
 describe("máscaras de digitação", () => {
   it("telefone: celular, fixo, parcial e com 55", () => {
@@ -35,6 +35,34 @@ describe("máscaras de digitação", () => {
     expect(mascararMoeda("00012")).toBe("0,12");
     expect(mascararMoeda("")).toBe("");
     expect(mascararMoeda("abc")).toBe("");
+  });
+});
+
+describe("colar dinheiro (Fase 7, Bloco 0c)", () => {
+  it("o valor colado é lido pela regra única, não dígito a dígito como na maquininha", () => {
+    expect(colarMoeda("2,5")).toBe("2,50"); // antes: "0,25"
+    expect(colarMoeda("2.5")).toBe("2,50");
+    expect(colarMoeda("1.234,56")).toBe("1.234,56");
+    expect(colarMoeda("1234,56")).toBe("1.234,56");
+    expect(colarMoeda("R$ 1.234,56")).toBe("1.234,56");
+    expect(colarMoeda("1234")).toBe("1.234,00"); // número inteiro copiado de uma planilha é em reais
+    expect(colarMoeda("1.500")).toBe("1.500,00");
+  });
+
+  it("texto que não é um valor legível segue a máscara comum (null)", () => {
+    for (const ruim of ["abc", "0.125", "1.23,45", "-5", ""]) expect(colarMoeda(ruim), ruim).toBeNull();
+  });
+
+  it("aoColarMoeda impede a colagem crua só quando o texto se lê", () => {
+    let impediu = false;
+    let valor = "";
+    const evento = (texto: string) => ({ clipboardData: { getData: () => texto }, preventDefault: () => (impediu = true) });
+    aoColarMoeda(evento("2,5"), (v) => (valor = v));
+    expect([impediu, valor]).toEqual([true, "2,50"]);
+    impediu = false;
+    valor = "";
+    aoColarMoeda(evento("abc"), (v) => (valor = v));
+    expect([impediu, valor]).toEqual([false, ""]);
   });
 });
 

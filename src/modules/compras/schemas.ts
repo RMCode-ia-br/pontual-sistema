@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { lerQuantidade } from "@/lib/dominio/estoque";
+import { textoParaInteiro } from "@/lib/dominio/numeros";
 import { parseMoedaParaCentavos } from "@/lib/formatadores";
 
 import type { EntradaDeCompra, EntradaDeRecebimento, ItemDeCompraEntrada, ItemRecebido, UnidadeDeCompra } from "./servico";
@@ -45,7 +46,13 @@ export const compraSchema = z.object({
   fazerPedido: z.boolean().optional(),
 });
 
-const inteiroOuNada = (t: string | null | undefined): number | null => (t && /^\d+$/.test(t.trim()) ? Number(t.trim()) : null);
+/** Medida em mm: vazio = não informada (null). Texto que não se lê ("1.5", "abc") NÃO vira "sem medida" em silêncio: vira erro. */
+function medidaEmMm(t: string | null | undefined): { valor: number | null; erro: boolean } {
+  const texto = (t ?? "").trim();
+  if (texto === "") return { valor: null, erro: false };
+  const n = textoParaInteiro(texto);
+  return n === null || n <= 0 ? { valor: null, erro: true } : { valor: n, erro: false };
+}
 
 /** Converte o formulário em entrada do serviço, devolvendo erros por item (`item:<n>`) quando algo não se lê. */
 export function lerCompra(d: z.output<typeof compraSchema>): { ok: true; entrada: EntradaDeCompra } | { ok: false; erro: string; campos: Record<string, string> } {
@@ -60,6 +67,12 @@ export function lerCompra(d: z.output<typeof compraSchema>): { ok: true; entrada
       if (preco === null || preco <= 0) campos[`item:${n}:preco`] = "Preço em reais, ex.: 12,50.";
     }
     if (!(UNIDADES_DE_COMPRA as readonly string[]).includes(i.unidadeCompra)) campos[`item:${n}:unidade`] = "Unidade inválida.";
+    const largura = medidaEmMm(i.larguraMm);
+    const altura = medidaEmMm(i.alturaMm);
+    const espessura = medidaEmMm(i.espessuraMm);
+    if (largura.erro) campos[`item:${n}:larguraMm`] = "Largura em mm, só números inteiros (ex.: 1200).";
+    if (altura.erro) campos[`item:${n}:alturaMm`] = "Altura em mm, só números inteiros (ex.: 2100).";
+    if (espessura.erro) campos[`item:${n}:espessuraMm`] = "Espessura em mm, só números inteiros (ex.: 8).";
     itens.push({
       id: i.id || undefined,
       produtoId: i.produtoId || null,
@@ -67,9 +80,9 @@ export function lerCompra(d: z.output<typeof compraSchema>): { ok: true; entrada
       unidadeCompra: i.unidadeCompra as UnidadeDeCompra,
       quantidadeMilesimos: q ?? 0,
       precoUnitarioCentavos: preco,
-      larguraMm: inteiroOuNada(i.larguraMm),
-      alturaMm: inteiroOuNada(i.alturaMm),
-      espessuraMm: inteiroOuNada(i.espessuraMm),
+      larguraMm: largura.valor,
+      alturaMm: altura.valor,
+      espessuraMm: espessura.valor,
       tipoVidroId: i.tipoVidroId || null,
       beneficiamentos: i.beneficiamentos?.trim() || null,
       itemPropostaId: i.itemPropostaId || null,

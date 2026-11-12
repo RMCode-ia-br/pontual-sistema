@@ -10,7 +10,7 @@ import { AreaTexto, Selecao } from "@/components/formulario";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FORMAS_PAGAMENTO, GATILHOS, MAXIMO_PARCELAS_CARTAO, ROTULO_FORMA, ROTULO_GATILHO, gerarParcelas } from "@/lib/dominio/parcelas";
-import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
+import { percentualParaPontosBase, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
 import { useProtecaoDeSaida } from "@/lib/hooks/usar-protecao-de-saida";
 
@@ -93,7 +93,7 @@ export function FormCondicao({ condicao }: Props) {
     });
   }
 
-  const soma = linhas.reduce((s, l) => s + (Number(l.percentual.replace(",", ".")) || 0), 0);
+  const soma = linhas.reduce((s, l) => s + (percentualParaPontosBase(l.percentual) ?? 0) / 100, 0);
 
   return (
     <div className="grid gap-5">

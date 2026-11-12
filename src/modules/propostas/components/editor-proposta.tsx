@@ -13,9 +13,9 @@ import { Input } from "@/components/ui/input";
 import type { TipoDesenho } from "@/lib/dominio/desenho";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
 import { FORMAS_PAGAMENTO, GATILHOS, ROTULO_FORMA, ROTULO_GATILHO } from "@/lib/dominio/parcelas";
-import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
+import { percentualParaPontosBase, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
-import { centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
+import { aoColarMoeda, centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
 import { useProtecaoDeSaida } from "@/lib/hooks/usar-protecao-de-saida";
 
 import { duplicarOpcao, duplicarItem, importarMedidasDaVisita, moverGrupo, moverItem, removerGrupo, removerItem, removerOpcao, salvarGrupo, salvarOpcao } from "../actions/estrutura";
@@ -161,8 +161,8 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
     medidas: i.medidas,
     avisoPreco: i.avisoPreco,
   }));
-  const pbNota = Math.round((Number(f.acrescimoNota.replace(",", ".")) || 0) * 100);
-  const somaParcelas = parcelas.reduce((s, p) => s + (Number(p.percentual.replace(",", ".")) || 0), 0);
+  const pbNota = percentualParaPontosBase(f.acrescimoNota) ?? 0;
+  const somaParcelas = parcelas.reduce((s, p) => s + (percentualParaPontosBase(p.percentual) ?? 0) / 100, 0);
   const L = somenteLeitura;
 
   const campo = (rotulo: string, valor: string, aoMudar: (v: string) => void, extra: { tipo?: string; max?: number; modo?: "numeric" | "decimal" | "tel" | "email"; erro?: string; className?: string } = {}) => (
@@ -202,7 +202,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
               </label>
               <label className="grid gap-1 text-sm">
                 Desconto (R$)
-                <Input inputMode="numeric" value={descontoOpcao} placeholder="0,00" maxLength={14} aria-label="Desconto da opção" onChange={(e) => setDescontoOpcao(mascararMoeda(e.target.value))} />
+                <Input inputMode="numeric" value={descontoOpcao} placeholder="0,00" maxLength={14} aria-label="Desconto da opção" onPaste={(e) => aoColarMoeda(e, setDescontoOpcao)} onChange={(e) => setDescontoOpcao(mascararMoeda(e.target.value))} />
               </label>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" disabled={pendente} onClick={() => chamar(() => salvarOpcao({ id: opcaoAtual.id, propostaId: proposta.id, nome: nomeOpcao, desconto: descontoOpcao }))}>
@@ -472,8 +472,8 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
           itens={totaisItens}
           comNotaFiscal={f.comNotaFiscal}
           acrescimoNotaPb={pbNota}
-          comissaoArquitetoPb={Math.round((Number(f.comissaoArquiteto.replace(",", ".")) || 0) * 100)}
-          comissaoIndicacaoPb={Math.round((Number(f.comissaoIndicacao.replace(",", ".")) || 0) * 100)}
+          comissaoArquitetoPb={percentualParaPontosBase(f.comissaoArquiteto) ?? 0}
+          comissaoIndicacaoPb={percentualParaPontosBase(f.comissaoIndicacao) ?? 0}
           margemMinimaAlerta={opcoes.config.margemMinimaAlerta}
         />
       </div>

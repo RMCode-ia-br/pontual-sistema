@@ -6,14 +6,18 @@
  */
 import { decodificarTexto, ErroPlanilha, LIMITES_PLANILHA, lerCsv, planilhaDeMatriz, type Planilha } from "./ler";
 
-/** O valor de uma célula do XLSX: texto, número, lógico, data ou vazio (a tipagem da biblioteca é mais frouxa). */
-function celulaParaTexto(valor: unknown): string {
+/**
+ * O valor de uma célula do XLSX: texto, número, lógico, data ou vazio (a tipagem da biblioteca é mais frouxa).
+ * Número fracionário sai com VÍRGULA ("0,125"), como o Excel brasileiro o mostra: com ponto, "0.125" seria lido como
+ * milhar ("125") em campo de dinheiro. Assim o leitor único de números decide (ou recusa) sem adivinhar.
+ */
+export function celulaParaTexto(valor: unknown): string {
   if (valor === null || valor === undefined) return "";
   if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? "" : valor.toISOString().slice(0, 10);
   if (typeof valor === "number") {
     if (!Number.isFinite(valor)) return "";
     // Evita o ruído de ponto flutuante (0.1 + 0.2) sem perder casas decimais reais.
-    return Number.isInteger(valor) ? String(valor) : String(Number(valor.toFixed(6)));
+    return Number.isInteger(valor) ? String(valor) : String(Number(valor.toFixed(6))).replace(".", ",");
   }
   if (typeof valor === "boolean") return valor ? "sim" : "não";
   return String(valor);

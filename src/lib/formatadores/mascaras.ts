@@ -3,6 +3,8 @@
  * normalização de verdade acontecem no servidor (Zod), então um texto estranho nunca passa por aqui.
  */
 
+import { lerNumeroBr } from "../validadores/numero-br";
+
 const digitos = (texto: string) => texto.replace(/\D/g, "");
 
 /** "22999583288" → "(22) 99958-3288"; aceita também o 55 na frente. */
@@ -46,6 +48,25 @@ export function mascararMoeda(texto: string): string {
   const centavos = d.padStart(3, "0");
   const inteiro = centavos.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${inteiro},${centavos.slice(-2)}`;
+}
+
+/**
+ * Texto COLADO num campo de dinheiro → texto do campo. A máscara de digitação põe cada dígito pela direita (como numa
+ * maquininha), então colar "2,5" daria "0,25". Quem cola quer o valor que copiou: lê pela regra única (`lerNumeroBr`:
+ * "2,5", "2.5", "1.234,56", "R$ 1.234,56") e devolve o campo já formatado ("2,50"). Se o texto não é um valor que se
+ * leia, devolve null e o campo segue a máscara comum.
+ */
+export function colarMoeda(textoColado: string): string | null {
+  const r = lerNumeroBr(textoColado, { casas: 2, moeda: true });
+  return r.ok ? mascararMoeda(String(r.escalado)) : null;
+}
+
+/** Trata o evento de colagem de um campo de dinheiro: se o texto se lê, impede a colagem crua e entrega o valor pronto. */
+export function aoColarMoeda(e: { clipboardData: { getData(tipo: string): string }; preventDefault(): void }, definir: (valor: string) => void): void {
+  const pronto = colarMoeda(e.clipboardData.getData("text"));
+  if (pronto === null) return;
+  e.preventDefault();
+  definir(pronto);
 }
 
 /** Centavos guardados → texto do campo de valor ("123456" → "1.234,56"). Vazio quando não há valor. */

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import type { ResultadoAcao } from "@/lib/acoes";
 import { FORMAS_PAGAMENTO, ROTULO_FORMA } from "@/lib/dominio/parcelas";
-import { mascararMoeda } from "@/lib/formatadores/mascaras";
+import { colarMoeda, mascararMoeda } from "@/lib/formatadores/mascaras";
 import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 
 import { criarConta, editarConta } from "../actions/contas";
@@ -28,6 +28,11 @@ export function CampoDinheiro({ id, nome, erro, defaultValue, negativo = false, 
         id={id}
         name={nome}
         mascara={(t) => (negativo && t.trim().startsWith("-") ? "-" : "") + mascararMoeda(t)}
+        colar={(t) => {
+          const devedor = negativo && t.trim().startsWith("-");
+          const pronto = colarMoeda(devedor ? t.trim().slice(1) : t);
+          return pronto === null ? null : (devedor ? "-" : "") + pronto;
+        }}
         defaultValue={defaultValue ?? ""}
         inputMode={negativo ? "text" : "numeric"}
         autoComplete="off"

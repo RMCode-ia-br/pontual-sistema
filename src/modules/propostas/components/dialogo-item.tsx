@@ -13,7 +13,7 @@ import { gerarDescricao, valoresDoTemplate } from "@/lib/dominio/descricao-item"
 import type { TipoDesenho } from "@/lib/dominio/desenho";
 import { areaM2, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
-import { centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
+import { aoColarMoeda, centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
 
 import { calcularPreviaDoItem, salvarItem } from "../actions/estrutura";
 import { ROTULO_MODO_PRECO, MODOS_PRECO } from "../schemas";
@@ -361,7 +361,7 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
         {modo === "MANUAL" || (previa && !previa.ok && modo === "TABELA") || errosCampo.valorManual ? (
           <label className="grid gap-1 text-sm">
             Valor do item (R$)
-            <Input inputMode="numeric" placeholder="0,00" value={valorManual} maxLength={14} aria-label="Valor do item" onChange={(e) => setValorManual(mascararMoeda(e.target.value))} aria-invalid={!!errosCampo.valorManual} />
+            <Input inputMode="numeric" placeholder="0,00" value={valorManual} maxLength={14} aria-label="Valor do item" onPaste={(e) => aoColarMoeda(e, setValorManual)} onChange={(e) => setValorManual(mascararMoeda(e.target.value))} aria-invalid={!!errosCampo.valorManual} />
             {errosCampo.valorManual ? <span role="alert" className="text-destructive text-xs">{errosCampo.valorManual}</span> : <span className="text-muted-foreground text-xs">Preço total do item (todas as medidas).</span>}
           </label>
         ) : null}

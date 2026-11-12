@@ -223,13 +223,13 @@ export function FormCompra({ opcoes, compra, inicial }: Props) {
                     <Campo id={`d-${i.chave}`} rotulo="Descrição" className="sm:col-span-4">
                       <Input id={`d-${i.chave}`} value={i.descricao} disabled={travado} onChange={(ev) => mudarItem(i.chave, { descricao: ev.target.value })} maxLength={200} autoComplete="off" />
                     </Campo>
-                    <Campo id={`l-${i.chave}`} rotulo="Largura (mm)">
+                    <Campo id={`l-${i.chave}`} rotulo="Largura (mm)" erro={e("larguraMm")}>
                       <Input id={`l-${i.chave}`} inputMode="numeric" value={i.larguraMm ?? ""} onChange={(ev) => mudarItem(i.chave, { larguraMm: ev.target.value })} maxLength={6} autoComplete="off" />
                     </Campo>
-                    <Campo id={`a-${i.chave}`} rotulo="Altura (mm)">
+                    <Campo id={`a-${i.chave}`} rotulo="Altura (mm)" erro={e("alturaMm")}>
                       <Input id={`a-${i.chave}`} inputMode="numeric" value={i.alturaMm ?? ""} onChange={(ev) => mudarItem(i.chave, { alturaMm: ev.target.value })} maxLength={6} autoComplete="off" />
                     </Campo>
-                    <Campo id={`e-${i.chave}`} rotulo="Espessura (mm)">
+                    <Campo id={`e-${i.chave}`} rotulo="Espessura (mm)" erro={e("espessuraMm")}>
                       <Input id={`e-${i.chave}`} inputMode="numeric" value={i.espessuraMm ?? ""} onChange={(ev) => mudarItem(i.chave, { espessuraMm: ev.target.value })} maxLength={4} autoComplete="off" />
                     </Campo>
                     <Campo id={`t-${i.chave}`} rotulo="Tipo de vidro">

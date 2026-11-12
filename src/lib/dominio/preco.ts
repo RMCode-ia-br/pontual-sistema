@@ -10,6 +10,8 @@
  * - Comissões (arquiteto, indicação) começam em zero, são editáveis e só informativas (não alteram o preço).
  */
 
+import { lerEscalado } from "../validadores/numero-br";
+
 export type ModoPreco = "MANUAL" | "TABELA" | "COMPOSICAO";
 export type TipoCobranca = "POR_M2" | "POR_UNIDADE" | "POR_METRO_LINEAR";
 
@@ -22,10 +24,14 @@ export function dividirArredondando(numerador: bigint, denominador: bigint): big
   return (numerador * BigInt(2) + denominador) / (denominador * BigInt(2));
 }
 
-/** "6,5" / 6.5 → 650 pontos-base. Aceita no máximo 2 casas. Devolve null se inválido. */
+/**
+ * "6,5" / "1.234,56" / 6.5 → 650 / 123456 / 650 pontos-base. Aceita no máximo 2 casas. Texto pela regra única de leitura
+ * (`lerNumeroBr`); número já vem pronto. Devolve null se inválido.
+ */
 export function percentualParaPontosBase(percentual: number | string | null | undefined): number | null {
   if (percentual === null || percentual === undefined || percentual === "") return null;
-  const n = typeof percentual === "number" ? percentual : Number(String(percentual).replace(",", "."));
+  if (typeof percentual === "string") return lerEscalado(percentual, { casas: 2 });
+  const n = percentual;
   if (!Number.isFinite(n) || n < 0) return null;
   const pb = Math.round(n * 100);
   return Math.abs(n * 100 - pb) < 1e-6 ? pb : null;

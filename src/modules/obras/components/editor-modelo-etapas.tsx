@@ -21,6 +21,7 @@ import {
   type ItemDoModelo,
   type TipoDeEtapa,
 } from "@/lib/dominio/etapas";
+import { textoParaInteiro } from "@/lib/dominio/numeros";
 import { GRUPOS_DE_PRAZO, type GrupoDePrazo } from "@/lib/dominio/prazo-obra";
 import { useProtecaoDeSaida } from "@/lib/hooks/usar-protecao-de-saida";
 
@@ -70,7 +71,7 @@ export function EditorModeloEtapas({ itens }: { itens: ItemDoModelo[] }) {
         tipo: l.tipo,
         nome: l.nome,
         grupoPrazo: l.grupoPrazo === "" ? null : l.grupoPrazo,
-        peso: l.peso.trim() === "" ? Number.NaN : Number(l.peso.replace(",", ".")),
+        peso: textoParaInteiro(l.peso.trim()) ?? Number.NaN,
         liberaGatilho: l.liberaGatilho === "" ? null : l.liberaGatilho,
         marcoGarantia: l.marcoGarantia,
         exigeEsquadria: l.exigeEsquadria,

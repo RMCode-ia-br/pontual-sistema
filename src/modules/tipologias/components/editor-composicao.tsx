@@ -8,6 +8,7 @@ import { Selecao } from "@/components/formulario";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { custoDaComposicao } from "@/lib/dominio/composicao";
+import { textoParaDecimal, valorParaCentavos } from "@/lib/dominio/numeros";
 import { testarFormula } from "@/lib/dominio/formulas";
 import { formatarMoeda } from "@/lib/formatadores";
 import { centavosParaCampo } from "@/lib/formatadores/mascaras";
@@ -64,14 +65,13 @@ export function EditorComposicao({ tipologiaId, nomeDaTipologia, exemplo, produt
     setSujo(true);
   }
 
-  const numero = (t: string) => Number(t.replace(",", "."));
+  const numero = (t: string) => textoParaDecimal(t, 4) ?? 0;
   const valores = { L: numero(teste.L) || 0, A: numero(teste.A) || 0, F: numero(teste.F) || 0, Q: numero(teste.Q) || 0 };
 
   /** Custo de teste: usa o custo do produto ou o digitado; o que não tem custo aparece como "falta informar". */
   const custoDeTeste = useMemo(() => {
     const centavos = (t: string) => {
-      const n = Number(t.replace(/\./g, "").replace(",", "."));
-      return t.trim() !== "" && Number.isFinite(n) ? Math.round(n * 100) : null;
+      return t.trim() === "" ? null : valorParaCentavos(t);
     };
     return custoDaComposicao(
       linhasInsumo.map((i) => ({

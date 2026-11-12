@@ -3,6 +3,8 @@
 // Saldo do produto = soma dos movimentos (o banco guarda também o cache, atualizado na mesma transação). Saída sem saldo
 // exige confirmação explícita e justificativa. Estorno é o movimento inverso, nunca uma edição.
 
+import { lerEscalado } from "../validadores/numero-br";
+
 export type TipoDeMovimento = "INVENTARIO_INICIAL" | "ENTRADA_COMPRA" | "SAIDA_OBRA" | "DEVOLUCAO" | "AJUSTE" | "PERDA";
 
 export const ROTULO_TIPO_DE_MOVIMENTO: Record<TipoDeMovimento, string> = {
@@ -38,14 +40,8 @@ export const deMilesimos = (m: number): number => m / 1000;
  * "25" ou "75" por engano. Ambíguo de outro jeito ("2.5000", "1.23.4") → null.
  */
 export function lerQuantidade(texto: string): number | null {
-  const bruto = texto.trim();
-  let limpo: string;
-  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(bruto)) limpo = bruto.replace(/\./g, "").replace(",", ".");
-  else if (/^\d+\.\d{1,2}$/.test(bruto)) limpo = bruto;
-  else limpo = bruto.replace(",", ".");
-  if (!/^\d+(\.\d{1,3})?$/.test(limpo)) return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? paraMilesimos(n) : null;
+  // Regra única de leitura (`lerNumeroBr`): o resultado já sai em milésimos inteiros, sem ponto flutuante.
+  return lerEscalado(texto, { casas: 3 });
 }
 
 /** Quantidade em milésimos → texto pt-BR sem zeros à direita ("1,5"). */
