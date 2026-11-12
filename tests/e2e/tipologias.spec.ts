@@ -1,14 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E } from "./banco";
+import { criarTipologiaDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(91) } });
 
+// Tipologia já cadastrada, criada pelo teste (o dono pode renomear ou excluir as semeadas).
+const NOME_EXISTENTE = "E2E Tipologia Preexistente";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarTipologiaDeTeste(NOME_EXISTENTE);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -20,8 +24,8 @@ const NOME = "E2E Tipologia de Teste";
 test("tipologias: criar, compor, testar fórmula e cadastrar preço", async ({ page }) => {
   await page.goto("/tipologias");
   await expect(page.getByRole("heading", { name: "Tipologias e preços" })).toBeVisible();
-  // As tipologias do seed aparecem; a de exemplo fica inativa.
-  await expect(page.getByText("Janela de correr").first()).toBeVisible();
+  // As tipologias já cadastradas aparecem na lista.
+  await expect(page.getByText(NOME_EXISTENTE).first()).toBeVisible();
   await semRolagemHorizontal(page);
   await capturar(page, "tipologias-lista");
 

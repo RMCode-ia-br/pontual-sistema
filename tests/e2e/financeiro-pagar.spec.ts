@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E } from "./banco";
+import { criarCategoriaFinanceiraDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 /** A pagar: conta única, parcelada e recorrente; baixa parcial e total; estorno; atraso derivado; exportação. */
@@ -9,6 +9,9 @@ test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(101) } });
 
 const NOME_DA_CONTA = "E2E Conta Pagar";
+// Categorias de despesa do próprio teste (o dono pode renomear ou excluir as do catálogo).
+const CATEGORIA_PADRAO = "E2E Despesa Vidros";
+const CATEGORIA_ALUGUEL = "E2E Aluguel";
 const dialogo = (page: Page) => page.getByRole("dialog");
 
 /** Data "aaaa-mm-dd" a `dias` de hoje (fuso de São Paulo, como o navegador do teste). */
@@ -19,6 +22,8 @@ function aDias(dias: number): string {
 
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarCategoriaFinanceiraDeTeste(CATEGORIA_PADRAO, "DESPESA", "CUSTOS_DIRETOS");
+  await criarCategoriaFinanceiraDeTeste(CATEGORIA_ALUGUEL, "DESPESA", "DESPESAS_FIXAS");
 });
 
 test.beforeEach(async ({ page }) => {
@@ -33,7 +38,7 @@ async function novaConta(page: Page, campos: { descricao: string; valor: string;
   await d.getByLabel(/^(Valor|Valor total|Valor de cada vez)/).fill(campos.valor);
   if (campos.vencimento) await d.getByLabel(/Vencimento|Primeiro vencimento/).fill(campos.vencimento);
   if (campos.parcelas) await d.getByLabel("Número de parcelas").fill(campos.parcelas);
-  await d.getByLabel("Categoria").selectOption({ label: campos.categoria ?? "Vidros" });
+  await d.getByLabel("Categoria").selectOption({ label: campos.categoria ?? CATEGORIA_PADRAO });
   await d.getByRole("button", { name: "Criar" }).click();
 }
 
@@ -117,7 +122,7 @@ test("conta parcelada: 3 parcelas mensais que somam o total (a última absorve a
 
 test("conta recorrente: gera os próximos meses, edita e encerra", async ({ page }) => {
   await page.goto("/financeiro/pagar");
-  await novaConta(page, { descricao: "E2E Aluguel da oficina", valor: "250000", vencimento: aDias(7), modo: "RECORRENTE", categoria: "Aluguel" });
+  await novaConta(page, { descricao: "E2E Aluguel da oficina", valor: "250000", vencimento: aDias(7), modo: "RECORRENTE", categoria: CATEGORIA_ALUGUEL });
   await expect(toast(page, /Recorrência criada: \d+ contas? geradas?/)).toBeVisible();
   await aguardarAvisosSumirem(page);
 

@@ -1,15 +1,21 @@
 import { expect, test } from "@playwright/test";
 
 import { aguardarAvisosSumirem, ehCelular, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E } from "./banco";
+import { criarCategoriaFinanceiraDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe("financeiro: contas e lançamentos", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(99) } });
 
+  // Categorias do próprio teste (o dono pode renomear ou excluir as do catálogo, como "Venda de sucata").
+  const CATEGORIA_RECEITA = "E2E Receita Sucata";
+  const CATEGORIA_DESPESA = "E2E Tarifas";
+
   test.beforeAll(async () => {
     await prepararUsuarioE2E({ senhaDefinitiva: true });
+    await criarCategoriaFinanceiraDeTeste(CATEGORIA_RECEITA, "RECEITA", "OUTRAS_RECEITAS");
+    await criarCategoriaFinanceiraDeTeste(CATEGORIA_DESPESA, "DESPESA", "DESPESAS_FINANCEIRAS");
   });
 
   test.beforeEach(async ({ page }) => {
@@ -43,7 +49,7 @@ test.describe("financeiro: contas e lançamentos", () => {
     await page.getByRole("button", { name: "Novo lançamento" }).click();
     await page.getByLabel("Valor").fill("15000");
     await expect(page.getByLabel("Valor")).toHaveValue("150,00");
-    await page.getByLabel("Categoria").selectOption({ label: "Venda de sucata" });
+    await page.getByLabel("Categoria").selectOption({ label: CATEGORIA_RECEITA });
     await page.getByLabel("Descrição").fill("E2E Sucata do mês");
     await page.getByRole("button", { name: "Registrar" }).click();
     await expect(toast(page, "Entrada registrada.")).toBeVisible();
@@ -52,7 +58,7 @@ test.describe("financeiro: contas e lançamentos", () => {
     await page.getByRole("button", { name: "Novo lançamento" }).click();
     await page.getByLabel("Tipo").selectOption("SAIDA");
     await page.getByLabel("Valor").fill("4050");
-    await page.getByLabel("Categoria").selectOption({ label: "Tarifas bancárias e maquininha" });
+    await page.getByLabel("Categoria").selectOption({ label: CATEGORIA_DESPESA });
     await page.getByLabel("Descrição").fill("E2E Tarifa");
     await page.getByRole("button", { name: "Registrar" }).click();
     await expect(toast(page, "Saída registrada.")).toBeVisible();

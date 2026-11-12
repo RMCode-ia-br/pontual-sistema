@@ -20,6 +20,7 @@ async function limpar() {
     await c.query(`DELETE FROM "Tarefa" WHERE "projetoId" IN (${projetos}) OR titulo LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "HistoricoFaseProjeto" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE $1`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "MotivoPerda" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Usuario" WHERE login = $1`, [LOGIN]);
     // Devolve o contador ao maior código que sobrou: os testes não deixam "buracos" na numeração real.
@@ -57,9 +58,8 @@ beforeAll(async () => {
   const u = await prisma.usuario.findUniqueOrThrow({ where: { login: LOGIN }, select: { id: true, nome: true } });
   usuario = u;
   clienteId = (await prisma.cliente.create({ data: { nome: `${PREFIXO} Cliente Ação`, tipoPessoa: "PF" } })).id;
-  const motivo = await prisma.motivoPerda.findFirst({ where: { ativo: true, deletadoEm: null }, select: { id: true } });
-  if (!motivo) throw new Error("Rode o seed: nenhum motivo de perda cadastrado.");
-  motivoId = motivo.id;
+  // Motivo de perda do próprio teste (o dono pode renomear ou excluir os do catálogo).
+  motivoId = (await prisma.motivoPerda.create({ data: { nome: `${PREFIXO} Motivo` } })).id;
 });
 
 afterAll(async () => {

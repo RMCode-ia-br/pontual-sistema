@@ -1,14 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { contasDaProposta, prepararUsuarioE2E, tarefasDoProjeto } from "./banco";
+import { contasDaProposta, criarCondicaoDePagamentoDeTeste, criarTipologiaDeTeste, prepararUsuarioE2E, tarefasDoProjeto } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(93) } });
 
+// Tipologia e condição do próprio teste (o dono pode renomear ou excluir as semeadas): "E2E ..." é removido pela limpeza.
+const TIPOLOGIA = "E2E Janela de correr";
+const CONDICAO = "E2E 50% sinal + 25% material + 25% vidros e instalação";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarTipologiaDeTeste(TIPOLOGIA);
+  await criarCondicaoDePagamentoDeTeste(CONDICAO);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -25,7 +31,7 @@ let idProposta = "";
 async function adicionarItemManual(page: Page, valor: string, largura = "2000", altura = "1200") {
   await page.getByRole("button", { name: "Adicionar item" }).click();
   const dialogo = page.getByRole("dialog");
-  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: "Janela de correr" });
+  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: TIPOLOGIA });
   await dialogo.getByLabel("Largura da medida 1").fill(largura);
   await dialogo.getByLabel("Altura da medida 1").fill(altura);
   await dialogo.getByLabel("Valor do item").fill(valor);
@@ -81,7 +87,7 @@ test("itens: total é a soma calculada; com nota soma 5% em linha separada", asy
   await expect(totais.getByText(/Acréscimo da nota fiscal/)).toHaveCount(0);
 
   // Descrição gerada pelo modelo, numeração automática e plural.
-  await expect(page.getByRole("article", { name: "Item 1" })).toContainText("1 un — Janela de correr");
+  await expect(page.getByRole("article", { name: "Item 1" })).toContainText(`1 un — ${TIPOLOGIA}`);
   await expect(page.getByRole("article", { name: "Item 2" })).toBeVisible();
 
   // Com nota: 13.180,00 × 1,05 = 13.839,00 (acréscimo 659,00), em linha separada.
@@ -98,7 +104,7 @@ test("salvar, recarregar, duplicar opção e item; rascunho não aceita item sem
   await page.getByLabel("Esta venda é COM nota fiscal").check();
   await page.getByLabel("Parte (ex.: Parte 01/02)").fill("Parte 01/02");
   // Cronograma 50/25/25 do modelo.
-  await page.getByLabel("Modelo de condição de pagamento").selectOption({ label: "50% sinal + 25% entrega do material + 25% entrega dos vidros e instalação" });
+  await page.getByLabel("Modelo de condição de pagamento").selectOption({ label: CONDICAO });
   await expect(page.getByText("Soma: 100%")).toBeVisible();
   await page.getByRole("button", { name: "Salvar proposta" }).click();
   await expect(toast(page, "Proposta salva")).toBeVisible();

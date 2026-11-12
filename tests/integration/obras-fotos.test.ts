@@ -14,11 +14,13 @@ const LOGIN = "int-fotos";
 const NOME_SECRETO = "Maria Silva Secreta";
 const RUA_SECRETA = "Rua Segredo 123";
 const TELEFONE_SECRETO = "+5522988887777";
+// Linha de alumínio criada pelo teste: o dono pode renomear ou excluir as linhas reais ("Suprema" etc.).
+const NOME_DA_LINHA = `${PREFIXO} Linha`;
 const prisma = criarClientePrisma(process.env.DIRECT_URL ?? process.env.DATABASE_URL);
 
 let usuario: { id: string; nome: string };
 let clienteId: string;
-let obraA: string; // concluída, autorizada, com linha Suprema, em Macaé/RJ
+let obraA: string; // concluída, autorizada, com a linha de teste, em Macaé/RJ
 let obraB: string; // concluída, SEM autorização do cliente
 let obraC: string; // ainda lead (não é obra)
 let obraSemDados: string; // obra sem endereço nem proposta
@@ -33,6 +35,7 @@ async function limpar() {
     await c.query(`DELETE FROM "ItemProposta" WHERE "propostaId" IN (SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetos}))`, p);
     await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetos}))`, p);
     await c.query(`DELETE FROM "Proposta" WHERE "projetoId" IN (${projetos})`, p);
+    await c.query(`DELETE FROM "LinhaAluminio" WHERE nome LIKE $1`, p);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE $1`, p);
     await c.query(`DELETE FROM "EnderecoCliente" WHERE "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE $1)`, p);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE $1`, p);
@@ -73,8 +76,8 @@ beforeAll(async () => {
   obraC = await novo("Obra C", { status: "NOVO_LEAD", enderecoObraId: endereco.id, tiposServico: ["JANELA"] });
   obraSemDados = await novo("Obra sem dados", { status: "EM_EXECUCAO" });
 
-  // A obra A tem uma proposta aprovada com itens na linha Suprema.
-  const linha = await prisma.linhaAluminio.findFirstOrThrow({ where: { nome: "Suprema" } });
+  // A obra A tem uma proposta aprovada com itens na linha de teste.
+  const linha = await prisma.linhaAluminio.create({ data: { nome: NOME_DA_LINHA } });
   const proposta = await prisma.proposta.create({
     data: { projetoId: obraA, numero: `INT-${randomUUID().slice(0, 8)}`, numeroSequencial: 1, ano: 2026, data: new Date("2026-05-20T00:00:00Z"), clienteNome: NOME_SECRETO, status: "APROVADA", opcoes: { create: [{ nome: "Opção 1" }] } },
     include: { opcoes: true },
@@ -120,7 +123,7 @@ describe("o que entra na galeria de obras", () => {
 
   it("a legenda sugerida usa tipo de serviço, linha, cidade e UF, e NADA do cliente", async () => {
     const [a] = await galeria();
-    expect(a.legenda.texto).toBe("Janelas e guarda-corpo em alumínio linha Suprema, entregues em Macaé/RJ. Pontualidade, qualidade e entrega em cada obra.");
+    expect(a.legenda.texto).toBe(`Janelas e guarda-corpo em alumínio linha ${NOME_DA_LINHA}, entregues em Macaé/RJ. Pontualidade, qualidade e entrega em cada obra.`);
     expect(a.legenda.faltando).toEqual([]);
     for (const segredo of [NOME_SECRETO, "Maria", RUA_SECRETA, "Segredo", TELEFONE_SECRETO, "988887777"]) {
       expect(a.legenda.texto, segredo).not.toContain(segredo);

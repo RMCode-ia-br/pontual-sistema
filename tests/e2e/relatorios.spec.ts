@@ -1,14 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 import { capturar, entrarEEsperarPainel, semRolagemHorizontal } from "./ajudantes";
-import { buscarAuditoriaFeitaPeloE2E, contarProjetosDecididosForaDoE2E, prepararUsuarioE2E } from "./banco";
+import { buscarAuditoriaFeitaPeloE2E, contarProjetosDecididosForaDoE2E, criarMotivoDePerdaDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(91) } });
 
+// Motivo de perda do próprio teste (o dono pode renomear ou excluir os do catálogo).
+const MOTIVO_PERDA = "E2E Motivo de perda do relatório";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarMotivoDePerdaDeTeste(MOTIVO_PERDA);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -33,7 +37,7 @@ test("preparação: projeto com origem Google, perdido com motivo", async ({ pag
 
   await page.getByRole("button", { name: "Marcar como perdido" }).click();
   const dialogo = page.getByRole("dialog");
-  await dialogo.getByLabel("Motivo").selectOption({ index: 1 });
+  await dialogo.getByLabel("Motivo").selectOption({ label: MOTIVO_PERDA });
   await dialogo.getByRole("button", { name: "Marcar como perdido" }).click();
   await expect(page.getByText("Por que foi perdido")).toBeVisible();
 });

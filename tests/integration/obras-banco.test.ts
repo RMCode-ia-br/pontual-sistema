@@ -25,6 +25,7 @@ async function limpar() {
     await c.query(`DELETE FROM "EtapaProjeto" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "PausaProjeto" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE $1`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "MotivoBloqueio" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "ModeloEtapaItem" WHERE "modeloId" IN (SELECT id FROM "ModeloEtapas" WHERE nome LIKE $1)`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "ModeloEtapas" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
@@ -35,7 +36,8 @@ beforeAll(async () => {
   await limpar();
   const cliente = await prisma.cliente.create({ data: { nome: `${PREFIXO} Cliente`, tipoPessoa: "PF" } });
   projetoId = (await prisma.projeto.create({ data: { codigo: `P-0000-${randomUUID().slice(0, 8)}`, titulo: `${PREFIXO} Obra`, clienteId: cliente.id } })).id;
-  motivoId = (await prisma.motivoBloqueio.findFirstOrThrow({ select: { id: true } })).id;
+  // Motivo de bloqueio do próprio teste (o dono pode renomear ou excluir os do catálogo).
+  motivoId = (await prisma.motivoBloqueio.create({ data: { nome: `${PREFIXO} Motivo` } })).id;
 });
 
 afterAll(async () => {

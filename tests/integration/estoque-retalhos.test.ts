@@ -24,6 +24,8 @@ let obraId: string;
 let obra2Id: string;
 let leadId: string;
 let contaId: string;
+/** Categoria de receita do próprio teste (o dono pode renomear ou excluir a "Venda de sucata" semeada). */
+let categoriaReceitaId: string;
 let minimoOriginal: number | null;
 /** Sucata que já existia antes dos testes (dado real): os testes que venderiam "tudo" só rodam quando isto é zero. */
 let sucataReal = 0;
@@ -58,6 +60,7 @@ async function limpar() {
     await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (${produtos})`);
     await c.query(`DELETE FROM "Produto" WHERE codigo LIKE 'INT-RET-%'`);
     await c.query(`DELETE FROM "ContaFinanceira" WHERE nome LIKE '${PREFIXO}%'`);
+    await c.query(`DELETE FROM "CategoriaFinanceira" WHERE nome LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "Usuario" WHERE login = $1`, [LOGIN]);
@@ -78,6 +81,7 @@ beforeAll(async () => {
   obra2Id = (await projeto("Obra B", "APROVADO")).id;
   leadId = (await projeto("Lead", "NOVO_LEAD")).id;
   contaId = (await prisma.contaFinanceira.create({ data: { nome: `${PREFIXO} Banco`, saldoInicialInformado: true, saldoInicialCentavos: 0, dataSaldoInicial: new Date("2026-11-01T00:00:00Z") } })).id;
+  categoriaReceitaId = (await prisma.categoriaFinanceira.create({ data: { nome: `${PREFIXO} Receita`, tipo: "RECEITA", grupo: "OUTRAS_RECEITAS", grupoDre: "Outras receitas" } })).id;
 });
 
 afterAll(async () => {
@@ -225,15 +229,30 @@ describe("sucata: venda e ajuste", () => {
   it("vende o peso digitado pelo valor digitado: baixa o saldo e (com a conta) lança a entrada no financeiro", async () => {
     await gerar();
     const antes = await kgDaSucata();
-    const r = await vender({ pesoMilesimosKg: 300, valorCentavos: 12_345, contaFinanceiraId: contaId });
+    const r = await vender({ pesoMilesimosKg: 300, valorCentavos: 12_345, contaFinanceiraId: contaId, categoriaId: categoriaReceitaId });
     expect(await kgDaSucata()).toBe(antes - 300);
     expect(r.lancamentoId).not.toBeNull();
     const l = await prisma.lancamento.findUniqueOrThrow({ where: { id: r.lancamentoId! }, include: { categoria: true } });
     expect(l).toMatchObject({ tipo: "ENTRADA", valorCentavos: 12_345, contaFinanceiraId: contaId, estornadoEm: null });
-    expect(l.categoria?.nome.toLowerCase()).toBe("venda de sucata");
+    expect(l.categoriaId).toBe(categoriaReceitaId);
     const m = await prisma.movimentoSucata.findUniqueOrThrow({ where: { id: r.id } });
     expect(m).toMatchObject({ tipo: "VENDA", valorCentavos: 12_345, lancamentoId: r.lancamentoId });
     expect(await prisma.logAuditoria.count({ where: { entidade: "MovimentoSucata", entidadeId: r.id, acao: "VENDER" } })).toBe(1);
+  });
+
+  it("com a conta e sem categoria, usa a \"Venda de sucata\" do catálogo; se o dono a renomeou ou desativou, pede a categoria e nada é gravado", async () => {
+    // O código procura a categoria padrão pelo NOME; este teste confere o comportamento nos dois cenários possíveis do banco.
+    const padrao = await prisma.categoriaFinanceira.findFirst({ where: { tipo: "RECEITA", nome: { equals: "Venda de sucata", mode: "insensitive" }, ativo: true, deletadoEm: null }, select: { id: true } });
+    await gerar();
+    const saldo = await kgDaSucata();
+    if (padrao) {
+      const r = await vender({ pesoMilesimosKg: 100, valorCentavos: 4_000, contaFinanceiraId: contaId });
+      expect((await prisma.lancamento.findUniqueOrThrow({ where: { id: r.lancamentoId! } })).categoriaId).toBe(padrao.id);
+      expect(await kgDaSucata()).toBe(saldo - 100);
+    } else {
+      await expect(vender({ pesoMilesimosKg: 100, valorCentavos: 4_000, contaFinanceiraId: contaId })).rejects.toThrow(/Escolha a categoria/);
+      expect(await kgDaSucata()).toBe(saldo);
+    }
   });
 
   it("sem escolher a conta, só registra a venda (nenhum lançamento)", async () => {

@@ -3,6 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { alertaDeFormulario, aguardarAvisosSumirem, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
 import {
   buscarAuditoriaFeitaPeloE2E,
+  criarEspessuraDeVidroDeTeste,
+  criarFeriadoDeTeste,
+  criarLinhaDeTeste,
+  criarMotivoDeBloqueioDeTeste,
   lerCampoConfiguracao,
   obterModeloTexto,
   prepararUsuarioE2E,
@@ -157,8 +161,18 @@ test.describe("catálogos", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(62) } });
 
+  // Os testes nunca dependem de itens do catálogo real (o dono pode renomear ou excluir): criam os próprios ("E2E ").
+  const LINHA_EXISTENTE = "E2E Linha Preexistente";
+  const MOTIVO_JUSTIFICADO = "E2E Motivo Com Prazo Estendido";
+  const MOTIVO_NAO_JUSTIFICADO = "E2E Motivo Interno";
+  let espessuraExistente = 0;
+
   test.beforeAll(async () => {
     await prepararUsuarioE2E({ senhaDefinitiva: true });
+    await criarLinhaDeTeste(LINHA_EXISTENTE);
+    await criarMotivoDeBloqueioDeTeste(MOTIVO_JUSTIFICADO, true);
+    await criarMotivoDeBloqueioDeTeste(MOTIVO_NAO_JUSTIFICADO, false);
+    espessuraExistente = await criarEspessuraDeVidroDeTeste();
   });
 
   test.beforeEach(async ({ page }) => {
@@ -180,8 +194,8 @@ test.describe("catálogos", () => {
   test("adicionar, ordenar, editar e desativar uma linha de alumínio", async ({ page }) => {
     await page.goto("/configuracoes/catalogos?c=linhas");
     await semRolagemHorizontal(page);
-    // As linhas da seed estão presentes.
-    await expect(item(page, "Suprema")).toBeVisible();
+    // As linhas já cadastradas aparecem na lista.
+    await expect(item(page, LINHA_EXISTENTE)).toBeVisible();
 
     await adicionar(page, "E2E Linha A");
     await expect(toast(page, "Item adicionado.")).toBeVisible();
@@ -230,7 +244,7 @@ test.describe("catálogos", () => {
 
   test("espessura de vidro exige número em milímetros", async ({ page }) => {
     await page.goto("/configuracoes/catalogos?c=espessuras-vidro");
-    await expect(item(page, "6 mm")).toBeVisible();
+    await expect(item(page, `${espessuraExistente} mm`)).toBeVisible();
     await adicionarEspessura(page, "abc");
     await expect(page.getByText("Informe a espessura em milímetros")).toBeVisible();
     await adicionarEspessura(page, "99");
@@ -257,8 +271,8 @@ test.describe("catálogos", () => {
 
   test("motivo de bloqueio guarda se é justificado", async ({ page }) => {
     await page.goto("/configuracoes/catalogos?c=motivos-bloqueio");
-    await expect(item(page, "Alvenaria não pronta")).toContainText("Justificado");
-    await expect(item(page, "Aguardando fornecedor")).not.toContainText("Justificado");
+    await expect(item(page, MOTIVO_JUSTIFICADO)).toContainText("Justificado");
+    await expect(item(page, MOTIVO_NAO_JUSTIFICADO)).not.toContainText("Justificado");
   });
 });
 
@@ -268,6 +282,9 @@ test.describe("feriados e férias", () => {
 
   test.beforeAll(async () => {
     await prepararUsuarioE2E({ senhaDefinitiva: true });
+    // Feriados do próprio teste (o dono pode apagar ou renomear os semeados): um nacional e um ponto facultativo.
+    await criarFeriadoDeTeste("E2E Feriado Nacional", "2026-04-21", "FERIADO");
+    await criarFeriadoDeTeste("E2E Ponto Facultativo", "2026-02-17", "OUTRO");
   });
 
   test.beforeEach(async ({ page }) => {
@@ -276,13 +293,12 @@ test.describe("feriados e férias", () => {
 
   const item = (page: Page, nome: string) => page.locator("ul li").filter({ hasText: nome });
 
-  test("o seed traz os feriados nacionais do ano", async ({ page }) => {
+  test("a lista do ano mostra os feriados cadastrados e o ponto facultativo como aviso", async ({ page }) => {
     await page.goto("/configuracoes/feriados?ano=2026");
-    await expect(item(page, "Tiradentes")).toContainText("21/04/2026");
-    await expect(item(page, "Natal")).toContainText("25/12/2026");
-    // Carnaval é ponto facultativo: aparece como aviso, sem descontar dias úteis.
-    await expect(item(page, "Carnaval (terça-feira, ponto facultativo)")).toContainText("17/02/2026");
-    await expect(item(page, "Carnaval (terça-feira, ponto facultativo)")).toContainText("Aviso");
+    await expect(item(page, "E2E Feriado Nacional")).toContainText("21/04/2026");
+    // Ponto facultativo (como o Carnaval) aparece como aviso, sem descontar dias úteis.
+    await expect(item(page, "E2E Ponto Facultativo")).toContainText("17/02/2026");
+    await expect(item(page, "E2E Ponto Facultativo")).toContainText("Aviso");
     await semRolagemHorizontal(page);
   });
 

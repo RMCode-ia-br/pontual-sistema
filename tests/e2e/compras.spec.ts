@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { contasPagarDasComprasDeTeste, criarAcabamentoDeTeste, criarObraDeTeste, criarPerfilPorKgDeTeste, estoqueDoProdutoDeTeste, lerCustoNoBanco, prepararUsuarioE2E, recebimentosDasComprasDeTeste } from "./banco";
+import { contasPagarDasComprasDeTeste, criarAcabamentoDeTeste, criarCategoriaFinanceiraDeTeste, criarObraDeTeste, criarPerfilPorKgDeTeste, estoqueDoProdutoDeTeste, lerCustoNoBanco, prepararUsuarioE2E, recebimentosDasComprasDeTeste } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 /**
@@ -14,6 +14,8 @@ test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(107) } });
 const FORNECEDOR = "E2E Fornecedor Compras";
 const CODIGO_RAPIDO = "E2E-RAPIDO-1";
 const CODIGO_PERFIL = "E2E-KGC-1";
+// Categoria de despesa do próprio teste (o dono pode renomear ou excluir as do catálogo).
+const CATEGORIA_DESPESA = "E2E Despesa Compras";
 let compraUrl = "";
 const dialogo = (page: Page) => page.getByRole("dialog");
 const item = (page: Page, n: number) => page.getByRole("listitem", { name: `Item ${n}`, exact: true });
@@ -21,6 +23,7 @@ const item = (page: Page, n: number) => page.getByRole("listitem", { name: `Item
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
   await criarObraDeTeste("Compras");
+  await criarCategoriaFinanceiraDeTeste(CATEGORIA_DESPESA, "DESPESA", "CUSTOS_DIRETOS");
   const acabamentoId = await criarAcabamentoDeTeste("E2E Acabamento Compras");
   await criarPerfilPorKgDeTeste(CODIGO_PERFIL, "E2E Perfil Compra", acabamentoId, "0.500");
 });
@@ -98,11 +101,11 @@ test("recebe tudo: o perfil em kg pede as barras, o preço do kg e o último cus
   await d.getByRole("button", { name: "Usar 10" }).click();
   await expect(d.getByLabel(/Atualizar o preço do kg do acabamento/)).toBeChecked();
 
-  // Conta a pagar em 2 parcelas (categoria de despesa já existente).
+  // Conta a pagar em 2 parcelas (categoria de despesa criada pelo teste).
   await d.getByLabel("Gerar a conta a pagar do que foi recebido").check();
   await d.getByLabel("Vencimento (1ª parcela)").fill("2027-02-10");
   await d.getByLabel("Parcelas").selectOption("2");
-  await d.getByLabel("Categoria da despesa").selectOption({ index: 1 });
+  await d.getByLabel("Categoria da despesa").selectOption({ label: CATEGORIA_DESPESA });
   await d.getByRole("button", { name: "Registrar recebimento" }).click();
   await expect(toast(page, "compra recebida por inteiro")).toBeVisible();
   await aguardarAvisosSumirem(page);

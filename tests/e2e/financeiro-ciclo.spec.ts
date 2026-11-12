@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { contaDaObra, criarObraDeTeste, prepararUsuarioE2E, recebidoDaObra } from "./banco";
+import { contaDaObra, criarCategoriaFinanceiraDeTeste, criarObraDeTeste, prepararUsuarioE2E, recebidoDaObra } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 /**
@@ -13,11 +13,14 @@ test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(102) } });
 
 const CONTA = "E2E Conta do ciclo";
+// Categoria de despesa do próprio teste, no grupo "Despesas fixas" do DRE (o dono pode renomear ou excluir as do catálogo).
+const CATEGORIA_ALUGUEL = "E2E Aluguel";
 const dialogo = (page: Page) => page.getByRole("dialog");
 let obraId: string;
 
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarCategoriaFinanceiraDeTeste(CATEGORIA_ALUGUEL, "DESPESA", "DESPESAS_FIXAS");
   obraId = await criarObraDeTeste("Aceite");
 });
 
@@ -68,7 +71,7 @@ test("cria a conta e recebe o sinal e a parcela liberada, pagando uma conta no m
   await page.getByRole("button", { name: "Nova conta a pagar" }).first().click();
   await dialogo(page).getByLabel("Descrição").fill("E2E Aluguel do ciclo");
   await dialogo(page).getByLabel(/^Valor/).fill("100000");
-  await dialogo(page).getByLabel("Categoria").selectOption({ label: "Aluguel" });
+  await dialogo(page).getByLabel("Categoria").selectOption({ label: CATEGORIA_ALUGUEL });
   await dialogo(page).getByRole("button", { name: "Criar" }).click();
   await expect(toast(page, "Conta a pagar criada.")).toBeVisible();
   await aguardarAvisosSumirem(page);

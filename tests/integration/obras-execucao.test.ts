@@ -54,6 +54,9 @@ async function limpar() {
     await c.query(`DELETE FROM "EventoAgenda" WHERE "projetoId" IN (${projetos})`, p);
     await c.query(`DELETE FROM "EtapaProjeto" WHERE "projetoId" IN (${projetos})`, p);
     await c.query(`DELETE FROM "PausaProjeto" WHERE "projetoId" IN (${projetos})`, p);
+    // Motivos de bloqueio e feriado criados pelo teste (o dono pode renomear ou excluir os do catálogo).
+    await c.query(`DELETE FROM "MotivoBloqueio" WHERE nome LIKE $1`, p);
+    await c.query(`DELETE FROM "Feriado" WHERE nome LIKE $1`, p);
     await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetos}))`, p);
     await c.query(`DELETE FROM "Proposta" WHERE "projetoId" IN (${projetos})`, p);
     await c.query(`DELETE FROM "HistoricoFaseProjeto" WHERE "projetoId" IN (${projetos})`, p);
@@ -69,6 +72,13 @@ beforeAll(async () => {
   await criarUsuarioDeTeste(LOGIN, "senha-de-teste-123");
   usuario = await prisma.usuario.findUniqueOrThrow({ where: { login: LOGIN }, select: { id: true, nome: true } });
   clienteId = (await prisma.cliente.create({ data: { nome: `${PREFIXO} Cliente`, tipoPessoa: "PF" } })).id;
+  // Os motivos de bloqueio são do próprio teste (nome com prefixo): `motivo("Clima")` lê "Int Exe Clima".
+  for (const [nome, justificado] of [["Aguardando cliente", true], ["Alvenaria não pronta", true], ["Aguardando fornecedor", false], ["Clima", true]] as const) {
+    await prisma.motivoBloqueio.create({ data: { nome: `${PREFIXO} ${nome}`, justificado } });
+  }
+  // Corpus Christi de 2026 (quinta, 04/06): os testes de pausa contam dias úteis de junho descontando esse feriado.
+  // Criado aqui para não depender do feriado semeado (se ele existir, a mesma data duas vezes não muda a conta).
+  await prisma.feriado.create({ data: { data: new Date("2026-06-04T00:00:00Z"), nome: `${PREFIXO} Corpus Christi`, tipo: "FERIADO" } });
 });
 
 afterAll(async () => {
@@ -118,7 +128,7 @@ const projetoDe = (obra: Obra) => prisma.projeto.findUniqueOrThrow({ where: { id
 const contas = (obra: Obra) => prisma.contaReceber.findMany({ where: { projetoId: obra.projetoId }, orderBy: { ordem: "asc" } });
 const mudar = (etapaId: string, para: Parameters<typeof mudarStatusDaEtapa>[1]["para"], extra: Partial<Parameters<typeof mudarStatusDaEtapa>[1]> = {}) =>
   prisma.$transaction((tx) => mudarStatusDaEtapa(tx, { etapaId, para, usuario, agora: AGORA, ...extra }), { timeout: 30_000 });
-const motivo = (nome: string) => prisma.motivoBloqueio.findFirstOrThrow({ where: { nome, deletadoEm: null } });
+const motivo = (nome: string) => prisma.motivoBloqueio.findFirstOrThrow({ where: { nome: `${PREFIXO} ${nome}`, deletadoEm: null } });
 
 describe("estados da etapa", () => {
   it("iniciar, bloquear com motivo, desbloquear e concluir; o projeto vai a Em execução", async () => {

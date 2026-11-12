@@ -65,8 +65,11 @@ async function limpar(c: Client): Promise<void> {
     `DELETE FROM "Lancamento" WHERE descricao LIKE 'E2E %' OR "contaFinanceiraId" IN (SELECT id FROM "ContaFinanceira" WHERE nome LIKE 'E2E %')
        OR "clienteId" IN (${clientesE2E}) OR "projetoId" IN (${projetosFinanceiro})`,
   );
-  await c.query(`DELETE FROM "ContaPagar" WHERE descricao LIKE 'E2E %'`);
-  await c.query(`DELETE FROM "RecorrenciaPagar" WHERE descricao LIKE 'E2E %'`);
+  // Categorias financeiras de teste ("E2E "): quem as usa sai antes delas (a limpeza no fim apaga as categorias).
+  const categoriasE2E = `SELECT id FROM "CategoriaFinanceira" WHERE nome LIKE 'E2E %'`;
+  await c.query(`DELETE FROM "Lancamento" WHERE "categoriaId" IN (${categoriasE2E})`);
+  await c.query(`DELETE FROM "ContaPagar" WHERE descricao LIKE 'E2E %' OR "categoriaId" IN (${categoriasE2E})`);
+  await c.query(`DELETE FROM "RecorrenciaPagar" WHERE descricao LIKE 'E2E %' OR "categoriaId" IN (${categoriasE2E})`);
   const comprasE2E = `SELECT id FROM "Compra" WHERE "projetoId" IN (${projetosFinanceiro}) OR "fornecedorId" IN (SELECT id FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %')`;
   // A conta a pagar nascida da compra aponta para ela (FK restrita) e a descrição não começa com "E2E ": sai pelo vínculo.
   await c.query(`DELETE FROM "ContaPagar" WHERE "compraId" IN (${comprasE2E})`);
@@ -166,7 +169,7 @@ async function limpar(c: Client): Promise<void> {
   for (const tabela of ["LinhaAluminio", "AcabamentoAluminio", "TipoVidro", "CategoriaProduto", "MotivoPerda", "MotivoBloqueio"]) {
     await c.query(`DELETE FROM "${tabela}" WHERE nome LIKE 'E2E %'`);
   }
-  await c.query(`DELETE FROM "EspessuraVidro" WHERE mm = 99`);
+  await c.query(`DELETE FROM "EspessuraVidro" WHERE mm IN (98, 99)`);
   await c.query(`DELETE FROM "CategoriaFinanceira" WHERE nome LIKE 'E2E %'`);
 
   // Só apaga o que é dos testes: os logins e2e-* e os IPs da faixa reservada (RFC 5737).
@@ -645,6 +648,109 @@ export async function criarCategoriaDeProdutoDeTeste(nome: string): Promise<stri
   return comConexao(async (c) => {
     const id = randomUUID();
     await c.query(`INSERT INTO "CategoriaProduto" (id, nome, ordem, "atualizadoEm") VALUES ($1, $2, 9999, now())`, [id, nome]);
+    return id;
+  });
+}
+
+/** Linha de alumínio de teste ("E2E ..."): os testes nunca dependem das linhas reais ("Suprema" etc.). */
+export async function criarLinhaDeTeste(nome: string): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "LinhaAluminio" (id, nome, ordem, "atualizadoEm") VALUES ($1, $2, 9999, now())`, [id, nome]);
+    return id;
+  });
+}
+
+/** Espessura de vidro de teste: 98 mm (a limpeza apaga 98 e 99 mm, valores que o dono não usa). */
+export async function criarEspessuraDeVidroDeTeste(): Promise<number> {
+  return comConexao(async (c) => {
+    await c.query(`INSERT INTO "EspessuraVidro" (id, mm, ordem, "atualizadoEm") VALUES ($1, 98, 9999, now()) ON CONFLICT (mm) DO NOTHING`, [randomUUID()]);
+    return 98;
+  });
+}
+
+/** Motivo de bloqueio de teste ("E2E ..."): `justificado` diz se a pausa estende o prazo prometido (R8). */
+export async function criarMotivoDeBloqueioDeTeste(nome: string, justificado: boolean): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "MotivoBloqueio" (id, nome, justificado, ordem, "atualizadoEm") VALUES ($1, $2, $3, 9999, now())`, [id, nome, justificado]);
+    return id;
+  });
+}
+
+/** Motivo de perda de teste ("E2E ..."): quem marca um projeto como perdido nos testes escolhe este. */
+export async function criarMotivoDePerdaDeTeste(nome: string): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "MotivoPerda" (id, nome, ordem, "atualizadoEm") VALUES ($1, $2, 9999, now())`, [id, nome]);
+    return id;
+  });
+}
+
+/**
+ * Categoria financeira de teste ("E2E ..."). O grupo do DRE precisa combinar com o tipo (receita só em grupo de receita,
+ * despesa só nos demais; o banco também confere).
+ */
+export async function criarCategoriaFinanceiraDeTeste(
+  nome: string,
+  tipo: "RECEITA" | "DESPESA",
+  grupo: "RECEITAS_OPERACIONAIS" | "OUTRAS_RECEITAS" | "IMPOSTOS" | "CUSTOS_DIRETOS" | "DESPESAS_FIXAS" | "DESPESAS_OPERACIONAIS" | "DESPESAS_COMERCIAIS" | "DESPESAS_ADMINISTRATIVAS" | "DESPESAS_FINANCEIRAS",
+): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(
+      `INSERT INTO "CategoriaFinanceira" (id, nome, tipo, grupo, ordem, "atualizadoEm") VALUES ($1, $2, $3::"TipoCategoriaFinanceira", $4::"GrupoDre", 9999, now())`,
+      [id, nome, tipo, grupo],
+    );
+    return id;
+  });
+}
+
+/**
+ * Condição de pagamento de teste ("E2E ..."): por padrão o cronograma 50% sinal + 25% entrega do material + 25% entrega dos
+ * vidros e instalação. Com `textoLivre` nasce sem parcelas (como "A combinar").
+ */
+export async function criarCondicaoDePagamentoDeTeste(nome: string, opcoes: { textoLivre?: string } = {}): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "CondicaoPagamento" (id, nome, "textoLivre", ordem, "atualizadoEm") VALUES ($1, $2, $3, 9999, now())`, [id, nome, opcoes.textoLivre ?? null]);
+    if (opcoes.textoLivre) return id;
+    const parcelas: [number, string, number, string][] = [
+      [1, "Sinal na confirmação do pedido", 5000, "CONFIRMACAO"],
+      [2, "Na entrega do material (esquadrias)", 2500, "ENTREGA_MATERIAL"],
+      [3, "Na entrega dos vidros e instalação", 2500, "ENTREGA_E_INSTALACAO"],
+    ];
+    for (const [ordem, descricao, percentualPb, gatilho] of parcelas) {
+      await c.query(
+        `INSERT INTO "CondicaoParcela" (id, "condicaoId", ordem, descricao, "percentualPb", gatilho, "atualizadoEm") VALUES ($1, $2, $3, $4, $5, $6::"GatilhoPagamento", now())`,
+        [randomUUID(), id, ordem, descricao, percentualPb, gatilho],
+      );
+    }
+    return id;
+  });
+}
+
+/**
+ * Tipologia de teste ("E2E ...") ativa: janela de correr de 2 a 4 folhas, cobrada por m², que exige esquadria, sem
+ * composição nem tabela de preços (os testes informam o valor do item na mão).
+ */
+export async function criarTipologiaDeTeste(nome: string): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(
+      `INSERT INTO "Tipologia" (id, nome, categoria, "tipoDesenho", "opcoesFolhas", "templateDescricao", "cobrancaPadrao", "exigeEsquadria", ordem, "atualizadoEm")
+       VALUES ($1, $2, 'JANELA'::"TipoServico", 'JANELA_CORRER'::"TipoDesenho", $3::int[], $4, 'POR_M2'::"TipoCobranca", true, 9999, now())`,
+      [id, nome, [2, 3, 4], "JANELA(S) DE CORRER COM {FOLHAS} FOLHAS EM ALUMÍNIO LINHA {LINHA}, MED. {MEDIDAS}"],
+    );
+    return id;
+  });
+}
+
+/** Feriado de teste ("E2E ...") numa data "aaaa-mm-dd"; `tipo` OUTRO é o ponto facultativo (só aviso, não desconta dia útil). */
+export async function criarFeriadoDeTeste(nome: string, data: string, tipo: "FERIADO" | "OUTRO" = "FERIADO"): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "Feriado" (id, data, nome, tipo, "atualizadoEm") VALUES ($1, $2::date, $3, $4::"TipoFeriado", now())`, [id, data, nome, tipo]);
     return id;
   });
 }

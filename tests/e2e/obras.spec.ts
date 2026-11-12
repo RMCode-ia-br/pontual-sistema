@@ -1,17 +1,23 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { concluirEtapasAnterioresDaObra, criarObraDeTeste, parcelasDaObra, prepararUsuarioE2E, tarefasDaObra } from "./banco";
+import { concluirEtapasAnterioresDaObra, criarMotivoDeBloqueioDeTeste, criarObraDeTeste, parcelasDaObra, prepararUsuarioE2E, tarefasDaObra } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(94) } });
+
+// Motivos de bloqueio do próprio teste (o dono pode renomear ou excluir os do catálogo); ambos justificados.
+const MOTIVO_BLOQUEIO = "E2E Clima";
+const MOTIVO_PAUSA = "E2E Alvenaria não pronta";
 
 let obraId: string;
 let obraSemEtapasId: string;
 
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarMotivoDeBloqueioDeTeste(MOTIVO_BLOQUEIO, true);
+  await criarMotivoDeBloqueioDeTeste(MOTIVO_PAUSA, true);
   obraId = await criarObraDeTeste("Fluxo");
   obraSemEtapasId = await criarObraDeTeste("Sem etapas", { semEtapas: true });
 });
@@ -119,13 +125,13 @@ test("bloquear exige motivo; desbloquear limpa; a etapa não pode ser concluída
   await pedido.getByRole("button", { name: "Bloquear: Pedido de material" }).click();
   await dialogo(page).getByRole("button", { name: "Bloquear", exact: true }).click();
   await expect(dialogo(page).getByText("Escolha o motivo.").first()).toBeVisible(); // exige o motivo da lista
-  await dialogo(page).getByLabel("Motivo do bloqueio").selectOption({ label: "Clima" });
+  await dialogo(page).getByLabel("Motivo do bloqueio").selectOption({ label: MOTIVO_BLOQUEIO });
   await dialogo(page).getByLabel("Detalhes (opcional)").fill("Chuva forte na semana");
   await dialogo(page).getByRole("button", { name: "Bloquear", exact: true }).click();
   await expect(toast(page, "Etapa bloqueada")).toBeVisible();
   await aguardarAvisosSumirem(page);
 
-  await expect(pedido).toContainText("Bloqueada: Clima — Chuva forte na semana");
+  await expect(pedido).toContainText(`Bloqueada: ${MOTIVO_BLOQUEIO} — Chuva forte na semana`);
   await expect(pedido.getByRole("button", { name: "Concluir: Pedido de material" })).toHaveCount(0); // desbloquear primeiro
   await expect(pedido.getByRole("button", { name: "Desbloquear: Pedido de material" })).toBeVisible();
   await capturar(page, "obra-etapa-bloqueada");
@@ -158,7 +164,7 @@ test("editar a etapa: datas incoerentes são recusadas e a equipe fica registrad
 test("pausa: abrir, ver o efeito no prazo e encerrar; entrega só com a pausa encerrada", async ({ page }) => {
   await page.goto(`/obras/${obraId}?aba=etapas`);
   await page.getByRole("button", { name: "Pausar obra", exact: true }).click();
-  await dialogo(page).getByLabel("Motivo").selectOption({ label: "Alvenaria não pronta" }); // o rótulo traz o asterisco de obrigatório
+  await dialogo(page).getByLabel("Motivo").selectOption({ label: MOTIVO_PAUSA }); // o rótulo traz o asterisco de obrigatório
   await expect(dialogo(page).getByText("Pausa justificada: estende o prazo prometido.")).toBeVisible();
   await dialogo(page).getByRole("button", { name: "Pausar obra", exact: true }).click();
   await expect(toast(page, "Obra pausada")).toBeVisible();

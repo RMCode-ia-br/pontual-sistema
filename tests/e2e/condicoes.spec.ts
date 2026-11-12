@@ -1,14 +1,20 @@
 import { expect, test } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E, restaurarConfiguracao, tirarSnapshotConfiguracao, lerCampoConfiguracao } from "./banco";
+import { criarCondicaoDePagamentoDeTeste, prepararUsuarioE2E, restaurarConfiguracao, tirarSnapshotConfiguracao, lerCampoConfiguracao } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(92) } });
 
+// Condições do próprio teste (o dono pode renomear ou excluir as semeadas).
+const CONDICAO_COM_PARCELAS = "E2E Condição 50-25-25 da lista";
+const CONDICAO_SEM_PARCELAS = "E2E Condição a combinar da lista";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarCondicaoDePagamentoDeTeste(CONDICAO_COM_PARCELAS);
+  await criarCondicaoDePagamentoDeTeste(CONDICAO_SEM_PARCELAS, { textoLivre: "Forma de pagamento a combinar." });
 });
 
 test.beforeEach(async ({ page }) => {
@@ -17,8 +23,8 @@ test.beforeEach(async ({ page }) => {
 
 test("condições de pagamento: soma 100% e prévia do cronograma", async ({ page }) => {
   await page.goto("/configuracoes/condicoes-pagamento");
-  await expect(page.getByText("50% sinal + 25% entrega do material + 25% entrega dos vidros e instalação")).toBeVisible();
-  await expect(page.getByText("A combinar").first()).toBeVisible();
+  await expect(page.getByText(CONDICAO_COM_PARCELAS).first()).toBeVisible();
+  await expect(page.getByText(CONDICAO_SEM_PARCELAS).first()).toBeVisible();
   await semRolagemHorizontal(page);
 
   await page.getByRole("link", { name: "Nova condição" }).first().click();

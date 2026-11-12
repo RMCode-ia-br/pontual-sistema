@@ -1,14 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, ehCelular, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { buscarAuditoriaFeitaPeloE2E, prepararUsuarioE2E } from "./banco";
+import { buscarAuditoriaFeitaPeloE2E, criarMotivoDePerdaDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(88) } });
 
+// Motivo de perda do próprio teste (o dono pode renomear ou excluir os do catálogo).
+const MOTIVO_PERDA = "E2E Motivo de perda";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  await criarMotivoDePerdaDeTeste(MOTIVO_PERDA);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -121,8 +125,8 @@ test("perder exige o motivo; reabrir pela ficha devolve o projeto ao funil", asy
 
   const dialogo = page.getByRole("dialog");
   await expect(dialogo.getByRole("heading", { name: "Marcar como perdido" })).toBeVisible();
-  // Sem motivo o navegador nem envia (campo obrigatório); escolhe o primeiro motivo da lista.
-  await dialogo.getByLabel("Motivo").selectOption({ index: 1 });
+  // Sem motivo o navegador nem envia (campo obrigatório); escolhe o motivo criado pelo teste.
+  await dialogo.getByLabel("Motivo").selectOption({ label: MOTIVO_PERDA });
   await dialogo.getByLabel(/qual\? \(opcional\)/).fill("E2E Concorrente");
   await dialogo.getByRole("button", { name: "Marcar como perdido" }).click();
 
