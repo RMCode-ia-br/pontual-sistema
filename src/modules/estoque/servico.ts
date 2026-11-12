@@ -15,6 +15,8 @@ import {
 } from "@/lib/dominio/estoque";
 import { formatarMoeda } from "@/lib/formatadores";
 
+import { saldoDaSucata, travarSucata } from "./sucata-base";
+
 type Tx = Prisma.TransactionClient;
 export type ContextoEstoque = {
   usuario: UsuarioSessao;
@@ -235,7 +237,7 @@ export async function estornarMovimentoDeEstoque(
     where: { id: movimentoId, deletadoEm: null },
     include: {
       estornadoPor: { select: { id: true } },
-      retalhosGerados: { where: { deletadoEm: null }, select: { id: true } },
+      retalhosGerados: { where: { deletadoEm: null }, select: { id: true, status: true } },
     },
   });
   if (!original) throw new ErroNegocio("Movimento não encontrado.");
@@ -250,19 +252,32 @@ export async function estornarMovimentoDeEstoque(
     throw new ErroNegocio(
       "Este movimento veio do recebimento de uma compra: desfaça-o pelo recebimento.",
     );
-  if (original.retalhosGerados.length > 0)
+  // Saída por corte de barra: o retalho gerado só se desfaz se ainda está disponível, e a sucata gerada se ainda não foi vendida.
+  if (original.retalhosGerados.some((r) => r.status !== "DISPONIVEL"))
     throw new ErroNegocio(
-      "Esta saída gerou retalho: trate o retalho antes de estornar.",
+      "Esta saída gerou um retalho que já foi usado ou descartado: não dá para estornar.",
     );
   if (motivo.trim().length < 3)
     throw new ErroNegocio("Informe o motivo do estorno.", {
       motivo: "Informe o motivo.",
     });
+  const sucatas = await tx.movimentoSucata.findMany({
+    where: { observacao: { startsWith: `mov:${original.id}` }, tipo: "GERACAO", deletadoEm: null },
+    select: { id: true, pesoKg: true, comprimentoMm: true, produtoId: true, projetoId: true },
+  });
+  if (sucatas.length > 0) {
+    await travarSucata(tx);
+    const saldo = await saldoDaSucata(tx);
+    const kg = sucatas.reduce((s, x) => s + (x.pesoKg ? Math.round(Number(x.pesoKg.toString()) * 1000) : 0), 0);
+    const mm = sucatas.reduce((s, x) => s + (x.pesoKg ? 0 : (x.comprimentoMm ?? 0)), 0);
+    if (saldo.pesoMilesimosKg < kg || saldo.comprimentoSemPesoMm < mm)
+      throw new ErroNegocio("A sucata gerada por esta saída já foi vendida ou ajustada: não dá para estornar.");
+  }
 
   const delta = milesimosDoDecimal(original.quantidade);
   const quantidade = Math.abs(delta);
   // Desfazer uma ENTRADA retira do saldo: precisa de saldo, ou de confirmação (aqui o estorno é intencional e justificado).
-  return registrarMovimentoDeEstoque(
+  const desfeito = await registrarMovimentoDeEstoque(
     tx,
     {
       produtoId: original.produtoId,
@@ -278,6 +293,29 @@ export async function estornarMovimentoDeEstoque(
     },
     ctx,
   );
+  // Efeitos do corte: o retalho gerado é descartado e a sucata gerada sai do saldo (ajuste negativo, com rastro).
+  if (original.retalhosGerados.length > 0) {
+    await tx.retalho.updateMany({
+      where: { id: { in: original.retalhosGerados.map((r) => r.id) } },
+      data: { status: "DESCARTADO", observacao: `Saída estornada: ${motivo.trim()}`, atualizadoPorId: ctx.usuario.id },
+    });
+  }
+  for (const s of sucatas) {
+    await tx.movimentoSucata.create({
+      data: {
+        tipo: "AJUSTE",
+        data: comoData((ctx.agora ?? new Date()).toISOString().slice(0, 10)),
+        pesoKg: s.pesoKg ? (-Number(s.pesoKg.toString())).toFixed(3) : null,
+        comprimentoMm: s.pesoKg ? null : s.comprimentoMm !== null ? -s.comprimentoMm : null,
+        produtoId: s.produtoId,
+        projetoId: s.projetoId,
+        observacao: `estorno:mov:${original.id} · ${motivo.trim()}`,
+        criadoPorId: ctx.usuario.id,
+        atualizadoPorId: ctx.usuario.id,
+      },
+    });
+  }
+  return desfeito;
 }
 
 export type LinhaDaContagem = {

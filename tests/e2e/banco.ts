@@ -57,9 +57,9 @@ async function limpar(c: Client): Promise<void> {
   const projetosFinanceiro = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (${clientesE2E})`;
   // Fase 6 (estoque e compras): movimentos, retalhos e sucata dos produtos "E2E-" e das obras "E2E " saem primeiro.
   const produtosE2E = `SELECT id FROM "Produto" WHERE codigo LIKE 'E2E-%'`;
+  await c.query(`DELETE FROM "Retalho" WHERE "produtoId" IN (${produtosE2E}) OR "origemProjetoId" IN (${projetosFinanceiro}) OR "consumidoProjetoId" IN (${projetosFinanceiro})`);
   await c.query(`UPDATE "MovimentoEstoque" SET "estornoDeId" = NULL WHERE "produtoId" IN (${produtosE2E}) OR "projetoId" IN (${projetosFinanceiro})`);
   await c.query(`DELETE FROM "MovimentoEstoque" WHERE "produtoId" IN (${produtosE2E}) OR "projetoId" IN (${projetosFinanceiro})`);
-  await c.query(`DELETE FROM "Retalho" WHERE "produtoId" IN (${produtosE2E}) OR "origemProjetoId" IN (${projetosFinanceiro}) OR "consumidoProjetoId" IN (${projetosFinanceiro})`);
   await c.query(`DELETE FROM "MovimentoSucata" WHERE "produtoId" IN (${produtosE2E}) OR "projetoId" IN (${projetosFinanceiro})`);
   await c.query(
     `DELETE FROM "Lancamento" WHERE descricao LIKE 'E2E %' OR "contaFinanceiraId" IN (SELECT id FROM "ContaFinanceira" WHERE nome LIKE 'E2E %')
@@ -613,5 +613,35 @@ export async function criarPerfilPorKgDeTeste(codigo: string, descricao: string,
       [id, codigo, descricao, acabamentoId, pesoKgPorMetro],
     );
     return id;
+  });
+}
+
+/** Perfil em barra de teste (6.000 mm, 0,5 kg/m) com `barras` em estoque (movimento + saldo em cache coerentes). */
+export async function criarPerfilBarraDeTeste(codigo: string, descricao: string, barras: number, custoCentavos: number | null = 15_000): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(
+      `INSERT INTO "Produto" (id, codigo, descricao, unidade, "custoUnitarioCentavos", "comprimentoBarraMm", "pesoKgPorMetro", "saldoCache", "atualizadoEm")
+       VALUES ($1, $2, $3, 'BARRA', $4, 6000, 0.5, $5, now())`,
+      [id, codigo, descricao, custoCentavos, barras],
+    );
+    await c.query(`INSERT INTO "MovimentoEstoque" (id, "produtoId", tipo, quantidade, data, "custoUnitarioCentavos", "atualizadoEm") VALUES ($1, $2, 'ENTRADA_COMPRA', $3, CURRENT_DATE, $4, now())`, [randomUUID(), id, barras, custoCentavos]);
+    return id;
+  });
+}
+
+/** Define o retalho mínimo de Configurações (null = vazio). Quem usa guarda e restaura o valor original. */
+export async function definirRetalhoMinimo(mm: number | null): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "ConfiguracaoEmpresa" SET "retalhoMinimoMm" = $1 WHERE id = 'singleton'`, [mm]));
+}
+
+/** Retalhos do produto de teste (comprimento e situação), do maior para o menor. */
+export async function retalhosDoProdutoDeTeste(codigo: string): Promise<{ comprimentoMm: number; status: string; local: string | null }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ comprimentoMm: number; status: string; local: string | null }>(
+      `SELECT r."comprimentoMm", r.status::text AS status, r.local FROM "Retalho" r JOIN "Produto" p ON p.id = r."produtoId" WHERE p.codigo = $1 ORDER BY r."comprimentoMm" DESC`,
+      [codigo],
+    );
+    return r.rows;
   });
 }

@@ -171,3 +171,75 @@ export const contagemSchema = z.object({
 });
 
 export type DadosDoMovimento = z.output<typeof movimentoSchema>;
+
+// ---------- Retalhos e sucata ----------
+
+const inteiroOpcional = (rotulo: string, max: number) =>
+  bruto(10).transform((v, ctx): number | undefined => {
+    if (v === "") return undefined;
+    if (!/^\d+$/.test(v) || Number(v) > max) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: informe um número inteiro de 1 a ${max.toLocaleString("pt-BR")}.` });
+      return z.NEVER;
+    }
+    return Number(v);
+  });
+
+export const baixaDePerfilSchema = z
+  .object({
+    produtoId: idObrigatorio("Produto inválido."),
+    projetoId: idObrigatorio("Escolha a obra."),
+    data: dataObrigatoria("Data"),
+    modo: z.enum(["BARRAS_INTEIRAS", "BARRA_CORTADA"], { message: "Escolha como baixar." }),
+    barras: inteiroOpcional("Barras", 100_000),
+    usadoMm: inteiroOpcional("Comprimento usado", 100_000),
+    destinoDaSobra: z.preprocess((v) => (v === "" || v === undefined ? undefined : v), z.enum(["RETALHO", "SUCATA"]).optional()),
+    local: textoOpcional(120),
+    confirmarSemSaldo: campoCaixa,
+    justificativa: textoOpcional(300),
+  })
+  .superRefine((d, ctx) => {
+    if (d.modo === "BARRAS_INTEIRAS" && !d.barras) ctx.addIssue({ code: "custom", path: ["barras"], message: "Informe quantas barras inteiras." });
+    if (d.modo === "BARRA_CORTADA" && !d.usadoMm) ctx.addIssue({ code: "custom", path: ["usadoMm"], message: "Informe o comprimento usado, em mm." });
+  });
+
+export const usarRetalhoSchema = z.object({ retalhoId: idObrigatorio("Retalho inválido."), projetoId: idObrigatorio("Escolha a obra.") });
+
+export const descartarRetalhoSchema = z.object({
+  retalhoId: idObrigatorio("Retalho inválido."),
+  motivo: bruto(300).refine((v) => v.length >= 3, "Informe o motivo do descarte."),
+  virarSucata: campoCaixa,
+});
+
+const valorObrigatorio = (rotulo: string) =>
+  bruto(24).transform((v, ctx): number => {
+    const c = parseMoedaParaCentavos(v);
+    if (c === null || c <= 0 || c > 2_000_000_000) {
+      ctx.addIssue({ code: "custom", message: `${rotulo}: informe um valor em reais maior que zero, ex.: 80,00.` });
+      return z.NEVER;
+    }
+    return c;
+  });
+
+export const vendaDeSucataSchema = z.object({
+  data: dataObrigatoria("Data da venda"),
+  peso: quantidade("Peso vendido (kg)"),
+  valor: valorObrigatorio("Valor da venda"),
+  contaFinanceiraId: idOpcional,
+  categoriaId: idOpcional,
+  observacao: textoOpcional(300),
+});
+
+/** Peso com sinal ("2,5" acrescenta, "-1,2" retira), até 3 casas. */
+export const ajusteDeSucataSchema = z.object({
+  data: dataObrigatoria("Data"),
+  peso: bruto(20).transform((v, ctx): number => {
+    const negativo = v.startsWith("-");
+    const q = lerQuantidade(v.replace(/^[+-]/, ""));
+    if (q === null || q <= 0 || q > 1_000_000_000) {
+      ctx.addIssue({ code: "custom", message: "Peso: informe kg com até 3 casas, ex.: 2,5 (acrescenta) ou -1,2 (retira)." });
+      return z.NEVER;
+    }
+    return negativo ? -q : q;
+  }),
+  observacao: bruto(300).refine((v) => v.length >= 3, "Explique o ajuste."),
+});

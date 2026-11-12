@@ -78,7 +78,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Produtos", href: "/produtos" },
       { titulo: "Preço do kg do alumínio", href: "/estoque/preco-do-kg" },
       { titulo: "Movimentações", href: "/estoque/movimentacoes" },
-      { titulo: "Retalhos", fase: 6 },
+      { titulo: "Retalhos e sucata", href: "/estoque/retalhos" },
       { titulo: "Compras", fase: 6 },
     ],
   },

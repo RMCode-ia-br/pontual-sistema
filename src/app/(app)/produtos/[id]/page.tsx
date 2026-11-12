@@ -7,10 +7,12 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { abaixoDoMinimo, formatarQuantidade } from "@/lib/dominio/estoque";
+import { prisma } from "@/lib/db";
 import { dataLocalDoInstante, formatarData, formatarMoeda } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
+import { DialogoDeBaixaDePerfil } from "@/modules/estoque/components/dialogo-de-baixa-de-perfil";
 import { DialogoDeMovimento } from "@/modules/estoque/components/dialogo-de-movimento";
 import { ListaDeMovimentos } from "@/modules/estoque/components/lista-de-movimentos";
 import { estoqueDoProduto } from "@/modules/estoque/queries";
@@ -93,7 +95,7 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
 
       <div className="max-w-3xl">
         {aba === "dados" ? <FormProduto produto={produto} opcoes={await listarOpcoesDeProduto()} /> : null}
-        {aba === "estoque" ? <AbaDeEstoque produtoId={produto.id} nome={produto.descricao} unidade={produto.unidade} custoCentavos={produto.custoUnitarioCentavos} ativo={produto.ativo} /> : null}
+        {aba === "estoque" ? <AbaDeEstoque produtoId={produto.id} nome={produto.descricao} unidade={produto.unidade} custoCentavos={produto.custoUnitarioCentavos} ativo={produto.ativo} comprimentoBarraMm={produto.comprimentoBarraMm} pesoKgPorMetro={produto.pesoKgPorMetro} /> : null}
         {aba === "historico" ? <HistoricoDePreco itens={await listarHistoricoDePreco(produto.id)} /> : null}
         {aba === "anexos" ? <Anexos entidadeTipo="Produto" entidadeId={produto.id} anexos={await listarAnexos("Produto", produto.id)} titulo="Arquivos do produto" /> : null}
       </div>
@@ -101,8 +103,8 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
   );
 }
 
-async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo }: { produtoId: string; nome: string; unidade: keyof typeof SIGLA_UNIDADE; custoCentavos: number | null; ativo: boolean }) {
-  const e = await estoqueDoProduto(produtoId);
+async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo, comprimentoBarraMm, pesoKgPorMetro }: { produtoId: string; nome: string; unidade: keyof typeof SIGLA_UNIDADE; custoCentavos: number | null; ativo: boolean; comprimentoBarraMm: number | null; pesoKgPorMetro: string | null }) {
+  const [e, cfg] = await Promise.all([estoqueDoProduto(produtoId), unidade === "BARRA" ? prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { retalhoMinimoMm: true } }) : null]);
   if (!e) return null;
   const sigla = SIGLA_UNIDADE[unidade];
   const abaixo = abaixoDoMinimo(e.saldoMilesimos, e.minimoMilesimos);
@@ -133,6 +135,17 @@ async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo }: 
       {ativo ? (
         <div className="flex flex-wrap gap-2">
           <DialogoDeMovimento produtoId={produtoId} produtoNome={nome} sigla={sigla} saldoMilesimos={e.saldoMilesimos} custoAtualCentavos={custoCentavos} hoje={dataLocalDoInstante(new Date())} />
+          {unidade === "BARRA" ? (
+            <DialogoDeBaixaDePerfil
+              produtoId={produtoId}
+              produtoNome={nome}
+              saldoMilesimos={e.saldoMilesimos}
+              comprimentoBarraMm={comprimentoBarraMm}
+              pesoMilesimosKgPorMetro={pesoKgPorMetro === null ? null : Math.round(Number(pesoKgPorMetro) * 1000)}
+              retalhoMinimoMm={cfg?.retalhoMinimoMm ?? null}
+              hoje={dataLocalDoInstante(new Date())}
+            />
+          ) : null}
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">Produto inativo: reative-o para registrar movimentos.</p>
