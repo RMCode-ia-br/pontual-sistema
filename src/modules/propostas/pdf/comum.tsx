@@ -1,6 +1,9 @@
-import { Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
+import { Font, Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
 
 import { ALTURA_QUADRO, gerarDesenho, LARGURA_QUADRO, type TipoDesenho } from "@/lib/dominio/desenho";
+
+// As propostas reais não hifenizam palavras ("TEM-PERADO"): desliga a hifenização automática do react-pdf.
+Font.registerHyphenationCallback((palavra) => [palavra]);
 
 export const COR_PADRAO = "#1d4ed8";
 
@@ -25,12 +28,22 @@ export function DesenhoPdf({ tipo, folhas, larguraMm, alturaMm, largura = 96 }: 
     <Svg width={largura} height={altura} viewBox={`0 0 ${LARGURA_QUADRO} ${ALTURA_QUADRO}`}>
       {formas.map((f, i) =>
         f.t === "rect" ? (
-          <Rect key={i} x={f.x} y={f.y} width={f.w} height={f.h} fill={f.vidro ? "#dbeafe" : "none"} stroke="#111827" strokeWidth={0.9} />
+          // A primeira forma é a moldura (perfil de alumínio): traço grosso, como nos desenhos das propostas reais.
+          <Rect key={i} x={f.x} y={f.y} width={f.w} height={f.h} fill={f.vidro ? "#dbeafe" : "none"} stroke="#111827" strokeWidth={i === 0 ? 2.6 : 0.9} />
         ) : (
           <Line key={i} x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#111827" strokeWidth={0.7} strokeDasharray={f.tracejada ? "2 1.6" : undefined} />
         ),
       )}
     </Svg>
+  );
+}
+
+/** Título em caixa cinza centralizada ("ESCOPO DO SERVIÇO", "NOTAS IMPORTANTES", "TERMOS COMERCIAIS"), como nas propostas reais. */
+export function CaixaTitulo({ texto }: { texto: string }) {
+  return (
+    <View style={{ backgroundColor: "#e5e7eb", borderWidth: 1, borderColor: "#111827", paddingVertical: 5, marginBottom: 8 }}>
+      <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", textAlign: "center" }}>{texto}</Text>
+    </View>
   );
 }
 

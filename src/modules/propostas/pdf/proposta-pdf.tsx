@@ -1,18 +1,21 @@
 import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
 
-import { linhasDePagamento, linhasDePrazo, notasNumeradas, textoDasMedidas, textoDoRodape } from "@/lib/dominio/texto-proposta";
+import { linhasDePagamento, linhasDePrazo, notasNumeradas, textoDoRodape } from "@/lib/dominio/texto-proposta";
 import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
 
 import type { ConteudoProposta } from "../conteudo";
-import { corDaMarca, DesenhoPdf, dataBr, moeda, Rodape } from "./comum";
+import { CaixaTitulo, corDaMarca, DesenhoPdf, dataBr, moeda, Rodape } from "./comum";
 
 export type LogoPdf = { data: Buffer; format: "png" | "jpg" } | null;
 
-const azulClaro = "#eff6ff";
+/** Nome genérico dado pelo sistema a opções sem nome próprio ("Opção 1"): não vai para o "VALOR TOTAL". */
+const nomeGenerico = (nome: string) => /^op[cç][aã]o\s*\d+$/i.test(nome.trim());
 
 /**
- * PDF da proposta (A4 retrato): cabeçalho, escopo por opção e seção, itens com desenho (sem quebrar entre páginas),
- * totais com a nota fiscal em linha separada, notas importantes, termos comerciais, assinatura e rodapé em todas as páginas.
+ * PDF da proposta (A4 retrato), na estrutura das propostas reais da Pontual: cabeçalho em duas colunas (cliente à
+ * esquerda; nº, data e consultor à direita), "ESCOPO DO SERVIÇO", seções "• NOME;", cada item num quadro com as colunas
+ * nº | quantidade | descrição, local, medidas e desenho | valor (nunca quebra entre páginas), totais com a nota fiscal em
+ * linha separada, notas importantes, termos comerciais, assinatura e rodapé em todas as páginas.
  * Nunca mostra custo, markup nem comissões (o conteúdo nem os contém).
  */
 export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null }) {
@@ -20,10 +23,12 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
   const maiusculas = (t: string) => (c.descricoesMaiusculas ? t.toUpperCase() : t);
   const nomeEmpresa = c.empresa.nomeFantasia ?? "";
   const varias = c.opcoes.length > 1;
+  const prazo = linhasDePrazo({ ...c.prazo, tipoDias: c.prazo.tipoDias ?? "UTEIS" });
+  const nomeNoTotal = (nome: string) => (varias || !nomeGenerico(nome) ? `${nome.toUpperCase()} ` : "");
 
   return (
     <Document title={`Proposta ${c.numero}`} author={nomeEmpresa} subject="Proposta comercial">
-      <Page size="A4" style={{ paddingTop: 36, paddingBottom: 56, paddingHorizontal: 36, fontFamily: "Helvetica", fontSize: 9, color: "#111827" }}>
+      <Page size="A4" style={{ paddingTop: 36, paddingBottom: 60, paddingHorizontal: 36, fontFamily: "Helvetica", fontSize: 9, color: "#111827" }}>
         <Rodape cor={cor} texto={textoDoRodape({ ...c.empresa })} />
         {aviso ? (
           <Text fixed style={{ position: "absolute", top: 14, left: 36, right: 36, fontSize: 8, fontFamily: "Helvetica-Bold", color: "#b91c1c", textAlign: "center" }}>
@@ -31,67 +36,82 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
           </Text>
         ) : null}
 
-        {/* Cabeçalho */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- Image do react-pdf (PDF), não é <img> HTML */}
-            {logo ? <Image src={logo} style={{ width: 54, height: 54, objectFit: "contain" }} /> : null}
-            <View>
-              <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: cor }}>{nomeEmpresa}</Text>
-              {c.empresa.razaoSocial && c.empresa.razaoSocial !== nomeEmpresa ? <Text style={{ fontSize: 8, color: "#4b5563" }}>{c.empresa.razaoSocial}</Text> : null}
-            </View>
-          </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold" }}>
-              PROPOSTA {c.numero}
-              {c.revisao > 0 ? ` — Rev. ${c.revisao}` : ""}
-            </Text>
-            {c.parte ? <Text style={{ fontSize: 8 }}>{c.parte}</Text> : null}
-            <Text style={{ fontSize: 8, color: "#4b5563" }}>Data: {dataBr(c.data)}</Text>
+        {/* Identidade */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- Image do react-pdf (PDF), não é <img> HTML */}
+          {logo ? <Image src={logo} style={{ width: 44, height: 44, objectFit: "contain" }} /> : null}
+          <View>
+            <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: cor }}>{nomeEmpresa}</Text>
+            {c.empresa.razaoSocial && c.empresa.razaoSocial !== nomeEmpresa ? <Text style={{ fontSize: 8, color: "#4b5563" }}>{c.empresa.razaoSocial}</Text> : null}
           </View>
         </View>
 
-        <View style={{ backgroundColor: azulClaro, borderLeftWidth: 3, borderLeftColor: cor, padding: 8, marginBottom: 10 }}>
-          <Linha rotulo="Cliente" valor={c.cliente.nome} />
-          {c.cliente.contato ? <Linha rotulo="Contato" valor={c.cliente.contato} /> : null}
-          {c.cliente.telefone ? <Linha rotulo="Telefone" valor={c.cliente.telefone} /> : null}
-          {c.cliente.email ? <Linha rotulo="E-mail" valor={c.cliente.email} /> : null}
-          {c.cliente.enderecoObra ? <Linha rotulo="Obra" valor={c.cliente.enderecoObra} /> : null}
-          {c.consultor.nome ? <Linha rotulo="Consultor" valor={`${c.consultor.nome}${c.consultor.cargo ? ` — ${c.consultor.cargo}` : ""}`} /> : null}
+        {/* Cabeçalho em duas colunas, como na proposta real */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Campo rotulo="Cliente" valor={c.cliente.nome} />
+            {c.cliente.contato ? <Campo rotulo="Contato" valor={c.cliente.contato} /> : null}
+            {c.cliente.telefone ? <Campo rotulo="Telefone" valor={c.cliente.telefone} /> : null}
+            {c.cliente.email ? <Campo rotulo="E-mail" valor={c.cliente.email} /> : null}
+            {c.cliente.enderecoObra ? <Campo rotulo="Endereço da obra" valor={c.cliente.enderecoObra} /> : null}
+          </View>
+          <View style={{ width: 235 }}>
+            <Direita rotulo="Nº DA PROPOSTA" valor={`${c.numero}${c.revisao > 0 ? ` — Rev. ${c.revisao}` : ""}`} destaque />
+            {c.parte ? <Direita rotulo="PARTE" valor={c.parte} /> : null}
+            <Direita rotulo="DATA DA PROPOSTA" valor={dataBr(c.data)} />
+            {c.consultor.nome ? <Direita rotulo="CONSULTOR RESPONSÁVEL" valor={c.consultor.nome.toUpperCase()} /> : null}
+            {c.empresa.email ? <Direita rotulo="E-MAIL" valor={c.empresa.email} /> : null}
+            {c.empresa.telefone ? <Direita rotulo="TELEFONE" valor={c.empresa.telefone} /> : null}
+          </View>
         </View>
 
-        <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: cor, marginBottom: 6 }}>{c.tituloEscopo}</Text>
+        <CaixaTitulo texto={c.tituloEscopo} />
 
         {/* Escopo */}
         {c.opcoes.map((o) => (
           <View key={o.id} style={{ marginBottom: 10 }}>
-            {varias ? <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", backgroundColor: cor, color: "#ffffff", padding: 4, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
+            {varias ? <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", backgroundColor: cor, color: "#ffffff", padding: 4, marginTop: 6, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
             {o.secoes.map((s, si) => (
               <View key={si}>
-                {s.grupo ? <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", marginTop: 4, marginBottom: 3, borderBottomWidth: 1, borderBottomColor: "#d1d5db", paddingBottom: 2 }}>{s.grupo.toUpperCase()}</Text> : null}
-                {s.itens.map((i) => (
-                  <View key={i.numero} wrap={false} style={{ flexDirection: "row", alignItems: "flex-start", borderBottomWidth: 0.5, borderBottomColor: "#d1d5db", paddingVertical: 5 }}>
-                    <View style={{ width: 34, flexShrink: 0 }}>
-                      <Text style={{ fontFamily: "Helvetica-Bold" }}>{String(i.numero).padStart(2, "0")}</Text>
-                      <Text style={{ fontSize: 8, color: "#4b5563" }}>{i.quantidade} un</Text>
+                {s.grupo ? <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", marginTop: 8, marginBottom: 4 }}>• {s.grupo.toUpperCase()};</Text> : null}
+                {s.itens.map((i) => {
+                  const comAnotacoes = i.medidas.some((m) => !!m.local);
+                  return (
+                    <View key={i.numero} wrap={false} style={{ flexDirection: "row", borderWidth: 1, borderColor: "#111827", marginBottom: -1 }}>
+                      <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: "#111827" }}>{String(i.numero).padStart(2, "0")}</Text>
+                      <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: "#111827" }}>{String(i.quantidade).padStart(2, "0")}</Text>
+                      <View style={{ flex: 1, padding: 5 }}>
+                        <Text>{maiusculas(i.descricao)}</Text>
+                        {i.local ? <Text style={{ fontSize: 8.5, marginTop: 4 }}>LOCAL: {maiusculas(i.local)}</Text> : null}
+                        {comAnotacoes ? (
+                          <View style={{ marginTop: 4 }}>
+                            {i.medidas.map((m, k) => (
+                              <Text key={k} style={{ fontSize: 8.5 }}>
+                                {k === 0 ? "MED. " : ""}
+                                {m.larguraMm} X {m.alturaMm} = {String(m.quantidade).padStart(2, "0")}
+                                {m.local ? ` ${maiusculas(m.local)}` : ""}
+                              </Text>
+                            ))}
+                          </View>
+                        ) : null}
+                        {i.observacoes ? <Text style={{ fontSize: 8.5, marginTop: 4 }}>OBS: {maiusculas(i.observacoes)}</Text> : null}
+                        <View style={{ marginTop: 6, alignSelf: "center" }}>
+                          <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={170} />
+                        </View>
+                      </View>
+                      {c.exibirValorPorItem ? (
+                        <View style={{ width: 84, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: "#111827", justifyContent: "center", alignItems: "center" }}>
+                          <Text>{moeda(i.precoTotalCentavos)}</Text>
+                        </View>
+                      ) : null}
                     </View>
-                    <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text>{maiusculas(i.descricao)}</Text>
-                      {i.medidas.length > 1 ? <Text style={{ fontSize: 8, color: "#374151", marginTop: 1 }}>MED.: {textoDasMedidas(i.medidas)}</Text> : null}
-                      {i.local ? <Text style={{ fontSize: 8, color: "#374151", marginTop: 1 }}>Local: {maiusculas(i.local)}</Text> : null}
-                      {i.observacoes ? <Text style={{ fontSize: 8, color: "#374151", marginTop: 1 }}>Obs.: {maiusculas(i.observacoes)}</Text> : null}
-                    </View>
-                    <View style={{ width: 88, flexShrink: 0 }}>
-                      <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={88} />
-                    </View>
-                    {c.exibirValorPorItem ? <Text style={{ width: 74, flexShrink: 0, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{moeda(i.precoTotalCentavos)}</Text> : null}
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             ))}
 
             {/* Totais da opção: a nota fiscal aparece em linha separada */}
-            <View wrap={false} style={{ alignSelf: "flex-end", width: 240, marginTop: 6, borderTopWidth: 1, borderTopColor: cor, paddingTop: 4 }}>
+            <View wrap={false} style={{ alignSelf: "flex-end", width: 250, marginTop: 10, borderTopWidth: 1, borderTopColor: cor, paddingTop: 4 }}>
               {o.totais.descontoCentavos > 0 || c.comNotaFiscal ? <Totais rotulo="Subtotal dos itens" valor={moeda(o.totais.itensCentavos)} /> : null}
               {o.totais.descontoCentavos > 0 ? <Totais rotulo="Desconto" valor={`− ${moeda(o.totais.descontoCentavos)}`} /> : null}
               {c.comNotaFiscal ? <Totais rotulo={`Acréscimo da nota fiscal (${pontosBaseParaPercentual(c.acrescimoNotaPb)}%)`} valor={moeda(o.totais.acrescimoNotaCentavos)} /> : null}
@@ -105,12 +125,10 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
 
         {/* Notas importantes */}
         {c.notas.length > 0 ? (
-          <View style={{ marginTop: 6 }}>
-            <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: cor, marginBottom: 3 }} minPresenceAhead={40}>
-              NOTAS IMPORTANTES
-            </Text>
+          <View style={{ marginTop: 8 }}>
+            <CaixaTitulo texto="NOTAS IMPORTANTES" />
             {notasNumeradas(c.notas).map((n, i) => (
-              <Text key={i} style={{ fontSize: 8, marginBottom: 2, textAlign: "justify" }}>
+              <Text key={i} style={{ fontSize: 8.5, marginBottom: 3, textAlign: "justify" }}>
                 {n}
               </Text>
             ))}
@@ -118,40 +136,40 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         ) : null}
 
         {/* Termos comerciais */}
-        <View style={{ marginTop: 10 }} wrap={false}>
-          <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: cor, marginBottom: 3 }}>TERMOS COMERCIAIS</Text>
-          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9, marginBottom: 2 }}>1.0 FORMA DE PAGAMENTO</Text>
+        <View style={{ marginTop: 12 }} wrap={false}>
+          <CaixaTitulo texto="TERMOS COMERCIAIS" />
+          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9.5, marginBottom: 4 }}>1.0 FORMA DE PAGAMENTO:</Text>
           {c.opcoes.map((o) => (
-            <View key={o.id} style={{ marginBottom: 3 }}>
+            <View key={o.id} style={{ marginBottom: 4 }}>
               <Text style={{ fontFamily: "Helvetica-Bold" }}>
-                VALOR TOTAL {varias ? `${o.nome.toUpperCase()} ` : ""}
+                • VALOR TOTAL {nomeNoTotal(o.nome)}
                 {moeda(o.totais.totalCentavos)}
-                {c.comNotaFiscal ? " (com nota fiscal)" : ""}
+                {c.comNotaFiscal ? " (com nota fiscal)" : ""};
               </Text>
               {linhasDePagamento(o.totais.totalCentavos, c.pagamento.parcelas, c.pagamento.textoLivre).map((l, i) => (
-                <Text key={i} style={{ fontSize: 8.5, marginLeft: 8 }}>
-                  • {l}
+                <Text key={i} style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
+                  {l.toUpperCase()};
                 </Text>
               ))}
             </View>
           ))}
-          {c.pagamento.dadosPagamento ? <Text style={{ fontSize: 8.5, marginTop: 2 }}>{c.pagamento.dadosPagamento}</Text> : null}
+          {c.pagamento.dadosPagamento ? <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8.5, marginTop: 4 }}>{c.pagamento.dadosPagamento}</Text> : null}
 
-          {linhasDePrazo({ ...c.prazo, tipoDias: c.prazo.tipoDias ?? "UTEIS" }).length > 0 ? (
-            <View style={{ marginTop: 6 }}>
-              <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9, marginBottom: 2 }}>PRAZO DE ENTREGA (APÓS MEDIÇÃO EXATA PARA PRODUÇÃO)</Text>
-              {linhasDePrazo({ ...c.prazo, tipoDias: c.prazo.tipoDias ?? "UTEIS" }).map((l, i) => (
-                <Text key={i} style={{ fontSize: 8.5, marginLeft: 8 }}>
-                  • {l}
+          {prazo.length > 0 ? (
+            <View style={{ marginTop: 8 }}>
+              <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9 }}>• PRAZO DE ENTREGA (APÓS MEDIÇÃO EXATA PARA PRODUÇÃO):</Text>
+              {prazo.map((l, i) => (
+                <Text key={i} style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
+                  {l};
                 </Text>
               ))}
             </View>
           ) : null}
 
-          <View style={{ marginTop: 6 }}>
-            <Text style={{ fontSize: 8.5 }}>
-              <Text style={{ fontFamily: "Helvetica-Bold" }}>Validade da proposta: </Text>
-              {c.validade.encerradaPorReajuste ? "encerrada por reajuste de fornecedor" : [c.validade.texto, c.validade.ate ? `até ${dataBr(c.validade.ate)}` : null].filter(Boolean).join(" — ") || "Até alteração dos fornecedores"}
+          <View style={{ marginTop: 8 }}>
+            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9 }}>• Validade da proposta:</Text>
+            <Text style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
+              {c.validade.encerradaPorReajuste ? "Encerrada por reajuste de fornecedor." : `${[c.validade.texto, c.validade.ate ? `até ${dataBr(c.validade.ate)}` : null].filter(Boolean).join(" — ") || "Até alteração dos fornecedores"}.`}
             </Text>
           </View>
         </View>
@@ -159,7 +177,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         {c.consultor.nome ? (
           <View style={{ marginTop: 16 }} wrap={false}>
             <Text style={{ fontSize: 9 }}>Att,</Text>
-            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9, marginTop: 14 }}>{c.consultor.nome.toUpperCase()}</Text>
+            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, marginTop: 14 }}>{c.consultor.nome.toUpperCase()}</Text>
             {c.consultor.cargo ? <Text style={{ fontSize: 8.5 }}>{c.consultor.cargo.toUpperCase()}</Text> : null}
           </View>
         ) : null}
@@ -168,12 +186,21 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
   );
 }
 
-function Linha({ rotulo, valor }: { rotulo: string; valor: string }) {
+function Campo({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
-    <Text style={{ fontSize: 8.5, marginBottom: 1 }}>
+    <Text style={{ fontSize: 8.5, marginBottom: 2 }}>
       <Text style={{ fontFamily: "Helvetica-Bold" }}>{rotulo}: </Text>
       {valor}
     </Text>
+  );
+}
+
+function Direita({ rotulo, valor, destaque = false }: { rotulo: string; valor: string; destaque?: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", marginBottom: 2 }}>
+      <Text style={{ width: 128, textAlign: "right", fontSize: 7.5, paddingRight: 4, color: "#374151" }}>{rotulo} |</Text>
+      <Text style={{ flex: 1, fontSize: destaque ? 10 : 8.5, fontFamily: destaque ? "Helvetica-Bold" : "Helvetica" }}>{valor}</Text>
+    </View>
   );
 }
 

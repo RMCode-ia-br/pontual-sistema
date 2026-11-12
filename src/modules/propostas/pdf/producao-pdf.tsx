@@ -48,7 +48,7 @@ export function ProducaoPdf({ c, opcaoId }: { c: ConteudoProposta; opcaoId: stri
             {varias ? <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
             {o.secoes.map((s, si) => (
               <View key={si}>
-                {s.grupo ? <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", marginTop: 4, marginBottom: 3, borderBottomWidth: 1, borderBottomColor: "#d1d5db", paddingBottom: 2 }}>{s.grupo.toUpperCase()}</Text> : null}
+                {s.grupo ? <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", marginTop: 8, marginBottom: 4 }}>• {s.grupo.toUpperCase()};</Text> : null}
                 {s.itens.map((i) => (
                   <View key={i.numero} wrap={false} style={{ flexDirection: "row", alignItems: "flex-start", borderBottomWidth: 0.5, borderBottomColor: "#9ca3af", paddingVertical: 6 }}>
                     <Text style={{ width: 26, flexShrink: 0, fontFamily: "Helvetica-Bold", fontSize: 11 }}>{String(i.numero).padStart(2, "0")}</Text>
