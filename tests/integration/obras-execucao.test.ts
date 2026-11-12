@@ -236,7 +236,8 @@ describe("gatilhos de pagamento (R6) — critério de aceite da Fase 4", () => {
     const fab = await etapa(obra, "FABRICACAO");
     await mudar(fab.id, "CONCLUIDA", { data: "2026-06-10" });
     const [, material] = await contas(obra);
-    await prisma.contaReceber.update({ where: { id: material.id }, data: { status: "PAGA" } });
+    // O banco só aceita "paga" com o valor recebido igual ao valor da parcela (CHECK da Fase 5).
+    await prisma.contaReceber.update({ where: { id: material.id }, data: { status: "PAGA", valorPagoCentavos: material.valorCentavos } });
 
     await expect(mudar(fab.id, "EM_ANDAMENTO")).rejects.toThrow(/já tem pagamento/);
     expect((await etapa(obra, "FABRICACAO")).status).toBe("CONCLUIDA"); // nada mudou (transação desfeita)
@@ -358,14 +359,15 @@ describe("pausas justificadas (R8)", () => {
 
     const p = await abrir(obra, (await motivo("Alvenaria não pronta")).id, "2026-06-03");
     expect(p.justificada).toBe(true);
-    // Em curso: de 03/06 até hoje (20/06, sábado): quarta 03 a sexta 19 = 13 dias úteis.
-    expect(await projetoDe(obra)).toMatchObject({ diasPausaJustificada: 13 });
-    expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(await esperado("2026-06-01", 12 + 13));
+    // Em curso: de 03/06 até hoje (20/06, sábado): quarta 03 a sexta 19 = 13 dias úteis, menos Corpus Christi
+    // (quinta 04/06, feriado do seed) = 12.
+    expect(await projetoDe(obra)).toMatchObject({ diasPausaJustificada: 12 });
+    expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(await esperado("2026-06-01", 12 + 12));
 
-    // Encerrada em 05/06: só 3 dias úteis (03, 04, 05).
+    // Encerrada em 05/06: 03, 04 e 05, menos o feriado de 04/06 = 2 dias úteis.
     await prisma.$transaction((tx) => encerrarPausa(tx, { pausaId: p.id, fim: "2026-06-05", usuario, agora: AGORA }));
-    expect(await projetoDe(obra)).toMatchObject({ diasPausaJustificada: 3 });
-    expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(await esperado("2026-06-01", 12 + 3));
+    expect(await projetoDe(obra)).toMatchObject({ diasPausaJustificada: 2 });
+    expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(await esperado("2026-06-01", 12 + 2));
   });
 
   it("pausa por motivo imputável à Pontual não estende o prazo, mas o gestor pode ajustar", async () => {
@@ -377,7 +379,7 @@ describe("pausas justificadas (R8)", () => {
     expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(sem);
 
     await prisma.$transaction((tx) => ajustarPausa(tx, { pausaId: p.id, justificada: true, observacao: "Fornecedor confirmou força maior", usuario, agora: AGORA }));
-    expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(await esperado("2026-06-01", 12 + 3));
+    expect(dia((await projetoDe(obra)).prazoFinalPrometido)).toBe(await esperado("2026-06-01", 12 + 2)); // 03, 04 (Corpus Christi) e 05
   });
 
   it("não abre duas pausas ao mesmo tempo; não encerra antes do início nem no futuro; excluir recalcula", async () => {

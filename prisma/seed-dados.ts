@@ -1,5 +1,6 @@
 // Dados iniciais da Fase 0 (spec seção 13). Sem clientes fictícios e sem valores de negócio inventados.
 
+import type { GrupoDre } from "../src/generated/prisma/client";
 import { expandirRegras, type DefinicaoDeFeriado } from "../src/lib/dominio/regras-feriado";
 
 export const LINHAS = ["Suprema", "Gold", "23", "25", "28", "30", "Euroshow"];
@@ -71,26 +72,33 @@ export const MOTIVOS_BLOQUEIO: { nome: string; justificado: boolean }[] = [
   { nome: "Outro", justificado: false },
 ];
 
-export const CATEGORIAS_FINANCEIRAS: { tipo: "RECEITA" | "DESPESA"; nome: string; grupoDre: string }[] = [
-  { tipo: "RECEITA", nome: "Venda de esquadrias", grupoDre: "Receitas operacionais" },
-  { tipo: "RECEITA", nome: "Venda de vidros e boxes", grupoDre: "Receitas operacionais" },
-  { tipo: "RECEITA", nome: "Assistência e visitas", grupoDre: "Receitas operacionais" },
-  { tipo: "RECEITA", nome: "Venda de sucata", grupoDre: "Outras receitas" },
-  { tipo: "RECEITA", nome: "Outras receitas", grupoDre: "Outras receitas" },
-  { tipo: "DESPESA", nome: "Perfis de alumínio", grupoDre: "Custos diretos" },
-  { tipo: "DESPESA", nome: "Vidros", grupoDre: "Custos diretos" },
-  { tipo: "DESPESA", nome: "Ferragens e acessórios", grupoDre: "Custos diretos" },
-  { tipo: "DESPESA", nome: "Mão de obra e salários", grupoDre: "Custos diretos" },
-  { tipo: "DESPESA", nome: "Impostos (DAS)", grupoDre: "Impostos" },
-  { tipo: "DESPESA", nome: "Aluguel", grupoDre: "Despesas fixas" },
-  { tipo: "DESPESA", nome: "Energia, água e internet", grupoDre: "Despesas fixas" },
-  { tipo: "DESPESA", nome: "Combustível e transporte", grupoDre: "Despesas operacionais" },
-  { tipo: "DESPESA", nome: "Manutenção", grupoDre: "Despesas operacionais" },
-  { tipo: "DESPESA", nome: "Marketing", grupoDre: "Despesas comerciais" },
-  { tipo: "DESPESA", nome: "Contador", grupoDre: "Despesas administrativas" },
-  { tipo: "DESPESA", nome: "Ferramentas e equipamentos", grupoDre: "Despesas operacionais" },
-  { tipo: "DESPESA", nome: "Pró-labore", grupoDre: "Despesas administrativas" },
-  { tipo: "DESPESA", nome: "Outras despesas", grupoDre: "Despesas administrativas" },
+/**
+ * `grupo` é o grupo do DRE (lista fixa); `grupoDre` é o texto antigo, mantido só por compatibilidade.
+ * As três últimas (tarifas e maquininha, frete, instalação terceirizada) foram sugeridas na Fase 5 e são editáveis.
+ */
+export const CATEGORIAS_FINANCEIRAS: { tipo: "RECEITA" | "DESPESA"; nome: string; grupoDre: string; grupo: GrupoDre }[] = [
+  { tipo: "RECEITA", nome: "Venda de esquadrias", grupoDre: "Receitas operacionais", grupo: "RECEITAS_OPERACIONAIS" },
+  { tipo: "RECEITA", nome: "Venda de vidros e boxes", grupoDre: "Receitas operacionais", grupo: "RECEITAS_OPERACIONAIS" },
+  { tipo: "RECEITA", nome: "Assistência e visitas", grupoDre: "Receitas operacionais", grupo: "RECEITAS_OPERACIONAIS" },
+  { tipo: "RECEITA", nome: "Venda de sucata", grupoDre: "Outras receitas", grupo: "OUTRAS_RECEITAS" },
+  { tipo: "RECEITA", nome: "Outras receitas", grupoDre: "Outras receitas", grupo: "OUTRAS_RECEITAS" },
+  { tipo: "DESPESA", nome: "Perfis de alumínio", grupoDre: "Custos diretos", grupo: "CUSTOS_DIRETOS" },
+  { tipo: "DESPESA", nome: "Vidros", grupoDre: "Custos diretos", grupo: "CUSTOS_DIRETOS" },
+  { tipo: "DESPESA", nome: "Ferragens e acessórios", grupoDre: "Custos diretos", grupo: "CUSTOS_DIRETOS" },
+  { tipo: "DESPESA", nome: "Mão de obra e salários", grupoDre: "Custos diretos", grupo: "CUSTOS_DIRETOS" },
+  { tipo: "DESPESA", nome: "Impostos (DAS)", grupoDre: "Impostos", grupo: "IMPOSTOS" },
+  { tipo: "DESPESA", nome: "Aluguel", grupoDre: "Despesas fixas", grupo: "DESPESAS_FIXAS" },
+  { tipo: "DESPESA", nome: "Energia, água e internet", grupoDre: "Despesas fixas", grupo: "DESPESAS_FIXAS" },
+  { tipo: "DESPESA", nome: "Combustível e transporte", grupoDre: "Despesas operacionais", grupo: "DESPESAS_OPERACIONAIS" },
+  { tipo: "DESPESA", nome: "Manutenção", grupoDre: "Despesas operacionais", grupo: "DESPESAS_OPERACIONAIS" },
+  { tipo: "DESPESA", nome: "Marketing", grupoDre: "Despesas comerciais", grupo: "DESPESAS_COMERCIAIS" },
+  { tipo: "DESPESA", nome: "Contador", grupoDre: "Despesas administrativas", grupo: "DESPESAS_ADMINISTRATIVAS" },
+  { tipo: "DESPESA", nome: "Ferramentas e equipamentos", grupoDre: "Despesas operacionais", grupo: "DESPESAS_OPERACIONAIS" },
+  { tipo: "DESPESA", nome: "Pró-labore", grupoDre: "Despesas administrativas", grupo: "DESPESAS_ADMINISTRATIVAS" },
+  { tipo: "DESPESA", nome: "Outras despesas", grupoDre: "Despesas administrativas", grupo: "DESPESAS_ADMINISTRATIVAS" },
+  { tipo: "DESPESA", nome: "Tarifas bancárias e maquininha", grupoDre: "Despesas financeiras", grupo: "DESPESAS_FINANCEIRAS" },
+  { tipo: "DESPESA", nome: "Frete", grupoDre: "Custos diretos", grupo: "CUSTOS_DIRETOS" },
+  { tipo: "DESPESA", nome: "Instalação terceirizada", grupoDre: "Custos diretos", grupo: "CUSTOS_DIRETOS" },
 ];
 
 type CategoriaTexto = "PROPOSTA_NOTAS" | "PROPOSTA_TERMOS" | "WHATSAPP" | "OUTRO";

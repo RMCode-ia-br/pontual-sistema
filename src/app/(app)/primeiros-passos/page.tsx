@@ -55,12 +55,6 @@ export default async function PaginaPrimeirosPassos() {
       feito: empresaCompleta,
     },
     {
-      titulo: "Definir a alíquota do Simples",
-      descricao: "Será usada no custo real de cada obra. Combine o valor com o contador. O markup (80%) e o acréscimo da nota (5%) já vêm preenchidos e ficam na mesma tela.",
-      href: "/configuracoes/empresa",
-      feito: cfg?.aliquotaImpostoPercentual != null,
-    },
-    {
       titulo: "Enviar o logo",
       descricao: "Aparece no menu e nos PDFs das propostas.",
       href: "/configuracoes/empresa",

@@ -163,6 +163,9 @@ async function catalogos(): Promise<string> {
     data: comOrdem(CATEGORIAS_FINANCEIRAS).map(({ item, ordem }) => ({ ...item, ordem })),
     skipDuplicates: true,
   });
+  // Categoria sugerida ao receber parcelas (Fase 5): só preenche se o gestor ainda não escolheu.
+  const venda = await prisma.categoriaFinanceira.findFirst({ where: { tipo: "RECEITA", nome: "Venda de esquadrias", deletadoEm: null }, select: { id: true } });
+  if (venda) await prisma.configuracaoEmpresa.updateMany({ where: { id: "singleton", categoriaReceitaPadraoId: null }, data: { categoriaReceitaPadraoId: venda.id } });
   return "catálogos: ok";
 }
 

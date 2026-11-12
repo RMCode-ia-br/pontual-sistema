@@ -1,4 +1,4 @@
-// Pontual Gestão — schema das Fases 0 (Fundação), 1 (Cadastros), 2 (Comercial), 3 (Propostas) e 4 (Obras).
+// Pontual Gestão — schema das Fases 0 (Fundação), 1 (Cadastros), 2 (Comercial), 3 (Propostas), 4 (Obras) e 5 (Financeiro).
 // Convenções (docs/ESPECIFICACAO.md, seção 4): nomes em português sem acento, dinheiro em
 // centavos (Int), medidas em mm, exclusão lógica (deletadoEm) e colunas de auditoria.
 
@@ -52,6 +52,19 @@ enum MomentoFoto {
 enum TipoCategoriaFinanceira {
   RECEITA
   DESPESA
+}
+
+/// Grupo do DRE gerencial (lista fixa: o DRE precisa de ordem e subtotais). Substitui o texto livre grupoDre.
+enum GrupoDre {
+  RECEITAS_OPERACIONAIS
+  OUTRAS_RECEITAS
+  IMPOSTOS
+  CUSTOS_DIRETOS
+  DESPESAS_FIXAS
+  DESPESAS_OPERACIONAIS
+  DESPESAS_COMERCIAIS
+  DESPESAS_ADMINISTRATIVAS
+  DESPESAS_FINANCEIRAS
 }
 
 enum CategoriaModeloTexto {
@@ -237,6 +250,16 @@ model ConfiguracaoEmpresa {
   porteGrandeMinimoCentavos     Int?
   diasAlertaPrazoAmarelo        Int      @default(3)
   limiteSimplesCentavos         Int      @default(480000000)
+
+  // Financeiro (Fase 5): parâmetros editáveis em Configurações → Empresa.
+  /// Categoria sugerida ao registrar o recebimento de parcelas (vazia = o gestor escolhe a cada vez).
+  categoriaReceitaPadraoId String?
+  /// Quantos meses à frente as recorrências geram contas a pagar.
+  mesesRecorrenciaAFrente  Int     @default(3)
+  /// Janela de "vence em breve" nas listas e no painel (dias).
+  diasAlertaVencimento     Int     @default(7)
+  /// Dias antes do vencimento para a tarefa "Cobrar parcela" (0 = no próprio dia).
+  diasLembreteCobranca     Int     @default(0)
 
   // Propostas
   proximoNumeroProposta   Int?
@@ -509,6 +532,12 @@ model CategoriaFinanceira {
   tipo            TipoCategoriaFinanceira
   /// Grupo usado no DRE gerencial.
   grupoDre        String?
+  /// Grupo do DRE (lista fixa). Preenchido a partir do texto `grupoDre` na migração da Fase 5.
+  grupo           GrupoDre?
+  lancamentos     Lancamento[]
+  contasPagar     ContaPagar[]
+  recorrencias    RecorrenciaPagar[]
+  contasReceber   ContaReceber[]
   ativo           Boolean                 @default(true)
   ordem           Int                     @default(0)
   criadoEm        DateTime                @default(now())
@@ -560,6 +589,7 @@ model Cliente {
 
   contasReceber   ContaReceber[]
   chamados        Chamado[]
+  lancamentos     Lancamento[]
   criadoEm        DateTime       @default(now())
   atualizadoEm    DateTime       @updatedAt
   criadoPorId     String?
@@ -646,6 +676,9 @@ model Fornecedor {
   loteImportacao     LoteImportacao?    @relation(fields: [loteImportacaoId], references: [id], onDelete: Restrict)
   produtos           Produto[]
   historicoPrecos    HistoricoPreco[]
+  lancamentos        Lancamento[]
+  contasPagar        ContaPagar[]
+  recorrencias       RecorrenciaPagar[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -659,22 +692,24 @@ model Fornecedor {
 }
 
 model Funcionario {
-  id                  String            @id @default(cuid())
+  id                  String             @id @default(cuid())
   nome                String
   cpf                 String?
   telefone            String?
   email               String?
   cargo               String?
   funcao              FuncaoFuncionario
-  admissaoEm          DateTime?         @db.Date
-  demissaoEm          DateTime?         @db.Date
+  admissaoEm          DateTime?          @db.Date
+  demissaoEm          DateTime?          @db.Date
   salarioBaseCentavos Int?
   custoHoraCentavos   Int?
   observacoes         String?
-  ativo               Boolean           @default(true)
-  usuarioId           String?           @unique
-  usuario             Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  ativo               Boolean            @default(true)
+  usuarioId           String?            @unique
+  usuario             Usuario?           @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
   equipes             EquipeMembro[]
+  contasPagar         ContaPagar[]
+  recorrencias        RecorrenciaPagar[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1005,6 +1040,8 @@ model Projeto {
   historicoFases HistoricoFaseProjeto[]
   propostas      Proposta[]
   contasReceber  ContaReceber[]
+  lancamentos    Lancamento[]
+  contasPagar    ContaPagar[]
   etapas         EtapaProjeto[]
   pausas         PausaProjeto[]
   chamados       Chamado[]
@@ -1621,31 +1658,37 @@ model PropostaParcela {
 /// Parcela a receber gerada na aprovação (R5/R6). As telas e os pagamentos entram na Fase 5.
 /// "Atrasada" é derivada (vencimento < hoje e não paga), nunca gravada.
 model ContaReceber {
-  id             String             @id @default(cuid())
-  projetoId      String
-  projeto        Projeto            @relation(fields: [projetoId], references: [id], onDelete: Restrict)
-  propostaId     String?
-  proposta       Proposta?          @relation(fields: [propostaId], references: [id], onDelete: Restrict)
-  clienteId      String
-  cliente        Cliente            @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  id                    String               @id @default(cuid())
+  projetoId             String
+  projeto               Projeto              @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  propostaId            String?
+  proposta              Proposta?            @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  clienteId             String
+  cliente               Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   /// Posição da parcela no cronograma (junto com a proposta, evita gerar em duplicidade).
-  ordem          Int
-  descricao      String
-  valorCentavos  Int
-  percentualPb   Int?
+  ordem                 Int
+  descricao             String
+  valorCentavos         Int
+  /// Cache da soma dos recebimentos (lançamentos) não estornados; atualizado na mesma transação (Fase 5).
+  valorPagoCentavos     Int                  @default(0)
+  percentualPb          Int?
   /// Vazio enquanto aguarda a etapa (AGUARDANDO_GATILHO).
-  vencimento     DateTime?          @db.Date
-  gatilho        GatilhoPagamento?
-  forma          FormaPagamento?
-  parcelasCartao Int?
-  status         StatusContaReceber @default(ABERTA)
+  vencimento            DateTime?            @db.Date
+  gatilho               GatilhoPagamento?
+  forma                 FormaPagamento?
+  parcelasCartao        Int?
+  status                StatusContaReceber   @default(ABERTA)
   /// Recebimento COM nota fiscal (regra do dono): herda da proposta e pode mudar no recebimento (Fase 5).
-  comNotaFiscal  Boolean            @default(false)
-  observacao     String?
+  comNotaFiscal         Boolean              @default(false)
+  observacao            String?
   /// Etapa cuja conclusão abriu a parcela (gatilho, Fase 4). Vazio enquanto aguarda ou se não era por etapa.
-  etapaProjetoId String?
-  etapaProjeto   EtapaProjeto?      @relation(fields: [etapaProjetoId], references: [id], onDelete: Restrict)
-  chamado        Chamado?
+  etapaProjetoId        String?
+  etapaProjeto          EtapaProjeto?        @relation(fields: [etapaProjetoId], references: [id], onDelete: Restrict)
+  chamado               Chamado?
+  /// Categoria sugerida/escolhida para a receita (Fase 5); o recebimento pode trocá-la.
+  categoriaFinanceiraId String?
+  categoriaFinanceira   CategoriaFinanceira? @relation(fields: [categoriaFinanceiraId], references: [id], onDelete: Restrict)
+  lancamentos           Lancamento[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1857,4 +1900,185 @@ model Chamado {
   @@index([status, abertoEm])
   @@index([clienteId])
   @@index([projetoId])
+}
+
+// ===================== Fase 5 (Financeiro) =====================
+// Contas financeiras, lançamentos, contas a pagar e recorrências. Dinheiro em centavos (Int); datas de
+// calendário em `@db.Date`. Todo dinheiro que entra ou sai é um `Lancamento`: saldo, fluxo realizado e DRE
+// (caixa) leem só dele. Atraso é sempre derivado (vencimento < hoje e saldo > 0), nunca gravado.
+// Fora do escopo por decisão do dono: notas fiscais (R16) e RBT12/Simples (R17); só a marca `comNotaFiscal`.
+
+enum TipoContaFinanceira {
+  BANCO
+  CAIXA
+  OUTRA
+}
+
+enum TipoLancamento {
+  ENTRADA
+  SAIDA
+}
+
+enum StatusContaPagar {
+  ABERTA
+  PARCIAL
+  PAGA
+  CANCELADA
+}
+
+enum PeriodicidadeRecorrencia {
+  MENSAL
+  TRIMESTRAL
+  ANUAL
+}
+
+/// Onde o dinheiro entra e sai (banco, caixa, etc.). Sem número de conta nem dado bancário sensível.
+/// Nasce sem saldo: `saldoInicialInformado = false` mostra "saldo não informado" e avisa no fluxo e no DRE.
+model ContaFinanceira {
+  id                    String              @id @default(cuid())
+  nome                  String
+  tipo                  TipoContaFinanceira @default(BANCO)
+  /// Saldo no INÍCIO do dia `dataSaldoInicial`. Zero e sem data enquanto não informado.
+  saldoInicialCentavos  Int                 @default(0)
+  saldoInicialInformado Boolean             @default(false)
+  dataSaldoInicial      DateTime?           @db.Date
+  ativo                 Boolean             @default(true)
+  ordem                 Int                 @default(0)
+  observacao            String?
+  lancamentos           Lancamento[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([deletadoEm, ativo, ordem])
+}
+
+/// Movimento de dinheiro numa conta financeira. Nunca é apagado: o estorno o marca (`estornadoEm`) e ele sai
+/// de saldo, fluxo e DRE. Transferência entre contas = dois lançamentos com o mesmo `transferenciaId`.
+model Lancamento {
+  id                String               @id @default(cuid())
+  data              DateTime             @db.Date
+  tipo              TipoLancamento
+  valorCentavos     Int
+  contaFinanceiraId String
+  contaFinanceira   ContaFinanceira      @relation(fields: [contaFinanceiraId], references: [id], onDelete: Restrict)
+  /// Vazia nas transferências (fora do DRE).
+  categoriaId       String?
+  categoria         CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  descricao         String
+  forma             FormaPagamento?
+  /// Recebimento/pagamento COM nota fiscal (só a marca; o sistema não lida com notas).
+  comNotaFiscal     Boolean              @default(false)
+  projetoId         String?
+  projeto           Projeto?             @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  clienteId         String?
+  cliente           Cliente?             @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  fornecedorId      String?
+  fornecedor        Fornecedor?          @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  contaReceberId    String?
+  contaReceber      ContaReceber?        @relation(fields: [contaReceberId], references: [id], onDelete: Restrict)
+  contaPagarId      String?
+  contaPagar        ContaPagar?          @relation(fields: [contaPagarId], references: [id], onDelete: Restrict)
+  transferenciaId   String?
+  conciliado        Boolean              @default(false)
+  conciliadoEm      DateTime?
+  estornadoEm       DateTime?
+  estornadoPorId    String?
+  motivoEstorno     String?
+  observacao        String?
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([contaFinanceiraId, data])
+  @@index([data])
+  @@index([categoriaId, data])
+  @@index([contaReceberId])
+  @@index([contaPagarId])
+  @@index([transferenciaId])
+  @@index([projetoId])
+}
+
+/// Conta a pagar (única, parcela de um parcelamento ou ocorrência de uma recorrência).
+/// `valorPagoCentavos` é cache da soma dos lançamentos não estornados, atualizado na mesma transação.
+model ContaPagar {
+  id                String               @id @default(cuid())
+  descricao         String
+  fornecedorId      String?
+  fornecedor        Fornecedor?          @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  funcionarioId     String?
+  funcionario       Funcionario?         @relation(fields: [funcionarioId], references: [id], onDelete: Restrict)
+  /// Quem recebe, quando não é fornecedor nem funcionário (ex.: proprietário do imóvel).
+  favorecido        String?
+  categoriaId       String?
+  categoria         CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  projetoId         String?
+  projeto           Projeto?             @relation(fields: [projetoId], references: [id], onDelete: Restrict)
+  valorCentavos     Int
+  valorPagoCentavos Int                  @default(0)
+  vencimento        DateTime             @db.Date
+  /// Mês de competência (sempre o dia 1), usado no DRE por competência.
+  competencia       DateTime             @db.Date
+  status            StatusContaPagar     @default(ABERTA)
+  forma             FormaPagamento?
+  parcelamentoId    String?
+  parcelaNumero     Int?
+  parcelaTotal      Int?
+  recorrenciaId     String?
+  recorrencia       RecorrenciaPagar?    @relation(fields: [recorrenciaId], references: [id], onDelete: Restrict)
+  observacao        String?
+  lancamentos       Lancamento[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  /// Uma ocorrência por mês de competência de cada recorrência: gerar de novo (cron, retry) não duplica.
+  @@unique([recorrenciaId, competencia])
+  @@index([status, vencimento])
+  @@index([fornecedorId])
+  @@index([parcelamentoId])
+  @@index([categoriaId])
+  @@index([projetoId])
+}
+
+/// Modelo de uma despesa que se repete (aluguel, energia, DAS, salários). As ocorrências são `ContaPagar`.
+/// `geradaAte` é a última competência já gerada (o cron e a criação estendem sem duplicar).
+model RecorrenciaPagar {
+  id            String                   @id @default(cuid())
+  descricao     String
+  fornecedorId  String?
+  fornecedor    Fornecedor?              @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  funcionarioId String?
+  funcionario   Funcionario?             @relation(fields: [funcionarioId], references: [id], onDelete: Restrict)
+  favorecido    String?
+  categoriaId   String?
+  categoria     CategoriaFinanceira?     @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  valorCentavos Int
+  /// Dia do mês do vencimento (1 a 31; em mês mais curto vale o último dia).
+  diaVencimento Int
+  periodicidade PeriodicidadeRecorrencia @default(MENSAL)
+  inicio        DateTime                 @db.Date
+  fim           DateTime?                @db.Date
+  ativo         Boolean                  @default(true)
+  forma         FormaPagamento?
+  observacao    String?
+  geradaAte     DateTime?                @db.Date
+  ocorrencias   ContaPagar[]
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([deletadoEm, ativo])
 }

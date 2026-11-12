@@ -220,7 +220,8 @@ describe("cobrança da visita", () => {
     // Conta com pagamento (parcial ou paga): o chamado não pode ser cancelado e nada muda.
     const outro = await chamadoParaCobrar(9000);
     const { contaId: contaPaga } = await prisma.$transaction((tx) => gerarCobrancaDoChamado(tx, { id: outro, usuario }));
-    await prisma.contaReceber.update({ where: { id: contaPaga }, data: { status: "PARCIAL" } });
+    // "Parcial" no banco exige algo recebido e menos que o valor (CHECK da Fase 5): R$ 30,00 de R$ 90,00.
+    await prisma.contaReceber.update({ where: { id: contaPaga }, data: { status: "PARCIAL", valorPagoCentavos: 3000 } });
     await expect(mudar(outro, "CANCELADO")).rejects.toThrow(/já tem pagamento/);
     expect((await chamadoDe(outro)).status).toBe("ABERTO");
     expect((await prisma.contaReceber.findUniqueOrThrow({ where: { id: contaPaga } })).status).toBe("PARCIAL");

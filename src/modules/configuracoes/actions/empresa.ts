@@ -22,6 +22,13 @@ export async function salvarEmpresa(_anterior: ResultadoAcao | null, formData: F
 
   return executar("configuracao.salvar", async () => {
     const ip = extrairIp(await headers());
+    if (dados.data.categoriaReceitaPadraoId) {
+      const categoria = await prisma.categoriaFinanceira.findFirst({
+        where: { id: dados.data.categoriaReceitaPadraoId, tipo: "RECEITA", ativo: true, deletadoEm: null },
+        select: { id: true },
+      });
+      if (!categoria) throw new ErroNegocio("Escolha uma categoria de receita ativa.", { categoriaReceitaPadraoId: "Categoria inválida." });
+    }
     await prisma.$transaction(async (tx) => {
       const antes = await tx.configuracaoEmpresa.findUnique({ where: { id: "singleton" } });
       const depois = await tx.configuracaoEmpresa.upsert({

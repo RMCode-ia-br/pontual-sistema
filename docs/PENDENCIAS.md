@@ -2,11 +2,11 @@
 
 ## Do cliente (Pontual)
 - [ ] **Endereço correto:** propostas trazem o nº 185, o site traz 195. Está editável em Configurações.
-- [ ] **Alíquota efetiva do Simples** (campo vazio com aviso até definir; usada no custo real da Fase 6). A margem de lucro foi informada em 2026-11-13: é **markup sobre o custo** (80%; 100% para guarda-corpo e vidro temperado), ver `docs/DECISOES.md` (58 e 61).
+- [x] **Alíquota efetiva do Simples:** fora do escopo por decisão do dono (2026-11-12): o imposto é lançado à mão como despesa real "Impostos (DAS)" e o sistema não calcula alíquota (decisão 102). A margem de lucro foi informada em 2026-11-13: é **markup sobre o custo** (80%; 100% para guarda-corpo e vidro temperado), ver `docs/DECISOES.md` (58 e 61).
 - [ ] **Numeração das propostas:** começa em 2000-26 (informado pelo dono; o último real é próximo de 1200). Confirmar se o contador reinicia por ano (padrão: não).
-- [ ] **Limite do Simples Nacional** (padrão R$ 4.800.000,00): validar o valor atual com o contador.
+- [x] **Limite do Simples Nacional:** fora do escopo por decisão do dono (R17: sem RBT12 nem alerta do limite). A coluna continua no banco, sem uso.
 - [ ] **Preços e tabelas de fornecedores**, **composições técnicas das tipologias** e fórmulas de corte (nada é preenchido por conta própria).
-- [ ] Confirmar o **mapa gatilho → etapa** (padrão: ENTREGA_MATERIAL → FABRICACAO concluída; ENTREGA_E_INSTALACAO → INSTALACAO_VIDROS concluída).
+- [x] **Mapa gatilho → etapa** confirmado pelo Marcelo em 2026-11-12 (sinal na aprovação; 2ª parcela na conclusão de FABRICACAO; última na conclusão de INSTALACAO_VIDROS). Segue editável em Configurações → Modelo de etapas.
 - [ ] Faixas de valor para sugerir o porte do projeto (opcional).
 - [ ] Textos legais das propostas (Apêndice A) e logo em vetor.
 - [ ] E-mails institucionais `marcelo@` e `luan@pontualmacae.com.br` e um e-mail institucional para as propostas (hoje é um Gmail).
@@ -97,10 +97,10 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Composições técnicas e preços:** nada foi preenchido. Existe só a tipologia de EXEMPLO (desativada). O custo por hora de mão de obra e os custos dos insumos precisam ser informados para o modo composição calcular.
 - [ ] **Textos das tipologias sem template no Apêndice B** (porta de giro, fechamento de sacada, portão, pergolado, espelho) estão marcados "revisar texto".
 - [x] **Fixture 1127-26:** trocada pelos 22 itens reais (medidas, quantidades e preços); soma calculada R$ 89.725,00.
-- [ ] **Mapa gatilho → etapa** (entrega do material = fabricação concluída; entrega e instalação = instalação de vidros concluída) segue para confirmação; as parcelas por gatilho ficam "aguardando" até a Fase 4.
+- [x] **Mapa gatilho → etapa:** confirmado pelo Marcelo em 2026-11-12 (ver o primeiro bloco desta lista).
 
 ## Surgidas na Fase 4 (obras)
-- [ ] **Confirmar o mapa gatilho → etapa e o marco da garantia** do modelo de etapas (padrão: entrega do material = FABRICACAO concluída; entrega e instalação = INSTALACAO_VIDROS concluída, que também inicia os 90 dias de regulagem). Editável em Configurações → Modelo de etapas.
+- [ ] **Confirmar o marco da garantia** do modelo de etapas (padrão: INSTALACAO_VIDROS concluída inicia os 90 dias de regulagem). O mapa gatilho → etapa já foi confirmado (2026-11-12). Editável em Configurações → Modelo de etapas.
 - [ ] **Durações das etapas:** não existem no sistema de propósito. Os dias vêm de cada proposta (por grupo: material, execução, vidros e finalização; ou total). O Marcelo pode querer durações padrão por tipo de obra; só depois de ele informar.
 - [ ] **Férias coletivas** (dezembro e Carnaval) precisam estar cadastradas em Configurações → Feriados para os avisos aparecerem (não afetam dia útil). Os feriados nacionais, de Macaé, São Jorge e Corpus Christi (2026 a 2030) e o Carnaval como ponto facultativo vêm da seed (decisão 100). A obra avisa quando a data final cai num ano sem nenhum feriado cadastrado.
 - [ ] **Texto da legenda do portfólio** (`portfolio.legenda`) é um texto simples proposto por mim e marcado "revisar texto"; o Marcelo ajusta o tom em Configurações → Modelos de texto. A "região" da legenda usa a UF do endereço da obra (não há cadastro de regiões); nunca entram nome, telefone ou endereço do cliente.
@@ -182,3 +182,12 @@ Diferenças pequenas já corrigidas (quadro por item com colunas nº | quantidad
 - [x] **Teste intermitente "sair encerra a sessão" (E2E `autenticacao`):** era falha real (logout não revogava o token e uma resposta do proxy devolvia o cookie renovado). Corrigido no Bloco 0 da Fase 4 com revogação por `sid` (`docs/DECISOES.md`, 92).
 - [ ] **Varrer `SessaoRevogada` expirada** (linhas com `expiraEm` no passado) na rotina diária do cron (Fase 8). O volume é de uma linha por logout, sem impacto até lá. Tokens emitidos antes da correção (sem `sid`) não são revogáveis e valem até expirar (no máximo 8 h).
 - [ ] **Sessão deslizante sem teto:** o proxy renova o token a cada requisição, então uma sessão usada continuamente nunca expira (só os 8 h de inatividade). Se for preciso um teto absoluto (ex.: 12 h desde o login), guardar `iat` do login no JWT e rejeitar acima do limite.
+
+## Surgidas na Fase 5 (financeiro)
+- [ ] **Contas financeiras e saldos iniciais:** o sistema não traz nenhuma conta nem saldo (nada foi inventado). O Marcelo cadastra as contas (nome, tipo, saldo inicial e data do saldo) quando começar a usar; até lá o fluxo de caixa e o DRE avisam "saldo não informado". Sem número de conta nem dado bancário.
+- [ ] **"Com nota" no recebimento:** a marca pode mudar no pagamento, mas o valor **não** é recalculado sozinho (o valor da parcela já traz o acréscimo de 5% quando a proposta era com nota). Confirmar com o Marcelo se isso basta ou se ele quer que o sistema ajuste o valor.
+- [ ] **Categorias sugeridas** (decisão 102): "Tarifas bancárias e maquininha", "Frete" e "Instalação terceirizada" foram acrescentadas ao seed; o Marcelo ajusta nomes e grupos em Configurações → Catálogos.
+- [ ] **Prazos de cobrança e horizonte das recorrências** são padrões editáveis (vence em breve: 7 dias; lembrete de cobrança: no dia; recorrências: 3 meses à frente). Revisar depois do mês de teste.
+- [ ] **Formas de pagamento como catálogo editável** (hoje a lista é fixa: PIX, transferência, espécie, cartão de crédito e boleto): melhoria futura, se o Marcelo pedir outra forma no mês de teste.
+- [ ] **Gerar contas de salário a partir do cadastro de funcionários** (spec 7.9, opcional): fora por ora; salários e aluguel entram como recorrência mensal de conta a pagar.
+- [ ] **Fase 6 (R15, custo real e margem por obra):** o imposto da obra deixa de ser alíquota × receita. O imposto real é a despesa "Impostos (DAS)" lançada à mão; a Fase 6 decide como (e se) ratear por obra.

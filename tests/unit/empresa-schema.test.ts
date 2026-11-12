@@ -13,7 +13,9 @@ const base = {
   diasSemRetornoProposta: "7",
   diasPedidoAvaliacao: "2",
   diasAlertaPrazoAmarelo: "3",
-  limiteSimplesCentavos: "4.800.000,00",
+  mesesRecorrenciaAFrente: "3",
+  diasAlertaVencimento: "7",
+  diasLembreteCobranca: "0",
   markupPadraoPb: "80",
   markupVidroTemperadoPb: "100",
   acrescimoNotaPb: "5",
@@ -28,19 +30,36 @@ describe("configuração da empresa", () => {
   it("converte moeda para centavos inteiros e deixa o opcional vazio como null", () => {
     const r = empresaSchema.parse(base);
     expect(r.metaFaturamentoMensalCentavos).toBe(30000000);
-    expect(r.limiteSimplesCentavos).toBe(480000000);
     expect(r.custoMaoDeObraPorM2Centavos).toBeNull();
-    expect(r.aliquotaImpostoPercentual).toBeNull();
+    expect(r.margemMinimaAlertaPercentual).toBeNull();
   });
 
-  it("alíquota e margem vazias NÃO são inventadas (ficam null)", () => {
-    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "" });
-    expect(r.aliquotaImpostoPercentual).toBeNull();
+  it("não lida mais com alíquota nem limite do Simples (decisão do dono): os campos antigos são ignorados", () => {
+    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "6,5", limiteSimplesCentavos: "4.800.000,00" });
+    expect(r).not.toHaveProperty("aliquotaImpostoPercentual");
+    expect(r).not.toHaveProperty("limiteSimplesCentavos");
+  });
+
+  it("parâmetros do financeiro: números inteiros dentro dos limites e categoria sugerida opcional", () => {
+    const r = empresaSchema.parse({ ...base, categoriaReceitaPadraoId: "abc123" });
+    expect([r.mesesRecorrenciaAFrente, r.diasAlertaVencimento, r.diasLembreteCobranca]).toEqual([3, 7, 0]);
+    expect(r.categoriaReceitaPadraoId).toBe("abc123");
+    expect(empresaSchema.parse(base).categoriaReceitaPadraoId).toBeNull();
+    expect(erros({ ...base, mesesRecorrenciaAFrente: "0" }).mesesRecorrenciaAFrente).toBeTruthy();
+    expect(erros({ ...base, mesesRecorrenciaAFrente: "25" }).mesesRecorrenciaAFrente).toBeTruthy();
+    expect(erros({ ...base, diasAlertaVencimento: "91" }).diasAlertaVencimento).toBeTruthy();
+    expect(erros({ ...base, diasLembreteCobranca: "-1" }).diasLembreteCobranca).toBeTruthy();
+    expect(erros({ ...base, diasAlertaVencimento: "" }).diasAlertaVencimento).toBeTruthy();
+  });
+
+  it("margem mínima vazia NÃO é inventada (fica null)", () => {
+    const r = empresaSchema.parse({ ...base, margemMinimaAlertaPercentual: "" });
+    expect(r.margemMinimaAlertaPercentual).toBeNull();
   });
 
   it("aceita percentual com vírgula e guarda como texto decimal", () => {
-    const r = empresaSchema.parse({ ...base, aliquotaImpostoPercentual: "6,5" });
-    expect(r.aliquotaImpostoPercentual).toBe("6.5");
+    const r = empresaSchema.parse({ ...base, margemMinimaAlertaPercentual: "6,5" });
+    expect(r.margemMinimaAlertaPercentual).toBe("6.5");
   });
 
   it("markup e acréscimo da nota viram pontos-base inteiros (80% = 8000; 5% = 500)", () => {
@@ -77,7 +96,7 @@ describe("configuração da empresa", () => {
 
   it("rejeita percentual inválido", () => {
     for (const ruim of ["abc", "101", "-5", "6,555"]) {
-      expect(erros({ ...base, aliquotaImpostoPercentual: ruim }).aliquotaImpostoPercentual, ruim).toBeTruthy();
+      expect(erros({ ...base, margemMinimaAlertaPercentual: ruim }).margemMinimaAlertaPercentual, ruim).toBeTruthy();
     }
   });
 
@@ -103,9 +122,9 @@ describe("configuração da empresa", () => {
   });
 
   it("recusa valor em reais que estoura o Int de 32 bits do banco (com mensagem no campo)", () => {
-    expect(erros({ ...base, limiteSimplesCentavos: "21.474.836,47" })).toEqual({});
-    expect(erros({ ...base, limiteSimplesCentavos: "21.474.836,48" }).limiteSimplesCentavos).toContain("R$ 21.474.836,47");
-    expect(erros({ ...base, limiteSimplesCentavos: "50.000.000,00" }).limiteSimplesCentavos).toBeTruthy();
+    expect(erros({ ...base, metaFaturamentoMensalCentavos: "21.474.836,47" })).toEqual({});
+    expect(erros({ ...base, metaFaturamentoMensalCentavos: "21.474.836,48" }).metaFaturamentoMensalCentavos).toContain("R$ 21.474.836,47");
+    expect(erros({ ...base, metaFaturamentoMensalCentavos: "50.000.000,00" }).metaFaturamentoMensalCentavos).toBeTruthy();
     expect(erros({ ...base, custoMaoDeObraPorM2Centavos: "999.999.999,00" }).custoMaoDeObraPorM2Centavos).toBeTruthy();
   });
 
@@ -124,7 +143,10 @@ describe("configuração da empresa", () => {
   it("ida e volta: banco → formulário → banco preserva os valores", () => {
     const doBanco = {
       metaFaturamentoMensalCentavos: 30000000,
-      limiteSimplesCentavos: 480000000,
+      mesesRecorrenciaAFrente: 3,
+      diasAlertaVencimento: 7,
+      diasLembreteCobranca: 2,
+      categoriaReceitaPadraoId: "cat1",
       capacidadeProducaoM2Mes: 300,
       garantiaRegulagemDias: 90,
       visitaDuracaoMin: 60,
@@ -134,7 +156,7 @@ describe("configuração da empresa", () => {
       porteMedioMinimoCentavos: 5000000,
       diasAlertaPrazoAmarelo: 3,
       tipoDias: "UTEIS",
-      aliquotaImpostoPercentual: "6.5",
+      margemMinimaAlertaPercentual: "6.5",
       markupPadraoPb: 8000,
       markupVidroTemperadoPb: 10000,
       acrescimoNotaPb: 525,
@@ -142,14 +164,14 @@ describe("configuração da empresa", () => {
     };
     const form = empresaParaFormulario(doBanco);
     expect(form.metaFaturamentoMensalCentavos).toBe("300.000,00");
-    expect(form.aliquotaImpostoPercentual).toBe("6,5");
+    expect(form.margemMinimaAlertaPercentual).toBe("6,5");
     expect(form.telefone).toBe("(22) 99958-3288");
     expect(form.markupPadraoPb).toBe("80");
     expect(form.acrescimoNotaPb).toBe("5,25");
     const volta = empresaSchema.parse(form);
     expect(volta.metaFaturamentoMensalCentavos).toBe(30000000);
-    expect(volta.limiteSimplesCentavos).toBe(480000000);
-    expect(volta.aliquotaImpostoPercentual).toBe("6.5");
+    expect([volta.mesesRecorrenciaAFrente, volta.diasAlertaVencimento, volta.diasLembreteCobranca, volta.categoriaReceitaPadraoId]).toEqual([3, 7, 2, "cat1"]);
+    expect(volta.margemMinimaAlertaPercentual).toBe("6.5");
     expect(volta.porteMedioMinimoCentavos).toBe(5000000);
     expect(volta.porteGrandeMinimoCentavos).toBeNull();
     expect(volta.telefone).toBe("+5522999583288");

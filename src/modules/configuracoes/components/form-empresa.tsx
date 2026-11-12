@@ -19,9 +19,11 @@ import { CampoCor } from "./campo-cor";
 type Props = {
   valores: Record<string, string>;
   marcados: { reiniciaNumeracaoPorAno: boolean; pdfExibirValorPorItem: boolean; pdfDescricoesMaiusculas: boolean };
+  /** Categorias de receita ativas (para a categoria sugerida nos recebimentos). */
+  categoriasDeReceita: { id: string; nome: string }[];
 };
 
-export function FormEmpresa({ valores, marcados }: Props) {
+export function FormEmpresa({ valores, marcados, categoriasDeReceita }: Props) {
   const { estado, pendente, aoEnviar } = useAcaoDeFormulario(
     (formData) => salvarEmpresa(null, formData),
     (r) => {
@@ -101,13 +103,11 @@ export function FormEmpresa({ valores, marcados }: Props) {
           <CardDescription>Estes valores alimentam o preço das propostas, os alertas e o painel.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          {t("aliquotaImpostoPercentual", "Alíquota efetiva do Simples", { modo: "decimal", max: 6, sufixo: "%", dica: "Defina com o contador. Não entra no preço da proposta; será usada no custo real da obra." })}
           {t("markupPadraoPb", "Markup padrão sobre o custo", { modo: "decimal", max: 6, sufixo: "%", obrigatorio: true, dica: "Preço por composição = custo × (1 + markup). Padrão informado: 80%. Não vale para itens com preço manual ou de tabela." })}
           {t("markupVidroTemperadoPb", "Markup de vidro temperado e guarda-corpo", { modo: "decimal", max: 6, sufixo: "%", obrigatorio: true, dica: "Vale para as tipologias marcadas com essa categoria (hoje: guarda-corpo). Padrão informado: 100%." })}
           {t("acrescimoNotaPb", "Acréscimo quando a venda é com nota fiscal", { modo: "decimal", max: 5, sufixo: "%", obrigatorio: true, dica: "Somado ao total (preço × 1,05 com 5%), em linha separada na proposta. Vendas sem nota não têm acréscimo." })}
           {t("margemMinimaAlertaPercentual", "Margem mínima de alerta", { modo: "decimal", max: 6, sufixo: "%", dica: "Margem real sobre o preço (lucro ÷ preço). Abaixo disso a proposta mostra um aviso. Vazio = sem alerta." })}
           {t("metaFaturamentoMensalCentavos", "Meta de faturamento mensal", { modo: "decimal", max: 20, sufixo: "R$", obrigatorio: true })}
-          {t("limiteSimplesCentavos", "Limite anual do Simples Nacional", { modo: "decimal", max: 20, sufixo: "R$", obrigatorio: true, dica: "Valide o valor atual com o contador." })}
           {t("capacidadeProducaoM2Mes", "Capacidade de produção por mês", { modo: "numeric", max: 6, sufixo: "m²", obrigatorio: true })}
           {t("custoMaoDeObraPorM2Centavos", "Custo de mão de obra por m² (opcional)", { modo: "decimal", max: 20, sufixo: "R$" })}
           {t("retalhoMinimoMm", "Retalho mínimo reaproveitável (opcional)", { modo: "numeric", max: 4, sufixo: "mm" })}
@@ -133,6 +133,28 @@ export function FormEmpresa({ valores, marcados }: Props) {
           {t("diasPedidoAvaliacao", "Pedir avaliação no Google após", { modo: "numeric", max: 2, sufixo: "dias", obrigatorio: true, dica: "Dias depois da conclusão da obra." })}
           {t("porteMedioMinimoCentavos", "Projeto médio a partir de (opcional)", { modo: "decimal", max: 20, sufixo: "R$", dica: "Vazio = o porte é sempre escolhido à mão, sem sugestão." })}
           {t("porteGrandeMinimoCentavos", "Projeto grande a partir de (opcional)", { modo: "decimal", max: 20, sufixo: "R$" })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle role="heading" aria-level={2}>Financeiro</CardTitle>
+          <CardDescription>Prazos de cobrança e de geração das contas recorrentes. Imposto não é calculado: lance o DAS como despesa na categoria &quot;Impostos (DAS)&quot;.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {t("diasAlertaVencimento", "Vence em breve: próximos", { modo: "numeric", max: 2, sufixo: "dias", obrigatorio: true, dica: "Janela de \"vence em breve\" nas listas e no painel." })}
+          {t("diasLembreteCobranca", "Lembrete de cobrança antes do vencimento", { modo: "numeric", max: 2, sufixo: "dias", obrigatorio: true, dica: "Quando a parcela abre, a tarefa \"Cobrar parcela\" vence tantos dias antes do vencimento (0 = no próprio dia)." })}
+          {t("mesesRecorrenciaAFrente", "Gerar contas recorrentes para os próximos", { modo: "numeric", max: 2, sufixo: "meses", obrigatorio: true, dica: "Aluguel, energia, DAS e salários são lançados mês a mês até esse horizonte." })}
+          <Campo id="categoriaReceitaPadraoId" rotulo="Categoria sugerida ao receber parcelas" erro={erros.categoriaReceitaPadraoId} dica="Pré-selecionada no recebimento; dá para trocar a cada vez. Vazio = escolher sempre.">
+            <Selecao id="categoriaReceitaPadraoId" name="categoriaReceitaPadraoId" defaultValue={valores.categoriaReceitaPadraoId ?? ""} {...ariaDoCampo("categoriaReceitaPadraoId", erros.categoriaReceitaPadraoId)}>
+              <option value="">Escolher a cada recebimento</option>
+              {categoriasDeReceita.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </Selecao>
+          </Campo>
         </CardContent>
       </Card>
 

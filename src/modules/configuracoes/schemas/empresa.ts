@@ -211,7 +211,6 @@ export const empresaSchema = z
     horarioSabadoFim: horario,
     visitaDuracaoMin: inteiroObrigatorio("Duração da visita", 15, 480),
 
-    aliquotaImpostoPercentual: percentual("Alíquota de imposto"),
     // Regra do dono (2026-11-13): preço de composição = custo × (1 + markup); nota fiscal soma o acréscimo depois.
     markupPadraoPb: percentualEmPontosBase("Markup padrão", MARKUP_MAXIMO_PB),
     markupVidroTemperadoPb: percentualEmPontosBase("Markup de vidro temperado e guarda-corpo", MARKUP_MAXIMO_PB),
@@ -229,7 +228,18 @@ export const empresaSchema = z
     porteMedioMinimoCentavos: dinheiroOpcional("Valor a partir do qual o projeto é médio"),
     porteGrandeMinimoCentavos: dinheiroOpcional("Valor a partir do qual o projeto é grande"),
     diasAlertaPrazoAmarelo: inteiroObrigatorio("Dias do alerta amarelo", 0, 30),
-    limiteSimplesCentavos: dinheiroObrigatorio("Limite do Simples"),
+
+    // Financeiro (Fase 5): parâmetros de cobrança e de recorrência, editáveis (nada fixo no código).
+    categoriaReceitaPadraoId: campo(
+      z
+        .string()
+        .trim()
+        .max(64)
+        .transform((v) => (v === "" ? null : v)),
+    ),
+    mesesRecorrenciaAFrente: inteiroObrigatorio("Meses à frente das recorrências", 1, 24),
+    diasAlertaVencimento: inteiroObrigatorio("Dias do alerta de vencimento", 0, 90),
+    diasLembreteCobranca: inteiroObrigatorio("Dias do lembrete de cobrança", 0, 60),
 
     proximoNumeroProposta: inteiroOpcional("Próximo número de proposta", 1, 999999),
     reiniciaNumeracaoPorAno: marcado,
@@ -286,7 +296,6 @@ export function empresaParaFormulario(cfg: Registro | null): Record<string, stri
     horarioSabadoInicio: s("horarioSabadoInicio"),
     horarioSabadoFim: s("horarioSabadoFim"),
     visitaDuracaoMin: n("visitaDuracaoMin"),
-    aliquotaImpostoPercentual: decimalParaTexto(c.aliquotaImpostoPercentual),
     markupPadraoPb: typeof c.markupPadraoPb === "number" ? pontosBaseParaPercentual(c.markupPadraoPb) : "",
     markupVidroTemperadoPb: typeof c.markupVidroTemperadoPb === "number" ? pontosBaseParaPercentual(c.markupVidroTemperadoPb) : "",
     acrescimoNotaPb: typeof c.acrescimoNotaPb === "number" ? pontosBaseParaPercentual(c.acrescimoNotaPb) : "",
@@ -303,7 +312,10 @@ export function empresaParaFormulario(cfg: Registro | null): Record<string, stri
     porteMedioMinimoCentavos: moedaParaTexto(c.porteMedioMinimoCentavos),
     porteGrandeMinimoCentavos: moedaParaTexto(c.porteGrandeMinimoCentavos),
     diasAlertaPrazoAmarelo: n("diasAlertaPrazoAmarelo"),
-    limiteSimplesCentavos: moedaParaTexto(c.limiteSimplesCentavos),
+    categoriaReceitaPadraoId: s("categoriaReceitaPadraoId"),
+    mesesRecorrenciaAFrente: n("mesesRecorrenciaAFrente"),
+    diasAlertaVencimento: n("diasAlertaVencimento"),
+    diasLembreteCobranca: n("diasLembreteCobranca"),
     proximoNumeroProposta: n("proximoNumeroProposta"),
     consultorNome: s("consultorNome"),
     consultorCargo: s("consultorCargo"),

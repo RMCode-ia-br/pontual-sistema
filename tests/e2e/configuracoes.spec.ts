@@ -22,9 +22,11 @@ test.describe("empresa, logo e auditoria", () => {
   test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(61) } });
 
   let original: SnapshotConfiguracao = null;
+  let margemOriginal: unknown = null;
 
   test.beforeAll(async () => {
     original = await tirarSnapshotConfiguracao();
+    margemOriginal = await lerCampoConfiguracao("margemMinimaAlertaPercentual");
     await prepararUsuarioE2E({ senhaDefinitiva: true });
   });
 
@@ -37,10 +39,14 @@ test.describe("empresa, logo e auditoria", () => {
     await entrarEEsperarPainel(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
   });
 
-  test("avisa que falta a alíquota (nunca inventa valores) e mostra os valores informados pelo dono", async ({ page }) => {
+  test("mostra os valores informados pelo dono e não pede alíquota nem limite do Simples", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
-    await expect(page.getByRole("status").filter({ hasText: "Defina a alíquota do Simples" })).toBeVisible();
-    await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveValue("");
+    await expect(page.getByText("Defina a alíquota do Simples")).toHaveCount(0);
+    await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveCount(0);
+    await expect(page.getByLabel("Limite anual do Simples Nacional")).toHaveCount(0);
+    // Financeiro: parâmetros editáveis com os padrões.
+    await expect(page.getByLabel("Vence em breve: próximos")).toHaveValue("7");
+    await expect(page.getByLabel("Gerar contas recorrentes para os próximos")).toHaveValue("3");
     // Regra do dono: markup 80%, 100% para vidro temperado/guarda-corpo e 5% de acréscimo com nota.
     await expect(page.getByLabel("Markup padrão sobre o custo")).toHaveValue("80");
     await expect(page.getByLabel("Markup de vidro temperado e guarda-corpo")).toHaveValue("100");
@@ -52,7 +58,7 @@ test.describe("empresa, logo e auditoria", () => {
   test("valida no servidor: CNPJ inválido e percentuais fora do limite", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
     await page.getByLabel("CNPJ").fill("11.111.111/1111-11");
-    await page.getByLabel("Alíquota efetiva do Simples").fill("60");
+    await page.getByLabel("Margem mínima de alerta").fill("60");
     await page.getByLabel("Markup padrão sobre o custo").fill("1500");
     await page.getByRole("button", { name: "Salvar configurações" }).click();
 
@@ -61,32 +67,34 @@ test.describe("empresa, logo e auditoria", () => {
 
     // Regressão: o React 19 limpava os campos após o erro; o que a pessoa digitou tem que permanecer.
     await expect(page.getByLabel("CNPJ")).toHaveValue("11.111.111/1111-11");
-    await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveValue("60");
+    await expect(page.getByLabel("Margem mínima de alerta")).toHaveValue("60");
     await expect(page.getByLabel("Markup padrão sobre o custo")).toHaveValue("1500");
 
     // Corrigido o CNPJ, o markup acima de 1.000% continua sendo recusado.
     await page.getByLabel("CNPJ").fill("37.323.333/0001-61");
     await page.getByRole("button", { name: "Salvar configurações" }).click();
     await expect(page.locator("#markupPadraoPb-erro")).toContainText("Markup padrão: informe um percentual");
-    expect(await lerCampoConfiguracao("aliquotaImpostoPercentual")).toBeNull();
+    // Nada foi salvo: a margem mínima segue como estava antes do teste.
+    expect(String(await lerCampoConfiguracao("margemMinimaAlertaPercentual"))).toBe(String(margemOriginal));
   });
 
   test("salva, mostra mensagem de sucesso, persiste e registra a auditoria", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
     await semRolagemHorizontal(page);
     await page.getByLabel("Cargo na assinatura").fill("Cargo E2E");
-    await page.getByLabel("Alíquota efetiva do Simples").fill("6,5");
+    await page.getByLabel("Margem mínima de alerta").fill("6,5");
+    await page.getByLabel("Vence em breve: próximos").fill("10");
     await page.getByRole("button", { name: "Salvar configurações" }).click();
     await expect(toast(page, "Configurações salvas.")).toBeVisible();
 
     await page.reload();
     await expect(page.getByLabel("Cargo na assinatura")).toHaveValue("Cargo E2E");
-    await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveValue("6,5");
-    // Com a alíquota definida, o aviso some.
-    await expect(page.getByText("Defina a alíquota do Simples")).toHaveCount(0);
+    await expect(page.getByLabel("Margem mínima de alerta")).toHaveValue("6,5");
+    await expect(page.getByLabel("Vence em breve: próximos")).toHaveValue("10");
 
-    // No banco: alíquota como decimal e telefone normalizado em E.164.
-    expect(String(await lerCampoConfiguracao("aliquotaImpostoPercentual"))).toBe("6.50");
+    // No banco: percentual como decimal, parâmetro do financeiro como inteiro e telefone normalizado em E.164.
+    expect(String(await lerCampoConfiguracao("margemMinimaAlertaPercentual"))).toBe("6.50");
+    expect(await lerCampoConfiguracao("diasAlertaVencimento")).toBe(10);
     expect(await lerCampoConfiguracao("telefone")).toBe("+5522999583288");
 
     const logs = await buscarAuditoriaFeitaPeloE2E("ConfiguracaoEmpresa", "ATUALIZAR");
