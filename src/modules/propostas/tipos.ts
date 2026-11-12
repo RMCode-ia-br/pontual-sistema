@@ -27,6 +27,8 @@ export type ItemSer = {
   markupPb: number | null;
   precoTotalCentavos: number;
   custoEstimadoCentavos: number | null;
+  /** Custo de material informado à mão (do programa de corte). SÓ interno. */
+  custoMaterialInformadoCentavos: number | null;
   avisoPreco: string | null;
   calculadoEm: string | null;
   medidas: MedidaSer[];
@@ -72,7 +74,7 @@ export type PropostaSer = {
   descricoesMaiusculas: boolean;
   observacoesInternas: string | null;
   enviadaEm: string | null;
-  opcoes: { id: string; nome: string; descontoCentavos: number }[];
+  opcoes: { id: string; nome: string; descontoCentavos: number; custoMaterialInformadoCentavos: number | null }[];
   grupos: { id: string; nome: string; ordem: number }[];
   itens: ItemSer[];
   parcelas: ParcelaSer[];
@@ -120,7 +122,7 @@ export function serializarProposta(p: PropostaDoEditor): PropostaSer {
     descricoesMaiusculas: p.descricoesMaiusculas,
     observacoesInternas: p.observacoesInternas,
     enviadaEm: p.enviadaEm ? p.enviadaEm.toISOString() : null,
-    opcoes: p.opcoes.map((o) => ({ id: o.id, nome: o.nome, descontoCentavos: o.descontoCentavos })),
+    opcoes: p.opcoes.map((o) => ({ id: o.id, nome: o.nome, descontoCentavos: o.descontoCentavos, custoMaterialInformadoCentavos: o.custoMaterialInformadoCentavos })),
     grupos: p.grupos.map((g) => ({ id: g.id, nome: g.nome, ordem: g.ordem })),
     itens: p.itens.map((i) => ({
       id: i.id,
@@ -146,6 +148,7 @@ export function serializarProposta(p: PropostaDoEditor): PropostaSer {
       markupPb: i.markupPb,
       precoTotalCentavos: i.precoTotalCentavos,
       custoEstimadoCentavos: i.custoEstimadoCentavos,
+      custoMaterialInformadoCentavos: i.custoMaterialInformadoCentavos,
       avisoPreco: i.avisoPreco,
       calculadoEm: i.calculadoEm ? i.calculadoEm.toISOString() : null,
       medidas: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),

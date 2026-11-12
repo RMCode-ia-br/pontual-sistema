@@ -1,12 +1,27 @@
 import { AlertTriangle } from "lucide-react";
 
+import { custoEstimadoDeMaterialDaOpcao } from "@/lib/dominio/custo-obra";
 import { analisarMargem, calcularTotais, pontosBaseParaPercentual, type Medida } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
 
-type Item = { opcaoId: string; precoTotalCentavos: number; custoEstimadoCentavos: number | null; medidas: Medida[]; avisoPreco: string | null };
+import { DialogoDeCustoDeMaterial } from "./dialogo-custo-material";
+
+type Item = {
+  id: string;
+  numero: number;
+  descricao: string;
+  opcaoId: string;
+  precoTotalCentavos: number;
+  custoEstimadoCentavos: number | null;
+  /** Custo de material informado à mão (do programa de corte). SÓ interno. */
+  custoMaterialInformadoCentavos: number | null;
+  medidas: Medida[];
+  avisoPreco: string | null;
+};
 
 type Props = {
-  opcoes: { id: string; nome: string; descontoCentavos: number }[];
+  propostaId: string;
+  opcoes: { id: string; nome: string; descontoCentavos: number; custoMaterialInformadoCentavos: number | null }[];
   itens: Item[];
   comNotaFiscal: boolean;
   acrescimoNotaPb: number;
@@ -19,7 +34,7 @@ type Props = {
 };
 
 /** Painel lateral: total por opção (sempre calculado, nunca digitado), nota fiscal em linha separada e, só internamente, custo e margem. */
-export function PainelTotais({ opcoes, itens, comNotaFiscal, acrescimoNotaPb, comissaoArquitetoPb, comissaoIndicacaoPb, margemMinimaAlerta, interno = true }: Props) {
+export function PainelTotais({ propostaId, opcoes, itens, comNotaFiscal, acrescimoNotaPb, comissaoArquitetoPb, comissaoIndicacaoPb, margemMinimaAlerta, interno = true }: Props) {
   const totais = calcularTotais(itens, opcoes, comNotaFiscal, acrescimoNotaPb);
   const semValor = itens.filter((i) => i.precoTotalCentavos <= 0).length;
   const comAviso = itens.filter((i) => i.avisoPreco).length;
@@ -30,7 +45,14 @@ export function PainelTotais({ opcoes, itens, comNotaFiscal, acrescimoNotaPb, co
       {totais.map((t) => {
         const opcao = opcoes.find((o) => o.id === t.opcaoId);
         const medidasDaOpcao = itens.filter((i) => i.opcaoId === t.opcaoId).flatMap((i) => i.medidas);
-        const margem = interno ? analisarMargem(t.baseCentavos, t.custoCentavos, medidasDaOpcao) : null;
+        const itensDaOpcao = itens.filter((i) => i.opcaoId === t.opcaoId);
+        // Custo estimado da opção: o total informado (programa) vale no lugar da soma; senão, por item (informado ou calculado).
+        const estimativa = custoEstimadoDeMaterialDaOpcao(
+          opcao?.custoMaterialInformadoCentavos ?? null,
+          itensDaOpcao.map((i) => ({ custoInformadoCentavos: i.custoMaterialInformadoCentavos, custoCalculadoCentavos: i.custoEstimadoCentavos })),
+        );
+        const somenteMaterial = estimativa.origem === "TOTAL_INFORMADO" || itensDaOpcao.some((i) => i.custoMaterialInformadoCentavos !== null);
+        const margem = interno ? analisarMargem(t.baseCentavos, estimativa.custoCentavos, medidasDaOpcao) : null;
         const abaixo = margem?.margemPb != null && margemMinimaAlerta !== null && margem.margemPb < margemMinimaAlerta * 100;
         const comissoes = t.baseCentavos > 0 ? Math.round((t.baseCentavos * (comissaoArquitetoPb + comissaoIndicacaoPb)) / 10000) : 0;
         return (
@@ -47,14 +69,22 @@ export function PainelTotais({ opcoes, itens, comNotaFiscal, acrescimoNotaPb, co
             {interno ? (
               <div className="bg-muted/50 mt-2 grid gap-0.5 rounded-lg p-2 text-xs" aria-label="Uso interno: não aparece no PDF">
                 <p className="text-muted-foreground font-medium">Só para você (não vai ao PDF)</p>
-                {t.custoCentavos !== null ? (
+                {estimativa.custoCentavos !== null ? (
                   <>
-                    <Linha rotulo="Custo estimado" valor={formatarMoeda(t.custoCentavos)} />
-                    <Linha rotulo="Lucro sobre o preço (sem nota)" valor={`${formatarMoeda(margem?.margemCentavos ?? 0)}${margem?.margemPb != null ? ` (${(margem.margemPb / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%)` : ""}`} />
+                    <Linha rotulo={somenteMaterial ? "Custo de material (informado)" : "Custo estimado"} valor={formatarMoeda(estimativa.custoCentavos)} />
+                    <Linha rotulo={somenteMaterial ? "Lucro sobre o preço (só material)" : "Lucro sobre o preço (sem nota)"} valor={`${formatarMoeda(margem?.margemCentavos ?? 0)}${margem?.margemPb != null ? ` (${(margem.margemPb / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%)` : ""}`} />
+                    {somenteMaterial ? <p className="text-muted-foreground">Só material, sem mão de obra: o custo informado do programa substitui o custo calculado da composição.</p> : null}
                   </>
                 ) : (
-                  <p className="text-muted-foreground">Custo indisponível: {t.itensSemCusto} item(ns) sem composição completa.</p>
+                  <p className="text-muted-foreground">
+                    Custo indisponível: {estimativa.itensSemCusto || t.itensSemCusto} item(ns) sem composição completa. Se o programa de corte já calculou o material, informe abaixo.
+                  </p>
                 )}
+                <DialogoDeCustoDeMaterial
+                  propostaId={propostaId}
+                  opcao={{ id: t.opcaoId, nome: opcoes.length > 1 ? (opcao?.nome ?? "") : "", custoMaterialInformadoCentavos: opcao?.custoMaterialInformadoCentavos ?? null }}
+                  itens={itensDaOpcao.map((i) => ({ id: i.id, rotulo: `Item ${i.numero}: ${i.descricao.length > 60 ? `${i.descricao.slice(0, 57)}...` : i.descricao}`, custoMaterialInformadoCentavos: i.custoMaterialInformadoCentavos }))}
+                />
                 {margem?.precoPorM2Centavos ? <Linha rotulo="Preço por m²" valor={formatarMoeda(margem.precoPorM2Centavos)} /> : null}
                 {comissoes > 0 ? <Linha rotulo="Comissões (informativo)" valor={formatarMoeda(comissoes)} /> : null}
                 {abaixo ? (

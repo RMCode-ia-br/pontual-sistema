@@ -438,7 +438,10 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
   });
   const mapaOpcao = new Map<string, string>();
   for (const op of o.opcoes) {
-    const c = await tx.opcaoProposta.create({ data: { propostaId: nova.id, nome: op.nome, ordem: op.ordem, descontoCentavos: op.descontoCentavos, ...autor }, select: { id: true } });
+    const c = await tx.opcaoProposta.create({
+      data: { propostaId: nova.id, nome: op.nome, ordem: op.ordem, descontoCentavos: op.descontoCentavos, custoMaterialInformadoCentavos: modo === "REVISAO" ? op.custoMaterialInformadoCentavos : null, ...autor },
+      select: { id: true },
+    });
     mapaOpcao.set(op.id, c.id);
   }
   const mapaGrupo = new Map<string, string>();
@@ -470,6 +473,8 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
         valorManualCentavos: i.valorManualCentavos,
         precoTotalCentavos: i.precoTotalCentavos,
         custoEstimadoCentavos: i.custoEstimadoCentavos,
+        // O custo de material informado (programa de corte) acompanha a REVISÃO (mesmas medidas); outra proposta recomeça sem ele.
+        custoMaterialInformadoCentavos: modo === "REVISAO" ? i.custoMaterialInformadoCentavos : null,
         markupPb: i.markupPb,
         calculadoEm: i.calculadoEm,
         avisoPreco: i.avisoPreco,

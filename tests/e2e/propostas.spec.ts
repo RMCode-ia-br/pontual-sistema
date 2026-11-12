@@ -207,6 +207,31 @@ test("ciclo: enviar congela, nova revisão compara, aprovar gera parcelas e leva
   await semRolagemHorizontal(page);
 });
 
+test("custo de material do programa de corte: informado no painel interno (mesmo com a proposta aprovada), só para o gestor", async ({ page }) => {
+  await page.goto(`/propostas/${idProposta}`);
+  const painel = page.getByRole("complementary", { name: "Totais da proposta" });
+  // A proposta tem duas opções (uma foi duplicada): cada uma tem o seu bloco interno e o seu botão. Usa a primeira.
+  await expect(painel.getByText("Só para você (não vai ao PDF)").first()).toBeVisible();
+  await painel.getByRole("button", { name: "Informar custo de material (programa)" }).first().click();
+  const dialogo = page.getByRole("dialog");
+  await expect(dialogo.getByText(/não aparece no PDF/)).toBeVisible();
+  await dialogo.getByLabel("Total da opção (R$)").fill("500000");
+  await dialogo.getByRole("button", { name: "Salvar" }).click();
+  await expect(toast(page, "Custo de material salvo")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+
+  // O painel passa a usar o custo informado (só material) na margem estimada.
+  await expect(painel.getByText("Custo de material (informado)")).toHaveCount(1);
+  await expect(painel.getByText(/Só material, sem mão de obra/)).toHaveCount(1);
+  await expect(painel.getByText("Lucro sobre o preço (só material)")).toHaveCount(1);
+  await semRolagemHorizontal(page);
+
+  // O conteúdo da proposta continua igual: a proposta segue aprovada e o PDF continua sendo gerado (sem o custo).
+  await expect(page.getByText("Aprovada", { exact: true }).first()).toBeVisible();
+  const pdf = await page.request.get(`/api/propostas/${idProposta}/pdf`);
+  expect(pdf.status()).toBe(200);
+});
+
 test("PDFs: a proposta e a folha de produção abrem; sem sessão são recusados", async ({ page, browser }) => {
   await page.goto(`/propostas/${idProposta}`);
   const pdf = await page.request.get(`/api/propostas/${idProposta}/pdf`);

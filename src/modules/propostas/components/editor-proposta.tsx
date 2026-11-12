@@ -150,7 +150,17 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
     });
   }
 
-  const totaisItens = proposta.itens.map((i) => ({ opcaoId: i.opcaoId, precoTotalCentavos: i.precoTotalCentavos, custoEstimadoCentavos: i.custoEstimadoCentavos, medidas: i.medidas, avisoPreco: i.avisoPreco }));
+  const totaisItens = proposta.itens.map((i) => ({
+    id: i.id,
+    numero: i.ordem + 1,
+    descricao: i.descricao,
+    opcaoId: i.opcaoId,
+    precoTotalCentavos: i.precoTotalCentavos,
+    custoEstimadoCentavos: i.custoEstimadoCentavos,
+    custoMaterialInformadoCentavos: i.custoMaterialInformadoCentavos,
+    medidas: i.medidas,
+    avisoPreco: i.avisoPreco,
+  }));
   const pbNota = Math.round((Number(f.acrescimoNota.replace(",", ".")) || 0) * 100);
   const somaParcelas = parcelas.reduce((s, p) => s + (Number(p.percentual.replace(",", ".")) || 0), 0);
   const L = somenteLeitura;
@@ -457,6 +467,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
 
       <div className="lg:sticky lg:top-4 lg:self-start">
         <PainelTotais
+          propostaId={proposta.id}
           opcoes={proposta.opcoes}
           itens={totaisItens}
           comNotaFiscal={f.comNotaFiscal}

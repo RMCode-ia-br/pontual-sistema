@@ -4,6 +4,8 @@ import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { datasDeFeriado, somarDiasDoTipo } from "@/lib/dominio/dias-uteis";
 import { gerarEtapasDaObra, substituirItensDoModelo } from "@/modules/obras/servico";
 import { proximoCodigoDoProjeto } from "@/modules/projetos/servico";
+import type { UsuarioSessao } from "@/lib/auth/sessao";
+import { informarCustoDeMaterial } from "@/modules/propostas/servico-custo-material";
 import { aprovarProposta, construirConteudo, copiarProposta, enviarProposta } from "@/modules/propostas/servico-ciclo";
 import { reservarNumeroDeProposta } from "@/modules/propostas/servico";
 
@@ -126,6 +128,83 @@ async function montar(titulo: string, o: Opcoes = {}) {
 
 const aprovar = (propostaId: string, opcaoId: string, extra: { aceitaEm?: string } = {}) =>
   prisma.$transaction((tx) => aprovarProposta(tx, { usuario, propostaId, opcaoId, forma: "WHATSAPP", aceitaEm: extra.aceitaEm ?? "2026-11-13" }), { timeout: 30_000 });
+
+describe("custo de material informado (programa de corte): só interno", () => {
+  const sessao = () => usuario as unknown as UsuarioSessao;
+  const informar = (propostaId: string, opcaoId: string, totalCentavos: number | null, itens: { itemId: string; custoCentavos: number | null }[] = []) =>
+    prisma.$transaction((tx) => informarCustoDeMaterial(tx, { propostaId, opcaoId, totalCentavos, itens }, { usuario: sessao(), ip: null }));
+  const itensDe = (propostaId: string) => prisma.itemProposta.findMany({ where: { propostaId, deletadoEm: null }, orderBy: { ordem: "asc" } });
+
+  it("grava total da opção e custo por item, audita, e NUNCA entra no conteúdo congelado, mesmo informado depois de enviada", async () => {
+    const m = await montar("CustoMaterial");
+    const [i1, i2] = await itensDe(m.propostaId);
+    const r = await informar(m.propostaId, m.opcaoId, 77_777, [{ itemId: i1.id, custoCentavos: 12_345 }, { itemId: i2.id, custoCentavos: 23_456 }]);
+    expect(r.alterados).toBe(3);
+    expect((await prisma.opcaoProposta.findUniqueOrThrow({ where: { id: m.opcaoId } })).custoMaterialInformadoCentavos).toBe(77_777);
+    expect((await prisma.itemProposta.findUniqueOrThrow({ where: { id: i1.id } })).custoMaterialInformadoCentavos).toBe(12_345);
+    expect(await prisma.logAuditoria.count({ where: { entidade: "Proposta", entidadeId: m.propostaId, acao: "CUSTO_MATERIAL" } })).toBe(1);
+
+    await prisma.$transaction((tx) => enviarProposta(tx, { usuario, propostaId: m.propostaId }));
+    const enviada = await prisma.proposta.findUniqueOrThrow({ where: { id: m.propostaId }, select: { snapshot: true, status: true } });
+    const texto = JSON.stringify(enviada.snapshot);
+    expect(texto).not.toMatch(/custoMaterial|custoEstimado|markup/);
+    for (const valor of ["77777", "12345", "23456"]) expect(texto).not.toContain(valor);
+    // O conteúdo montado agora (PDF e folha de produção leem dele) também não traz o custo.
+    const conteudo = JSON.stringify(await construirConteudo(prisma, m.propostaId));
+    expect(conteudo).not.toMatch(/custoMaterial/);
+    expect(conteudo).not.toContain("77777");
+
+    // Depois de enviada ainda dá para informar ou corrigir (não é conteúdo da proposta), sem criar revisão e sem tocar no snapshot.
+    await informar(m.propostaId, m.opcaoId, 88_888);
+    const depois = await prisma.proposta.findUniqueOrThrow({ where: { id: m.propostaId }, select: { snapshot: true, status: true, revisao: true } });
+    expect(depois.status).toBe("ENVIADA");
+    expect(depois.revisao).toBe(0);
+    expect(JSON.stringify(depois.snapshot)).toBe(texto);
+    expect((await prisma.opcaoProposta.findUniqueOrThrow({ where: { id: m.opcaoId } })).custoMaterialInformadoCentavos).toBe(88_888);
+  });
+
+  it("apagar (vazio) volta a 'não informado'; o mesmo valor é 'nada alterado'", async () => {
+    const m = await montar("CustoApagar");
+    const [i1] = await itensDe(m.propostaId);
+    await informar(m.propostaId, m.opcaoId, 5_000, [{ itemId: i1.id, custoCentavos: 1_000 }]);
+    await expect(informar(m.propostaId, m.opcaoId, 5_000, [{ itemId: i1.id, custoCentavos: 1_000 }])).rejects.toThrow(/Nada foi alterado/);
+    await informar(m.propostaId, m.opcaoId, null, [{ itemId: i1.id, custoCentavos: null }]);
+    expect((await prisma.opcaoProposta.findUniqueOrThrow({ where: { id: m.opcaoId } })).custoMaterialInformadoCentavos).toBeNull();
+    expect((await prisma.itemProposta.findUniqueOrThrow({ where: { id: i1.id } })).custoMaterialInformadoCentavos).toBeNull();
+  });
+
+  it("revisão herda o custo informado (mesmas medidas); copiar como base de OUTRA proposta recomeça sem ele", async () => {
+    const m = await montar("CustoRevisao");
+    const [i1] = await itensDe(m.propostaId);
+    await informar(m.propostaId, m.opcaoId, 40_000, [{ itemId: i1.id, custoCentavos: 9_000 }]);
+    await prisma.$transaction((tx) => enviarProposta(tx, { usuario, propostaId: m.propostaId }));
+
+    const rev = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "REVISAO" }));
+    const daRevisao = await prisma.proposta.findUniqueOrThrow({ where: { id: rev.id }, include: { opcoes: true, itens: { orderBy: { ordem: "asc" } } } });
+    expect(daRevisao.opcoes[0].custoMaterialInformadoCentavos).toBe(40_000);
+    expect(daRevisao.itens[0].custoMaterialInformadoCentavos).toBe(9_000);
+
+    const nova = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "NOVA" }));
+    const daNova = await prisma.proposta.findUniqueOrThrow({ where: { id: nova.id }, include: { opcoes: true, itens: true } });
+    expect(daNova.opcoes[0].custoMaterialInformadoCentavos).toBeNull();
+    expect(daNova.itens.every((i) => i.custoMaterialInformadoCentavos === null)).toBe(true);
+  });
+
+  it("recusa valor zero/negativo, item ou opção de outra proposta, item repetido e proposta inexistente; nada é gravado", async () => {
+    const a = await montar("CustoRecusaA");
+    const b = await montar("CustoRecusaB");
+    const [ia] = await itensDe(a.propostaId);
+    const [ib] = await itensDe(b.propostaId);
+    await expect(informar(a.propostaId, a.opcaoId, 0)).rejects.toThrow(/maior que zero/);
+    await expect(informar(a.propostaId, a.opcaoId, -5)).rejects.toThrow(/maior que zero/);
+    await expect(informar(a.propostaId, a.opcaoId, null, [{ itemId: ib.id, custoCentavos: 100 }])).rejects.toThrow(/não pertence/);
+    await expect(informar(a.propostaId, b.opcaoId, 100)).rejects.toThrow(/Opção não encontrada/);
+    await expect(informar(a.propostaId, a.opcaoId, null, [{ itemId: ia.id, custoCentavos: 1 }, { itemId: ia.id, custoCentavos: 2 }])).rejects.toThrow(/repetido/);
+    await expect(informar("nao-existe", a.opcaoId, 100)).rejects.toThrow(/Proposta não encontrada/);
+    expect((await prisma.opcaoProposta.findUniqueOrThrow({ where: { id: a.opcaoId } })).custoMaterialInformadoCentavos).toBeNull();
+    expect((await prisma.itemProposta.findUniqueOrThrow({ where: { id: ib.id } })).custoMaterialInformadoCentavos).toBeNull();
+  });
+});
 
 describe("envio e congelamento (R4)", () => {
   it("enviar congela o conteúdo, move o projeto e cria o acompanhamento", async () => {
