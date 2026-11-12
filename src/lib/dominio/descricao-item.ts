@@ -25,7 +25,8 @@ export function valoresDoTemplate(e: {
     FOLHAS: e.folhas ? String(e.folhas).padStart(2, "0") : "",
     LINHA: e.linha ?? "",
     COR: e.tipoVidro ?? "",
-    MM: e.espessuraMm ?? "",
+    // As propostas reais imprimem a espessura com dois dígitos ("06MM", "08MM", "10MM").
+    MM: e.espessuraMm ? String(e.espessuraMm).padStart(2, "0") : "",
     ACABAMENTO: e.acabamento ?? "",
     FACES: e.faces ? `${String(e.faces).padStart(2, "0")} ${e.faces === 1 ? "FACE" : "FACES"}` : "",
     TORRES_CM: e.torresCm ?? "",
@@ -46,9 +47,13 @@ export function aplicarPlural(texto: string, quantidade: number): string {
   });
 }
 
-/** `2000 X 3600 / 2000 X 2600`. */
+/**
+ * `2000 X 3600 / 2000 X 2600`. Com várias medidas e quantidade maior que 1 em alguma, essa medida leva
+ * ` = NN` (como no original: `2000 X 1800 = 02 / 2000 X 2150`).
+ */
 export function formatarMedidas(medidas: Medida[]): string {
-  return medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}`).join(" / ");
+  const varias = medidas.length > 1;
+  return medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}${varias && m.quantidade > 1 ? ` = ${String(m.quantidade).padStart(2, "0")}` : ""}`).join(" / ");
 }
 
 export type ValoresTemplate = Partial<Record<Exclude<VariavelTemplate, "MEDIDAS" | "L" | "A">, string | number | null | undefined>>;

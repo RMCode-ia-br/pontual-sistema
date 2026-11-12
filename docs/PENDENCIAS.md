@@ -97,7 +97,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Comissões** (arquiteto/indicação) ficam em zero e só informativas; avisar se alguma proposta futura passar a ter comissão e como ela entra no preço.
 - [ ] **Composições técnicas e preços:** nada foi preenchido. Existe só a tipologia de EXEMPLO (desativada). O custo por hora de mão de obra e os custos dos insumos precisam ser informados para o modo composição calcular.
 - [ ] **Textos das tipologias sem template no Apêndice B** (porta de giro, fechamento de sacada, portão, pergolado, espelho) estão marcados "revisar texto".
-- [ ] **Fixture 1127-26:** os 22 valores originais estão no PDF (fora do repositório); o teste usa valores de teste que reproduzem o total de R$ 89.725,00. Trocar pelos reais quando o PDF estiver disponível.
+- [x] **Fixture 1127-26:** trocada pelos 22 itens reais (medidas, quantidades e preços); soma calculada R$ 89.725,00.
 - [ ] **Mapa gatilho → etapa** (entrega do material = fabricação concluída; entrega e instalação = instalação de vidros concluída) segue para confirmação; as parcelas por gatilho ficam "aguardando" até a Fase 4.
 
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)
@@ -112,4 +112,16 @@ Corrigidos na fase: aprovação de duas revisões do mesmo número, revisão ap�
 - [ ] **`npm audit`**: 12 avisos, todos em ferramentas de desenvolvimento (`shadcn`, `typescript-eslint`/`minimatch`); o pacote de PDF não trouxe nenhum.
 - [ ] **Configuração de desenho por item** (`desenhoConfig`, ex.: sentido de abertura) existe no banco, sem tela.
 - [ ] **Anexo do aceite** sem vínculo ao campo `aceiteAnexoId` (hoje é a lista geral de arquivos da proposta).
-- [ ] **Fixture 1127-26** usa valores de teste que reproduzem o total real (R$ 89.725,00); trocar pelos 22 valores do PDF quando disponível.
+- [x] **Fixture 1127-26** com os valores reais (ver acima); o segundo caso real (1157-26) também virou fixture.
+
+## Complemento da Fase 3: comparação com os PDFs reais (1127-26 e 1157-26)
+Diferenças pequenas já corrigidas (quadro por item com colunas nº | quantidade | conteúdo | valor, cabeçalho em duas colunas, títulos em caixa cinza, seções "• NOME;", desenho maior com moldura grossa, medidas por linha com local, nome da opção no "VALOR TOTAL", espessura "06MM", "= 02" nas medidas, sem hifenização). **Diferenças maiores, deixadas para decisão:**
+- [ ] **Desenhos menos detalhados que os originais:** os reais mostram puxadores, alças, setas e trilhos por tipo; os nossos são formas esquemáticas (retângulos, linhas e setas). Refinar por tipologia (e usar `desenhoConfig`) quando o Marcelo definir o padrão visual.
+- [ ] **Notas importantes e Termos comerciais em páginas próprias** nos originais; no sistema o fluxo é contínuo (os termos não se partem entre páginas). Forçar quebra de página se o Marcelo preferir.
+- [ ] **Medida de guarda-corpo:** o original imprime "altura X comprimento" (1050 X 2200) e, na escada, três números (1050 X 1100 X 3300). O sistema tem só largura × altura (a cobrança por metro linear usa a largura como comprimento: 9,5 m a R$ 700,00/m reproduz o item real de R$ 6.650,00). Confirmar a convenção e se a medida da escada com três números precisa de campo próprio.
+- [ ] **"dias" × "dias úteis":** os originais imprimem "Material: 30 dias". O sistema imprime "dias úteis" (padrão da R8, configurável). Confirmar com o Marcelo qual texto ele quer na proposta.
+- [ ] **Parcelas com valor:** os originais não mostram o valor de cada parcela nem "OU A COMBINAR"; o sistema mostra o valor (mais claro, vale com ou sem nota). Confirmar.
+- [ ] **Rodapé:** o original é centralizado em 3 linhas; o sistema usa 1 linha + "Página X de Y". Ajustar se quiser idêntico.
+- [ ] **Quantidade impressa:** nos originais é digitada à mão (o item 1 do 1157-26 mostra 01 para duas medidas); o sistema soma as quantidades das medidas. A numeração repetida do 1127-26 (19 e 20 duas vezes) é corrigida: o sistema numera de 1 a 22.
+- [ ] **Descrições dos originais têm variações manuais e erros de português** ("COMPLETA E INSTALADO", "BOX EM FRONTAL", "PAINEIS FIXO"); o sistema gera o texto padrão do modelo (editável por item).
+- [ ] **Identidade visual:** os originais são preto e branco, sem logo; o PDF do sistema usa o azul da marca e o logo (modernização prevista na spec, mesma estrutura de conteúdo).

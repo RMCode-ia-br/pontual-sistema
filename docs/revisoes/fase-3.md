@@ -47,3 +47,11 @@ Aviso de preço velho quando muda fórmula/tabela/markup (M5); desconto cortado 
 - `seed:demo` não foi estendido; nenhuma proposta real existe (decisão do dono: demonstração por ~1 mês, sem dados reais).
 - O logo em WebP não aparece no PDF (react-pdf lê PNG/JPEG).
 - As telas financeiras (a receber) são da Fase 5: as parcelas foram conferidas por consulta ao banco.
+
+## Complemento (2026-11-14): casos reais e comparação com os PDFs originais
+Os PDFs de referência (1127-26, 1157-26 e o questionário) e o prompt original passaram a ficar em `docs/referencias/` (ignorada pelo Git; nenhum arquivo está rastreado nem aparece no histórico). O `.md` do prompt é idêntico a `docs/ESPECIFICACAO.md` (diferem só na quebra de linha CRLF×LF).
+- **1127-26:** os 22 valores de teste foram trocados pelos **reais** (medidas, quantidades e preços, transcritos do PDF); a soma calculada é **R$ 89.725,00** (o PDF imprime R$ 89.145,00: diferença de R$ 580,00, uma báscula fora da soma manual). Pagamento 50/25/25 = R$ 44.862,50 + R$ 22.431,25 + R$ 22.431,25. Com nota: R$ 94.211,25.
+- **1157-26** (nome de arquivo "1257"): segundo caso do motor de preço e da descrição: itens 4.130,00 + 9.050,00 + 6.650,00 = **R$ 19.830,00**; guarda-corpo por metro linear (9,5 m × R$ 700,00); descrições geradas conferidas contra o texto real (única diferença: erros de gênero/português do original).
+- **Achados do cotejo no motor:** a espessura do vidro agora sai com dois dígitos ("06MM") e medida com quantidade maior que 1 em item de várias medidas leva "= 02", como nos originais.
+- **PDF:** estrutura comparada visualmente com as páginas reais; diferenças pequenas corrigidas; as grandes estão em `docs/PENDENCIAS.md` ("Complemento da Fase 3").
+- **Privacidade:** as fixtures (`tests/unit/fixtures-casos-reais.ts`) não trazem nome, telefone, e-mail nem endereço do cliente, nem os nomes dos ambientes da casa; um teste confere. Resultado: 545 testes unitários, typecheck e lint verdes.

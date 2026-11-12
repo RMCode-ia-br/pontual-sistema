@@ -16,6 +16,8 @@ import {
 } from "@/lib/dominio/preco";
 import { gerarParcelas, validarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 
+import { ITENS_1127 } from "./fixtures-casos-reais";
+
 describe("áreas e metros lineares", () => {
   it("m² = L × A × quantidade", () => {
     expect(areaM2([{ larguraMm: 2000, alturaMm: 1200, quantidade: 1 }])).toBeCloseTo(2.4, 10);
@@ -214,11 +216,8 @@ describe("casos reais (fixtures da especificação, seção 12)", () => {
   });
 
   it("1127-26 (Parte 01): soma correta R$ 89.725,00 (o PDF imprimia 89.145,00); 50% + 25% + 25%", () => {
-    // Valores de teste que reproduzem o total real (os 22 valores originais estão no PDF, fora do repositório).
-    const valores = [
-      12000_00, 9500_00, 8750_00, 7200_00, 6800_00, 6100_00, 5400_00, 4950_00, 4300_00, 3900_00, 3500_00, 3100_00, 2700_00, 2400_00,
-      2100_00, 1800_00, 1500_00, 1300_00, 1100_00, 600_00, 400_00, 325_00,
-    ];
+    // Valores REAIS dos 22 itens (transcritos do PDF original; ver tests/unit/fixtures-casos-reais.ts).
+    const valores = ITENS_1127.map((i) => i.valorCentavos);
     expect(valores).toHaveLength(22);
     const m = [{ larguraMm: 1000, alturaMm: 1000, quantidade: 1 }];
     const [total] = calcularTotais(valores.map((v) => ({ opcaoId: "u", precoTotalCentavos: v, medidas: m })), [{ id: "u" }], false, 500);
@@ -348,7 +347,7 @@ describe("valoresDoTemplate (descrição regerada ao duplicar opção)", () => {
   const medidas = [{ larguraMm: 2000, alturaMm: 1200, quantidade: 1 }];
   const base = { folhas: 2, faces: null, torresCm: null, linha: "Suprema", tipoVidro: "Incolor", espessuraMm: 8, acabamento: "Branco" };
   it("troca de linha e vidro muda o texto", () => {
-    expect(gerarDescricao(modelo, valoresDoTemplate(base), medidas).texto).toBe("JANELA COM 02 FOLHAS LINHA Suprema, VIDRO Incolor DE 8MM, ACABAMENTO Branco, MED. 2000 X 1200");
+    expect(gerarDescricao(modelo, valoresDoTemplate(base), medidas).texto).toBe("JANELA COM 02 FOLHAS LINHA Suprema, VIDRO Incolor DE 08MM, ACABAMENTO Branco, MED. 2000 X 1200");
     const gold = gerarDescricao(modelo, valoresDoTemplate({ ...base, linha: "Gold", tipoVidro: "Fumê", espessuraMm: 10 }), medidas).texto;
     expect(gold).toContain("LINHA Gold");
     expect(gold).toContain("VIDRO Fumê DE 10MM");
