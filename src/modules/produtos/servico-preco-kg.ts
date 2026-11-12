@@ -78,7 +78,11 @@ export type PrecoParaDefinir = { linhaId: string | null; custoKgCentavos: number
  * Define os preços do kg de UM acabamento (o geral e, se houver, um por linha) numa transação: grava o histórico de cada mudança,
  * audita e recalcula o custo dos perfis afetados. Preço vazio = "sem preço do kg" (nunca zero). Sem linha mudada, nada acontece.
  */
-export async function definirPrecosKgDoAcabamento(tx: Tx, e: { acabamentoId: string; precos: readonly PrecoParaDefinir[] }, ctx: ContextoPrecoKg) {
+export async function definirPrecosKgDoAcabamento(
+  tx: Tx,
+  e: { acabamentoId: string; precos: readonly PrecoParaDefinir[]; origem?: "MANUAL" | "COMPRA"; compraId?: string | null },
+  ctx: ContextoPrecoKg,
+) {
   const acabamento = await tx.acabamentoAluminio.findFirst({ where: { id: e.acabamentoId, deletadoEm: null }, select: { id: true, nome: true } });
   if (!acabamento) throw new ErroNegocio("Acabamento não encontrado.");
   const linhasValidas = new Set((await tx.linhaAluminio.findMany({ where: { deletadoEm: null }, select: { id: true } })).map((l) => l.id));
@@ -103,7 +107,7 @@ export async function definirPrecosKgDoAcabamento(tx: Tx, e: { acabamentoId: str
       ? await tx.precoKgAluminio.update({ where: { id: existente.id }, data: { custoKgCentavos: p.custoKgCentavos, atualizadoPorId: ctx.usuario.id } })
       : await tx.precoKgAluminio.create({ data: { acabamentoId: e.acabamentoId, linhaId: p.linhaId, custoKgCentavos: p.custoKgCentavos, criadoPorId: ctx.usuario.id, atualizadoPorId: ctx.usuario.id } });
     await tx.historicoPrecoKg.create({
-      data: { precoKgId: linha.id, custoAnteriorCentavos: anterior, custoNovoCentavos: p.custoKgCentavos, origem: "MANUAL", usuarioId: ctx.usuario.id, criadoPorId: ctx.usuario.id, atualizadoPorId: ctx.usuario.id },
+      data: { precoKgId: linha.id, custoAnteriorCentavos: anterior, custoNovoCentavos: p.custoKgCentavos, origem: e.origem ?? "MANUAL", compraId: e.compraId ?? null, usuarioId: ctx.usuario.id, criadoPorId: ctx.usuario.id, atualizadoPorId: ctx.usuario.id },
     });
     await registrarAuditoria(tx, { usuario: ctx.usuario, entidade: "PrecoKgAluminio", entidadeId: linha.id, acao: existente ? "ATUALIZAR" : "CRIAR", antes: existente ? { custoKgCentavos: anterior } : undefined, depois: { acabamento: acabamento.nome, linhaId: p.linhaId, custoKgCentavos: p.custoKgCentavos }, ip: ctx.ip });
     mudancas += 1;

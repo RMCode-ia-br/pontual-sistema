@@ -102,7 +102,7 @@ export async function estenderRecorrencias(tx: Tx, hoje: string, opcoes: { apena
 // ---------------------------------------------------------------------------------------------------------
 
 /** Cria a(s) conta(s) a pagar. Parcelada: o valor é o TOTAL (a última parcela absorve a diferença). Recorrente: o valor é o de cada ocorrência. */
-export async function criarContasAPagar(tx: Tx, d: DadosDaContaAPagar, ctx: ContextoFinanceiro): Promise<{ criadas: number; recorrenciaId: string | null; primeiraId: string }> {
+export async function criarContasAPagar(tx: Tx, d: DadosDaContaAPagar & { compraId?: string | null }, ctx: ContextoFinanceiro): Promise<{ criadas: number; recorrenciaId: string | null; primeiraId: string }> {
   await conferirVinculos(tx, { fornecedorId: d.fornecedorId, funcionarioId: d.funcionarioId, categoriaId: d.categoriaId, projetoId: d.projetoId });
   const agora = ctx.agora ?? new Date();
   const base = {
@@ -111,6 +111,8 @@ export async function criarContasAPagar(tx: Tx, d: DadosDaContaAPagar, ctx: Cont
     favorecido: d.favorecido,
     categoriaId: d.categoriaId,
     projetoId: d.projetoId,
+    // Conta nascida de uma compra (Fase 6): o custo real da obra lê a COMPRA recebida, nunca esta conta (não contar em dobro).
+    compraId: d.compraId ?? null,
     forma: d.forma,
     observacao: d.observacao,
     criadoPorId: ctx.usuario.id,
