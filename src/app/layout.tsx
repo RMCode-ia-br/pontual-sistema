@@ -3,13 +3,19 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { EstiloDaMarca } from "@/components/layout/estilo-da-marca";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca, SUPERFICIES } from "@/lib/tema/derivar";
+import { obterMarcaOuPadrao } from "@/modules/configuracoes/queries";
 
 import "./globals.css";
 
 // O Tailwind lê --font-sans (ver globals.css), por isso a variável tem esse nome.
 const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+// A cor da marca vem do banco (Configurações): nenhuma página pode ser gravada estática com a cor do momento do build.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: { default: "Pontual Gestão", template: "%s | Pontual Gestão" },
@@ -19,16 +25,26 @@ export const metadata: Metadata = {
   icons: { icon: "/icons/icone-192.png", apple: "/icons/apple-touch-icon.png" },
 };
 
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#1d4ed8" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
-  ],
-};
+// A cor da barra do navegador acompanha a cor da marca de Configurações (no escuro, o fundo do sistema).
+export async function generateViewport(): Promise<Viewport> {
+  const marca = await obterMarcaOuPadrao();
+  const tema = derivarTemaDaMarca(marca.corPrimaria);
+  return {
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: tema?.claro["--primary"] ?? COR_PADRAO_DO_SISTEMA },
+      { media: "(prefers-color-scheme: dark)", color: SUPERFICIES.escuro.fundo },
+    ],
+  };
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Uma leitura por requisição (cache): o mesmo resultado serve ao layout da área logada e ao login.
+  const marca = await obterMarcaOuPadrao();
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <head>
+        <EstiloDaMarca cor={marca.corPrimaria} />
+      </head>
       <body className="flex min-h-full flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <TooltipProvider>{children}</TooltipProvider>

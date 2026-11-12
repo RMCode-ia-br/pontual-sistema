@@ -1,5 +1,7 @@
 "use client";
 
+import { COR_PADRAO_DO_SISTEMA, TEXTO_SOBRE_MARCA } from "@/lib/tema/derivar";
+
 // Último recurso: substitui o layout raiz, então precisa trazer o próprio <html> e estilos mínimos.
 export default function ErroGlobal({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
@@ -13,7 +15,7 @@ export default function ErroGlobal({ error, reset }: { error: Error & { digest?:
           <button
             type="button"
             onClick={reset}
-            style={{ background: "#1d4ed8", color: "#fff", border: 0, borderRadius: 8, padding: "10px 16px", fontSize: 14, cursor: "pointer" }}
+            style={{ background: COR_PADRAO_DO_SISTEMA, color: TEXTO_SOBRE_MARCA.claro, border: 0, borderRadius: 8, padding: "10px 16px", fontSize: 14, cursor: "pointer" }}
           >
             Tentar de novo
           </button>

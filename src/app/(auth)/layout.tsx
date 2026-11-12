@@ -1,16 +1,8 @@
-import { obterMarca } from "@/modules/configuracoes/queries";
-
-async function marcaSegura(): Promise<{ nome: string; logoUrl: string | null }> {
-  try {
-    return await obterMarca();
-  } catch {
-    // A tela de login nunca pode quebrar por causa de uma falha ao ler a configuração.
-    return { nome: "Pontual", logoUrl: null };
-  }
-}
+import { obterMarcaOuPadrao } from "@/modules/configuracoes/queries";
 
 export default async function LayoutAutenticacao({ children }: { children: React.ReactNode }) {
-  const marca = await marcaSegura();
+  // A tela de login nunca pode quebrar por causa de uma falha ao ler a configuração.
+  const marca = await obterMarcaOuPadrao();
 
   return (
     <main className="from-primary/10 via-background to-background flex min-h-dvh items-center justify-center bg-gradient-to-b p-4">

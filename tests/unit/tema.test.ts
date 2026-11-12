@@ -129,6 +129,8 @@ describe("contrato com o globals.css", () => {
 
   it("as superfícies de SUPERFICIES são as do CSS", () => {
     expect(claro.background).toBe(SUPERFICIES.claro.fundo);
+    expect(claro.foreground).toBe(SUPERFICIES.claro.texto);
+    expect(escuro.foreground).toBe(SUPERFICIES.escuro.texto);
     expect(claro.secondary).toBe(SUPERFICIES.claro.secundaria);
     expect(claro.muted).toBe(SUPERFICIES.claro.suave);
     expect(escuro.background).toBe(SUPERFICIES.escuro.fundo);

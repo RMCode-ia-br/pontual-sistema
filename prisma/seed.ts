@@ -9,6 +9,7 @@ import { config } from "dotenv";
 
 import { gerarHashSenha, validarPoliticaSenha } from "../src/lib/auth/senha";
 import { criarClientePrisma } from "../src/lib/db/criar-cliente";
+import { COR_PADRAO_DO_SISTEMA } from "../src/lib/tema/derivar";
 
 import { semearPropostas } from "./seed-propostas";
 import {
@@ -86,7 +87,8 @@ async function configuracaoEmpresa(): Promise<string> {
       siteUrl: "https://pontualmacae.com.br",
       instagramUrl: "https://www.instagram.com/pontualmacae",
       googlePerfilUrl: "https://share.google/TTMYvE7Tm6mf23uoM",
-      corPrimaria: "#1d4ed8",
+      // Azul do site da empresa (Fase 3.5). Só vale na criação: depois a cor é do gestor (Configurações).
+      corPrimaria: COR_PADRAO_DO_SISTEMA,
       consultorNome: "Marcelo Pinheiro",
       consultorCargo: "Gerente Comercial",
       // Regra do dono (2026-11-13): a numeração das propostas começa em 2000 (o último real é próximo de 1200).
@@ -96,7 +98,30 @@ async function configuracaoEmpresa(): Promise<string> {
   });
   // Banco que já existia sem número configurado: aplica o início combinado (nunca altera um valor já definido).
   await prisma.configuracaoEmpresa.updateMany({ where: { id: "singleton", proximoNumeroProposta: null }, data: { proximoNumeroProposta: 2000 } });
+  await migrarCorPadraoAntiga();
   return "configuração da empresa: ok";
+}
+
+/** Azul genérico que a seed gravava antes da Fase 3.5. */
+const COR_PADRAO_ANTIGA = "#1d4ed8";
+
+/**
+ * Banco criado antes da Fase 3.5: troca o azul genérico antigo pelo azul do site, mas NUNCA se o gestor
+ * mexeu na cor (a auditoria registra toda edição de Configurações; basta uma em que a cor mudou).
+ */
+async function migrarCorPadraoAntiga(): Promise<void> {
+  const cfg = await prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { corPrimaria: true } });
+  const atual = cfg?.corPrimaria?.trim().toLowerCase() ?? null;
+  if (atual && atual !== COR_PADRAO_ANTIGA) return;
+
+  const edicoes = await prisma.logAuditoria.findMany({
+    where: { entidade: "ConfiguracaoEmpresa", entidadeId: "singleton", acao: "ATUALIZAR" },
+    select: { antes: true, depois: true },
+  });
+  const cor = (json: unknown) => (json && typeof json === "object" ? (json as Record<string, unknown>).corPrimaria : undefined);
+  if (edicoes.some((e) => cor(e.antes) !== cor(e.depois))) return;
+
+  await prisma.configuracaoEmpresa.updateMany({ where: { id: "singleton" }, data: { corPrimaria: COR_PADRAO_DO_SISTEMA } });
 }
 
 async function catalogos(): Promise<string> {

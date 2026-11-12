@@ -1,7 +1,15 @@
 import type { MetadataRoute } from "next";
 
+import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca } from "@/lib/tema/derivar";
+import { obterMarcaOuPadrao } from "@/modules/configuracoes/queries";
+
+// Lê a cor da marca no banco: nunca estático.
+export const dynamic = "force-dynamic";
+
 // PWA instalável (sem modo offline nesta etapa, ver docs/DECISOES.md).
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const marca = await obterMarcaOuPadrao();
+  const corDoTema = derivarTemaDaMarca(marca.corPrimaria)?.claro["--primary"] ?? COR_PADRAO_DO_SISTEMA;
   return {
     name: "Pontual Gestão",
     short_name: "Pontual",
@@ -12,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     orientation: "portrait",
     background_color: "#ffffff",
-    theme_color: "#1d4ed8",
+    theme_color: corDoTema,
     icons: [
       { src: "/icons/icone-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icone-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

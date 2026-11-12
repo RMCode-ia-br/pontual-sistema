@@ -1,15 +1,17 @@
 import { Font, Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
 
 import { ALTURA_QUADRO, gerarDesenho, LARGURA_QUADRO, type TipoDesenho } from "@/lib/dominio/desenho";
+import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca } from "@/lib/tema/derivar";
 
 // As propostas reais não hifenizam palavras ("TEM-PERADO"): desliga a hifenização automática do react-pdf.
 Font.registerHyphenationCallback((palavra) => [palavra]);
 
-export const COR_PADRAO = "#1d4ed8";
-
-/** Cor da marca vinda de Configurações (validada: só #rrggbb entra no PDF). */
+/**
+ * Cor da marca vinda de Configurações para o PDF (fundo branco): a variante do tema claro, que já tem
+ * contraste AA sobre branco (cores claras como amarelo são escurecidas). Inválida ou vazia: azul padrão.
+ */
 export function corDaMarca(cor: string | null): string {
-  return cor && /^#[0-9a-fA-F]{6}$/.test(cor) ? cor : COR_PADRAO;
+  return derivarTemaDaMarca(cor)?.claro["--primary"] ?? COR_PADRAO_DO_SISTEMA;
 }
 
 export function moeda(centavos: number): string {

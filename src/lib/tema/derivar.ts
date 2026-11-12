@@ -11,12 +11,15 @@ import { contraste, hexParaOklch, misturar, normalizarHex, oklchParaHex, type Ok
 
 /** Superfícies onde a cor da marca aparece como texto ou ícone. Mantidas em sincronia com `globals.css`. */
 export const SUPERFICIES = {
-  claro: { fundo: "#ffffff", secundaria: "#f1f4f7", suave: "#e8ebef" },
-  escuro: { fundo: "#0a0f14", cartao: "#12181e", suave: "#1f252b" },
+  claro: { fundo: "#ffffff", texto: "#121921", secundaria: "#f1f4f7", suave: "#e8ebef" },
+  escuro: { fundo: "#0a0f14", texto: "#f1f4f7", cartao: "#12181e", suave: "#1f252b" },
 } as const;
 
 /** Texto sobre a cor da marca (claro: quase branco; escuro: quase preto azulado). */
 export const TEXTO_SOBRE_MARCA = { claro: "#fcfcfc", escuro: "#060c13" } as const;
+
+/** Cor da marca usada quando Configurações não tem nenhuma (é o azul que o `globals.css` já traz). */
+export const COR_PADRAO_DO_SISTEMA = "#0064b5";
 
 export const CONTRASTE_MINIMO = 4.5;
 const CONTRASTE_ACENTO = 7;

@@ -202,7 +202,7 @@ export const empresaSchema = z
         .string()
         .trim()
         .transform((v) => (v === "" ? null : v))
-        .refine((v) => v === null || /^#[0-9a-fA-F]{6}$/.test(v), "Cor inválida. Use o formato #1d4ed8."),
+        .refine((v) => v === null || /^#[0-9a-fA-F]{6}$/.test(v), "Cor inválida. Use o formato #0064b5."),
     ),
 
     horarioSemanaInicio: horario,

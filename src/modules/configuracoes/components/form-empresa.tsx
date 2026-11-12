@@ -14,6 +14,8 @@ import { enviarAnexo } from "@/modules/anexos/components/anexos";
 
 import { definirLogoEmpresa, salvarEmpresa } from "../actions/empresa";
 
+import { CampoCor } from "./campo-cor";
+
 type Props = {
   valores: Record<string, string>;
   marcados: { reiniciaNumeracaoPorAno: boolean; pdfExibirValorPorItem: boolean; pdfDescricoesMaiusculas: boolean };
@@ -69,7 +71,7 @@ export function FormEmpresa({ valores, marcados }: Props) {
           {t("cidade", "Cidade", { max: 80 })}
           {t("uf", "UF", { max: 2 })}
           {t("cep", "CEP", { modo: "numeric", max: 9 })}
-          {t("corPrimaria", "Cor principal (opcional)", { dica: "Formato #1d4ed8", max: 7 })}
+          <CampoCor nome="corPrimaria" rotulo="Cor principal (opcional)" valorInicial={valores.corPrimaria ?? ""} erro={erros.corPrimaria} />
         </CardContent>
       </Card>
 
