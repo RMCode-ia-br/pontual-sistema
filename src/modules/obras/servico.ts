@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { dataDoLembreteDeCobranca } from "@/lib/dominio/cobranca";
 import { datasDeFeriado, type PeriodoDeFeriado, type TipoDiasDoPrazo } from "@/lib/dominio/dias-uteis";
 import { etapasDoModelo, type GatilhoDeEtapa, type ItemDoModelo } from "@/lib/dominio/etapas";
 import { distribuirDatas, prazoDaProposta, type PrazoDaProposta } from "@/lib/dominio/prazo-obra";
@@ -95,6 +96,9 @@ export async function abrirParcelasDoGatilho(
 
   const projeto = await tx.projeto.findUniqueOrThrow({ where: { id: e.projetoId }, select: { responsavelId: true, clienteId: true } });
   const vencimento = paraData(e.vencimento);
+  // Parâmetro do financeiro (Configurações): a tarefa de cobrança vence N dias antes do vencimento (0 = no dia), nunca no passado.
+  const diasDoLembrete = (await tx.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { diasLembreteCobranca: true } }))?.diasLembreteCobranca ?? 0;
+  const vencimentoDaTarefa = paraData(dataDoLembreteDeCobranca(e.vencimento, diasDoLembrete, dataLocalDoInstante(new Date())));
   await tx.contaReceber.updateMany({
     where: { id: { in: contas.map((c) => c.id) }, status: "AGUARDANDO_GATILHO" },
     data: { status: "ABERTA", vencimento, etapaProjetoId: e.etapaId, atualizadoPorId: e.usuario.id },
@@ -105,7 +109,7 @@ export async function abrirParcelasDoGatilho(
       descricao: e.motivo,
       tipo: "COBRAR_PARCELA",
       responsavelId: projeto.responsavelId,
-      vencimento,
+      vencimento: vencimentoDaTarefa,
       clienteId: projeto.clienteId,
       projetoId: e.projetoId,
       chaveUnica: `cobranca:${c.id}`,

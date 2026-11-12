@@ -5,6 +5,7 @@ import type { GatilhoDeEtapa, ItemDoModelo, TipoDeEtapa } from "@/lib/dominio/et
 import { linkWhatsApp, preencherModelo, primeiroNome } from "@/lib/dominio/modelos-texto";
 import type { GrupoDePrazo, StatusDeEtapa } from "@/lib/dominio/prazo-obra";
 import { etapaAtrasada, semaforoDaEtapa, semaforoDaObra, type Semaforo } from "@/lib/dominio/semaforo";
+import { situacaoDoTitulo } from "@/lib/dominio/titulos";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 
 import { avisosDaObra, visaoDoPrazo, type PrazoDaObraVisao } from "./visao";
@@ -68,10 +69,11 @@ export type ParcelaDaObra = {
   ordem: number;
   descricao: string;
   valorCentavos: number;
+  valorPagoCentavos: number;
   vencimento: string | null;
   status: "AGUARDANDO_GATILHO" | "ABERTA" | "PARCIAL" | "PAGA" | "CANCELADA";
   gatilho: string | null;
-  /** Vencimento passado e ainda não paga (derivado). */
+  /** Vencimento passado e ainda com saldo (derivado de `situacaoDoTitulo`, a mesma regra do Financeiro). */
   atrasada: boolean;
   /** Nome da etapa que a liberou, ou da que ela aguarda. */
   etapa: string | null;
@@ -183,10 +185,11 @@ export async function obterObra(id: string, agora: Date = new Date()): Promise<O
     ordem: c.ordem,
     descricao: c.descricao,
     valorCentavos: c.valorCentavos,
+    valorPagoCentavos: c.valorPagoCentavos,
     vencimento: dia(c.vencimento),
     status: c.status,
     gatilho: c.gatilho,
-    atrasada: c.status === "ABERTA" && c.vencimento !== null && dia(c.vencimento)! < hoje,
+    atrasada: situacaoDoTitulo({ status: c.status, vencimento: dia(c.vencimento), valorCentavos: c.valorCentavos, valorPagoCentavos: c.valorPagoCentavos }, hoje).situacao === "ATRASADO",
     etapa: c.etapaProjetoId ? (nomeDaEtapaPorId.get(c.etapaProjetoId) ?? null) : c.status === "AGUARDANDO_GATILHO" ? nomeDaEtapaDoGatilho(c.gatilho) : null,
   }));
 

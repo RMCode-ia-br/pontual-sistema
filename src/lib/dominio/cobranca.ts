@@ -4,6 +4,7 @@
 
 import { formatarMoeda } from "../formatadores";
 
+import { somarDias } from "./calendario";
 import { linkWhatsApp, preencherModelo, primeiroNome } from "./modelos-texto";
 
 export type DadosDaCobranca = {
@@ -34,4 +35,15 @@ export function montarCobranca(modelo: string, d: DadosDaCobranca): { texto: str
   if (!d.telefone) pendencias.push("telefone do cliente");
   const link = pendencias.length === 0 && d.telefone ? linkWhatsApp(d.telefone, texto) : null;
   return { texto, link, faltando: pendencias };
+}
+
+/**
+ * Data em que a tarefa "Cobrar parcela" vence: `dias` antes do vencimento (0 = no próprio dia), mas nunca antes de
+ * hoje. Parcela que já venceu mantém o vencimento (a cobrança nasce atrasada, como a parcela). Datas "aaaa-mm-dd".
+ */
+export function dataDoLembreteDeCobranca(vencimento: string, dias: number, hoje: string): string {
+  if (!Number.isInteger(dias) || dias < 0) throw new RangeError("Dias do lembrete inválidos.");
+  if (vencimento < hoje) return vencimento;
+  const lembrete = somarDias(vencimento, -dias);
+  return lembrete < hoje ? hoje : lembrete;
 }

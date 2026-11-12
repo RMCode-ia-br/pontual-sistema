@@ -198,8 +198,9 @@ export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boole
     ];
     for (const [ordem, descricao, valor, gatilho, status] of parcelas) {
       await c.query(
-        `INSERT INTO "ContaReceber" (id, "projetoId", "clienteId", ordem, descricao, "valorCentavos", gatilho, status, "atualizadoEm")
-         VALUES ($1, $2, $3, $4, $5, $6, $7::"GatilhoPagamento", $8::"StatusContaReceber", now())`,
+        // Parcela em aberto sempre tem vencimento (hoje); a que aguarda a etapa não tem, como no sistema.
+        `INSERT INTO "ContaReceber" (id, "projetoId", "clienteId", ordem, descricao, "valorCentavos", gatilho, status, vencimento, "atualizadoEm")
+         VALUES ($1, $2, $3, $4, $5, $6, $7::"GatilhoPagamento", $8::"StatusContaReceber", CASE WHEN $8 = 'ABERTA' THEN CURRENT_DATE END, now())`,
         [randomUUID(), projetoId, clienteId, ordem, descricao, valor, gatilho, status],
       );
     }
@@ -503,5 +504,26 @@ export async function tarefasDoProjeto(titulo: string): Promise<{ titulo: string
       [titulo],
     );
     return r.rows;
+  });
+}
+
+/** Dá um WhatsApp ao cliente da obra de teste (a cobrança por WhatsApp só gera o link com telefone). */
+export async function definirWhatsappDoClienteDaObra(projetoId: string, whatsapp: string): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Cliente" SET whatsapp = $2 WHERE id = (SELECT "clienteId" FROM "Projeto" WHERE id = $1)`, [projetoId, whatsapp]));
+}
+
+/** Situação financeira de uma parcela da obra de teste (pela ordem). */
+export async function contaDaObra(projetoId: string, ordem: number): Promise<{ id: string; status: string; valorCentavos: number; valorPagoCentavos: number }> {
+  return comConexao(async (c) => {
+    const r = await c.query(`SELECT id, status::text AS status, "valorCentavos", "valorPagoCentavos" FROM "ContaReceber" WHERE "projetoId" = $1 AND ordem = $2`, [projetoId, ordem]);
+    return r.rows[0];
+  });
+}
+
+/** Soma dos lançamentos não estornados das contas a receber da obra de teste (entradas). */
+export async function recebidoDaObra(projetoId: string): Promise<number> {
+  return comConexao(async (c) => {
+    const r = await c.query(`SELECT COALESCE(SUM("valorCentavos"), 0)::int AS total FROM "Lancamento" WHERE "projetoId" = $1 AND tipo = 'ENTRADA' AND "estornadoEm" IS NULL`, [projetoId]);
+    return r.rows[0].total;
   });
 }

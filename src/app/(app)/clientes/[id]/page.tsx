@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
 import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
-import { formatarData, formatarTelefone } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarData, formatarTelefone } from "@/lib/formatadores";
 import { primeiroNome } from "@/lib/dominio/modelos-texto";
 import { cn } from "@/lib/utils";
 import { formatarCnpj, formatarCpf } from "@/lib/validadores";
@@ -24,6 +24,8 @@ import { SecaoEnderecos } from "@/modules/clientes/components/secao-enderecos";
 import { listarContatos, listarEnderecos, listarInteracoes, listarMensagensProntas, obterCliente, ROTULO_MARCACAO } from "@/modules/clientes/queries";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
+import { FinanceiroDoClienteSecao } from "@/modules/financeiro/components/financeiro-do-cliente";
+import { financeiroDoCliente } from "@/modules/financeiro/queries-receber";
 import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
 import { listarChamados } from "@/modules/obras/queries-chamados";
 import { ProjetosDoCliente } from "@/modules/projetos/components/projetos-do-cliente";
@@ -37,6 +39,7 @@ const ABAS = [
   { valor: "contatos", titulo: "Contatos" },
   { valor: "projetos", titulo: "Projetos" },
   { valor: "assistencia", titulo: "Assistência" },
+  { valor: "financeiro", titulo: "Financeiro" },
   { valor: "anexos", titulo: "Arquivos" },
   { valor: "linha-do-tempo", titulo: "Linha do tempo" },
 ] as const;
@@ -183,6 +186,11 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       {aba === "assistencia" ? (
         <div className="max-w-3xl">
           <SecaoDeAssistencia chamados={(await listarChamados({ situacao: "todos", busca: "", clienteId: cliente.id })).linhas} novoHref={`/obras/assistencia/novo?cliente=${cliente.id}`} />
+        </div>
+      ) : null}
+      {aba === "financeiro" ? (
+        <div className="max-w-3xl">
+          <FinanceiroDoClienteSecao clienteId={cliente.id} dados={await financeiroDoCliente(cliente.id, dataLocalDoInstante(new Date()))} />
         </div>
       ) : null}
       {aba === "anexos" ? (

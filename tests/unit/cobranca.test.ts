@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dataBrasileira, montarCobranca } from "../../src/lib/dominio/cobranca";
+import { dataBrasileira, dataDoLembreteDeCobranca, montarCobranca } from "../../src/lib/dominio/cobranca";
 
 const MODELO =
   "Olá, {{cliente}}! Aqui é da {{nomeFantasia}}. Identificamos a parcela de {{valorParcela}} com vencimento em {{vencimento}} referente à obra {{obra}}. Pode nos confirmar a previsão de pagamento?";
@@ -41,5 +41,33 @@ describe("cobrança por WhatsApp", () => {
 
   it("formata a data", () => {
     expect(dataBrasileira("2026-01-05")).toBe("05/01/2026");
+  });
+});
+
+describe("data do lembrete de cobrança", () => {
+  const HOJE = "2026-11-12";
+
+  it("0 dias: no próprio vencimento", () => {
+    expect(dataDoLembreteDeCobranca("2026-11-20", 0, HOJE)).toBe("2026-11-20");
+  });
+
+  it("N dias antes do vencimento", () => {
+    expect(dataDoLembreteDeCobranca("2026-11-20", 3, HOJE)).toBe("2026-11-17");
+    expect(dataDoLembreteDeCobranca("2026-12-02", 5, HOJE)).toBe("2026-11-27"); // atravessa o mês
+  });
+
+  it("nunca antes de hoje quando o vencimento ainda vem (vence amanhã, lembrete de 5 dias: hoje)", () => {
+    expect(dataDoLembreteDeCobranca("2026-11-13", 5, HOJE)).toBe(HOJE);
+    expect(dataDoLembreteDeCobranca(HOJE, 5, HOJE)).toBe(HOJE);
+  });
+
+  it("parcela que já venceu mantém o vencimento (cobrança atrasada, como a parcela), qualquer que seja o lembrete", () => {
+    expect(dataDoLembreteDeCobranca("2026-06-10", 0, HOJE)).toBe("2026-06-10");
+    expect(dataDoLembreteDeCobranca("2026-06-10", 7, HOJE)).toBe("2026-06-10");
+  });
+
+  it("dias inválidos são recusados", () => {
+    expect(() => dataDoLembreteDeCobranca("2026-11-20", -1, HOJE)).toThrow();
+    expect(() => dataDoLembreteDeCobranca("2026-11-20", 1.5, HOJE)).toThrow();
   });
 });

@@ -120,6 +120,11 @@ export default async function PaginaChamado({ params }: { params: Promise<{ id: 
                 {formatarMoeda(c.conta.valorCentavos)}
                 {c.conta.vencimento ? ` · vence em ${formatarData(c.conta.vencimento)}` : ""} · {c.conta.status === "ABERTA" ? "em aberto" : c.conta.status.toLowerCase().replaceAll("_", " ")}
               </p>
+              <p>
+                <Link href={`/financeiro/receber/${c.conta.id}`} className="underline">
+                  Abrir no Financeiro (receber, cobrar, estornar)
+                </Link>
+              </p>
             </section>
           ) : null}
 

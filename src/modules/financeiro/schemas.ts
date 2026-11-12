@@ -150,3 +150,55 @@ export const periodoSchema = z.object({
   de: bruto(10).transform((v) => (dataValida(v) ? v : null)),
   ate: bruto(10).transform((v) => (dataValida(v) ? v : null)),
 });
+
+// ---------- Contas a receber ----------
+
+/** Valor opcional: vazio = não mexer (null). */
+function dinheiroOuVazio(rotulo: string) {
+  return bruto(24).transform((v, ctx): number | null => {
+    if (v === "") return null;
+    const r = dinheiro(rotulo).safeParse(v);
+    if (!r.success) {
+      ctx.addIssue({ code: "custom", message: r.error.issues[0].message });
+      return z.NEVER;
+    }
+    return r.data;
+  });
+}
+
+export const contaReceberIdSchema = z.object({ contaReceberId: idObrigatorio("Conta inválida.") });
+
+export const recebimentoSchema = z.object({
+  contaReceberId: idObrigatorio("Conta inválida."),
+  data: dataObrigatoria("Data do recebimento"),
+  valor: dinheiro("Valor recebido"),
+  contaFinanceiraId: idObrigatorio("Escolha a conta onde o dinheiro entrou."),
+  categoriaId: idOpcional,
+  forma,
+  comNotaFiscal: campoCaixa,
+  observacao: textoOpcional(500),
+});
+
+export type DadosDoRecebimento = z.output<typeof recebimentoSchema>;
+
+export const ajusteDeContaSchema = z
+  .object({
+    contaReceberId: idObrigatorio("Conta inválida."),
+    valor: dinheiroOuVazio("Novo valor"),
+    vencimento: bruto(10).transform((v) => (v === "" ? null : v)),
+    motivo: textoObrigatorio("Motivo", 3, 300),
+  })
+  .superRefine((d, ctx) => {
+    if (d.vencimento !== null && !dataValida(d.vencimento)) ctx.addIssue({ code: "custom", path: ["vencimento"], message: "Novo vencimento: informe uma data válida." });
+    if (d.valor === null && d.vencimento === null) ctx.addIssue({ code: "custom", path: ["valor"], message: "Informe o novo valor e/ou o novo vencimento." });
+  });
+
+export const cancelarContaSchema = z.object({
+  contaReceberId: idObrigatorio("Conta inválida."),
+  motivo: textoObrigatorio("Motivo", 3, 300),
+});
+
+export const liberarParcelaSchema = z.object({
+  contaReceberId: idObrigatorio("Conta inválida."),
+  vencimento: dataObrigatoria("Vencimento"),
+});

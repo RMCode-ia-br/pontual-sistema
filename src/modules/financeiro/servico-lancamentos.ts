@@ -7,9 +7,11 @@ import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import type { UsuarioSessao } from "@/lib/auth/sessao";
 import { aplicarEstorno, type StatusDoTitulo } from "@/lib/dominio/titulos";
-import { dataLocalDoInstante } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
+import { registrarInteracao } from "@/modules/interacoes/registrar";
 
 import type { DadosDaTransferencia, DadosDoLancamento } from "./schemas";
+import { sincronizarTarefaDeCobranca } from "./tarefa-cobranca";
 
 type Tx = Prisma.TransactionClient;
 
@@ -167,7 +169,7 @@ export async function estornarLancamento(tx: Tx, lancamentoId: string, motivo: s
   const agora = ctx.agora ?? new Date();
   const estornados: Awaited<ReturnType<typeof tx.lancamento.update>>[] = [];
   for (const antes of lancamentos) {
-    if (antes.contaReceberId) await refazerTituloDeReceber(tx, antes.contaReceberId, antes.valorCentavos);
+    if (antes.contaReceberId) await refazerTituloDeReceber(tx, antes.contaReceberId, antes.valorCentavos, ctx);
     if (antes.contaPagarId) await refazerTituloDePagar(tx, antes.contaPagarId, antes.valorCentavos);
     const depois = await tx.lancamento.update({
       where: { id: antes.id },
@@ -179,13 +181,21 @@ export async function estornarLancamento(tx: Tx, lancamentoId: string, motivo: s
   return { lancamentos: estornados };
 }
 
-async function refazerTituloDeReceber(tx: Tx, id: string, valorCentavos: number) {
-  const [t] = await tx.$queryRaw<{ status: StatusDoTitulo; valorCentavos: number; valorPagoCentavos: number }[]>`
-    SELECT "status", "valorCentavos", "valorPagoCentavos" FROM "ContaReceber" WHERE "id" = ${id} FOR UPDATE`;
+async function refazerTituloDeReceber(tx: Tx, id: string, valorCentavos: number, ctx: ContextoFinanceiro) {
+  const [t] = await tx.$queryRaw<{ status: StatusDoTitulo; valorCentavos: number; valorPagoCentavos: number; descricao: string; clienteId: string; projetoId: string | null }[]>`
+    SELECT "status", "valorCentavos", "valorPagoCentavos", "descricao", "clienteId", "projetoId" FROM "ContaReceber" WHERE "id" = ${id} FOR UPDATE`;
   if (!t) throw new ErroNegocio("A conta a receber deste lançamento não foi encontrada.");
   const r = aplicarEstorno(t, valorCentavos);
   if (!r.ok) throw new ErroNegocio(r.erro);
-  await tx.contaReceber.update({ where: { id }, data: { valorPagoCentavos: r.valorPagoCentavos, status: r.status } });
+  await tx.contaReceber.update({ where: { id }, data: { valorPagoCentavos: r.valorPagoCentavos, status: r.status, atualizadoPorId: ctx.usuario.id } });
+  await sincronizarTarefaDeCobranca(tx, id, t.status, r.status, ctx.agora ?? new Date());
+  await registrarInteracao(tx, {
+    tipo: "SISTEMA",
+    texto: `Recebimento de ${formatarMoeda(valorCentavos)} estornado em “${t.descricao}”.`,
+    clienteId: t.clienteId,
+    projetoId: t.projetoId,
+    usuarioId: ctx.usuario.id,
+  });
 }
 
 async function refazerTituloDePagar(tx: Tx, id: string, valorCentavos: number) {
