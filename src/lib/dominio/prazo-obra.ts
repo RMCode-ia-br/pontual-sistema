@@ -10,8 +10,8 @@
 import { diferencaEmDias, somarDias } from "./calendario";
 import { diasEntreDoTipo, diasUteisEntre, somarDiasDoTipo, type TipoDiasDoPrazo } from "./dias-uteis";
 
-export type GrupoDePrazo = "MATERIAL" | "EXECUCAO" | "VIDROS_FINALIZACAO";
-export const GRUPOS_DE_PRAZO: readonly GrupoDePrazo[] = ["MATERIAL", "EXECUCAO", "VIDROS_FINALIZACAO"];
+export const GRUPOS_DE_PRAZO = ["MATERIAL", "EXECUCAO", "VIDROS_FINALIZACAO"] as const;
+export type GrupoDePrazo = (typeof GRUPOS_DE_PRAZO)[number];
 
 export type ModoDoPrazo = "NENHUM" | "TOTAL" | "POR_ETAPA";
 

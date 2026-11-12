@@ -10,6 +10,7 @@ import { calcularTotais, MAXIMO_CENTAVOS, quantidadeTotal } from "@/lib/dominio/
 import { chaveFollowUp, vencimentoAcompanharProposta } from "@/lib/dominio/followup";
 import { formatarMoeda, hojeCalendario } from "@/lib/formatadores";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
+import { gerarEtapasDaObra } from "@/modules/obras/servico";
 import { mudarFaseDoProjeto } from "@/modules/projetos/servico";
 
 import type { ConteudoProposta } from "./conteudo";
@@ -208,8 +209,8 @@ export type EntradaAprovacao = {
 
 /**
  * Aprovação (R5), numa transação só: aceite, projeto → Aprovado com valor fechado, parcelas a receber (R6), tarefas e
- * linha do tempo. Aprovar um rascunho congela antes. Idempotente nas parcelas (única por proposta + ordem).
- * O passo 4 (etapas da obra) é o ponto de extensão da Fase 4: `gerarEtapasDaObra`.
+ * etapas da obra (R7, `gerarEtapasDaObra` em `@/modules/obras/servico`) e linha do tempo. Aprovar um rascunho
+ * congela antes. Idempotente nas parcelas (única por proposta + ordem) e nas etapas (uma geração por projeto).
  */
 export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const { usuario, propostaId, ip } = e;
@@ -342,24 +343,21 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   }
   await tx.tarefa.createMany({ data: tarefas, skipDuplicates: true });
 
-  await gerarEtapasDaObra(tx, { projetoId: p.projeto.id, propostaId, usuario });
+  // Etapas da obra (R5.4 → R7): a partir do modelo padrão; idempotente por projeto.
+  const etapas = await gerarEtapasDaObra(tx, { projetoId: p.projeto.id, propostaId, opcaoId: e.opcaoId, usuario, aceitaEm: e.aceitaEm, prazo: conteudo.prazo, ip });
+  const textoEtapas = etapas.criadas > 0 ? ` ${etapas.criadas} etapa(s) da obra geradas${etapas.dispensadas > 0 ? ` (${etapas.dispensadas} dispensada(s))` : ""}.` : etapas.jaExistiam ? " As etapas da obra já existiam e foram mantidas." : etapas.semModelo ? " Não há modelo de etapas ativo: gere as etapas na obra." : "";
 
   await registrarInteracao(tx, {
     tipo: "SISTEMA",
-    texto: `Proposta ${p.numero} aprovada${conteudo.opcoes.length > 1 ? ` (opção "${opcao.nome}")` : ""}: ${formatarMoeda(valorAprovado)}, aceite por ${e.forma.toLowerCase()}.${p.parcelas.length === 0 ? " Condição a combinar: nenhuma parcela foi gerada." : ` ${parcelasGeradas} parcela(s) a receber geradas.`}`,
+    texto: `Proposta ${p.numero} aprovada${conteudo.opcoes.length > 1 ? ` (opção "${opcao.nome}")` : ""}: ${formatarMoeda(valorAprovado)}, aceite por ${e.forma.toLowerCase()}.${p.parcelas.length === 0 ? " Condição a combinar: nenhuma parcela foi gerada." : ` ${parcelasGeradas} parcela(s) a receber geradas.`}${textoEtapas}`,
     clienteId: p.projeto.clienteId,
     projetoId: p.projeto.id,
     usuarioId: usuario.id,
   });
-  await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "APROVAR", antes: { status: p.status, projeto: antesProjeto }, depois: { status: "APROVADA", opcaoAprovadaId: e.opcaoId, valorAprovadoCentavos: valorAprovado, parcelas: parcelasGeradas, valorFechadoCentavos: valorFechado }, ip });
+  await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "APROVAR", antes: { status: p.status, projeto: antesProjeto }, depois: { status: "APROVADA", opcaoAprovadaId: e.opcaoId, valorAprovadoCentavos: valorAprovado, parcelas: parcelasGeradas, valorFechadoCentavos: valorFechado, etapas: etapas.criadas, etapasDispensadas: etapas.dispensadas, parcelasLiberadasPorEtapaDispensada: etapas.parcelasLiberadas }, ip });
 
   const outras = await tx.proposta.count({ where: { projetoId: p.projeto.id, id: { not: propostaId }, status: { in: ["RASCUNHO", "ENVIADA"] }, deletadoEm: null } });
-  return { numero: p.numero, projetoId: p.projeto.id, valorAprovadoCentavos: valorAprovado, parcelasGeradas, semParcelas: p.parcelas.length === 0, outrasEmAberto: outras, valorFechadoCentavos: valorFechado };
-}
-
-/** Ponto de extensão da Fase 4 (R5, passo 4): gerar as etapas da obra a partir do modelo. Hoje não faz nada. */
-async function gerarEtapasDaObra(_tx: Tx, _dados: { projetoId: string; propostaId: string; usuario: Usuario }): Promise<void> {
-  return;
+  return { numero: p.numero, projetoId: p.projeto.id, valorAprovadoCentavos: valorAprovado, parcelasGeradas, semParcelas: p.parcelas.length === 0, outrasEmAberto: outras, valorFechadoCentavos: valorFechado, etapasGeradas: etapas.criadas };
 }
 
 /**

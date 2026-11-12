@@ -978,7 +978,8 @@ model Projeto {
   // ----- Obra (Fase 4: R7/R8) -----
   /// Como o prazo foi prometido (copiado da proposta aprovada): total simples ou por grupo de etapas.
   prazoModo            ModoPrazo @default(NENHUM)
-  /// Prazo total simples; no modo "20 a 35 dias" vale o MÁXIMO (R7).
+  /// Total de dias que vale para o prazo final: no modo total simples ("20 a 35 dias") o MÁXIMO (R7);
+  /// no modo por etapa, a soma dos três grupos.
   prazoDias            Int?
   prazoMaterialDias    Int?
   prazoExecucaoDias    Int?

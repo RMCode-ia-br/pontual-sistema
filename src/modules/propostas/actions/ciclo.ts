@@ -49,7 +49,7 @@ const aprovacaoSchema = z.object({
   observacao: z.string().trim().max(1000, "Use no máximo 1.000 caracteres.").optional(),
 });
 
-export type ResultadoAprovacao = { numero: string; valorAprovadoCentavos: number; parcelasGeradas: number; semParcelas: boolean; outrasEmAberto: number; valorFechadoCentavos: number };
+export type ResultadoAprovacao = { numero: string; valorAprovadoCentavos: number; parcelasGeradas: number; semParcelas: boolean; outrasEmAberto: number; valorFechadoCentavos: number; etapasGeradas: number };
 
 /** Aprova a proposta (R5): uma transação única com aceite, projeto, parcelas, tarefas e linha do tempo. */
 export async function aprovarPropostaAcao(entrada: z.input<typeof aprovacaoSchema>): Promise<ResultadoAcao<ResultadoAprovacao>> {
@@ -62,7 +62,7 @@ export async function aprovarPropostaAcao(entrada: z.input<typeof aprovacaoSchem
     const ip = extrairIp(await headers());
     const r = await prisma.$transaction((tx) => aprovarNaTransacao(tx, { usuario: sessao, propostaId: v.propostaId, opcaoId: v.opcaoId, forma: v.forma, aceitaEm: v.aceitaEm, observacao: v.observacao, ip }), { timeout: 30_000 });
     revalidar(v.propostaId, r.projetoId);
-    return sucesso(r, `Proposta ${r.numero} aprovada.`);
+    return sucesso(r, `Proposta ${r.numero} aprovada.${r.etapasGeradas > 0 ? ` ${r.etapasGeradas} etapas da obra geradas.` : ""}`);
   });
 }
 

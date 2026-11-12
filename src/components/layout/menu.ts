@@ -103,7 +103,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Modelos de texto", href: "/configuracoes/modelos-texto" },
       { titulo: "Feriados e férias", href: "/configuracoes/feriados" },
       { titulo: "Condições de pagamento", href: "/configuracoes/condicoes-pagamento" },
-      { titulo: "Modelo de etapas", fase: 4 },
+      { titulo: "Modelo de etapas", href: "/configuracoes/modelo-etapas" },
       { titulo: "Integrações/API", fase: 8 },
       { titulo: "Importação", href: "/configuracoes/importacao" },
       { titulo: "Auditoria", href: "/configuracoes/auditoria" },

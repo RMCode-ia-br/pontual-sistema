@@ -82,6 +82,9 @@ async function limpar(c: Client): Promise<void> {
   const eventosE2E = `SELECT id FROM "EventoAgenda" WHERE titulo LIKE 'E2E %' OR "projetoId" IN (${projetosE2E}) OR "clienteId" IN (SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %')`;
   await c.query(`DELETE FROM "MedidaRascunho" WHERE "projetoId" IN (${projetosE2E}) OR "eventoId" IN (${eventosE2E})`);
   await c.query(`DELETE FROM "EventoAgenda" WHERE id IN (${eventosE2E})`);
+  // Fase 4 (obras): etapas e pausas das obras de teste (as parcelas que apontavam para as etapas já foram apagadas acima).
+  await c.query(`DELETE FROM "EtapaProjeto" WHERE "projetoId" IN (${projetosE2E})`);
+  await c.query(`DELETE FROM "PausaProjeto" WHERE "projetoId" IN (${projetosE2E})`);
   await c.query(`DELETE FROM "Interacao" WHERE "projetoId" IN (${projetosE2E})`);
   await c.query(`DELETE FROM "Tarefa" WHERE "projetoId" IN (${projetosE2E})`);
   await c.query(`DELETE FROM "HistoricoFaseProjeto" WHERE "projetoId" IN (${projetosE2E})`);
@@ -149,6 +152,29 @@ export async function prepararUsuarioE2E(opcoes: OpcoesUsuario = {}): Promise<vo
        VALUES ($1, $2, $3, $4, $5, now())`,
       [randomUUID(), USUARIO_E2E.nome, USUARIO_E2E.login, senhaHash, !opcoes.senhaDefinitiva],
     );
+  });
+}
+
+/** Ids dos itens ativos do modelo de etapas padrão (para restaurar depois de um teste que o edita). */
+export async function tirarSnapshotDoModeloDeEtapas(): Promise<{ modeloId: string; itemIds: string[] }> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ modeloId: string; id: string }>(
+      `SELECT i."modeloId", i.id FROM "ModeloEtapaItem" i JOIN "ModeloEtapas" m ON m.id = i."modeloId"
+        WHERE m.padrao AND m."deletadoEm" IS NULL AND i."deletadoEm" IS NULL ORDER BY i.ordem`,
+    );
+    if (r.rows.length === 0) throw new Error("O modelo de etapas padrão não existe no banco de teste (rode a seed).");
+    return { modeloId: r.rows[0].modeloId, itemIds: r.rows.map((x) => x.id) };
+  });
+}
+
+/**
+ * Desfaz uma edição do modelo pela interface: a ação só marca os itens antigos como excluídos e cria novos,
+ * então basta apagar os novos e reativar os antigos (nada referencia os itens do modelo).
+ */
+export async function restaurarModeloDeEtapas(snapshot: { modeloId: string; itemIds: string[] }): Promise<void> {
+  await comConexao(async (c) => {
+    await c.query(`DELETE FROM "ModeloEtapaItem" WHERE "modeloId" = $1 AND id <> ALL($2::text[])`, [snapshot.modeloId, snapshot.itemIds]);
+    await c.query(`UPDATE "ModeloEtapaItem" SET "deletadoEm" = NULL WHERE id = ANY($1::text[])`, [snapshot.itemIds]);
   });
 }
 

@@ -4,17 +4,20 @@
  */
 import type { GrupoDePrazo, StatusDeEtapa } from "./prazo-obra";
 
-export type TipoDeEtapa =
-  | "MEDICAO_EXATA"
-  | "PEDIDO_MATERIAL"
-  | "FABRICACAO"
-  | "INSTALACAO_ESQUADRIAS"
-  | "MEDICAO_VIDROS"
-  | "PEDIDO_VIDROS"
-  | "INSTALACAO_VIDROS"
-  | "ACABAMENTO"
-  | "ENTREGA"
-  | "OUTRA";
+export const TIPOS_DE_ETAPA = [
+  "MEDICAO_EXATA",
+  "PEDIDO_MATERIAL",
+  "FABRICACAO",
+  "INSTALACAO_ESQUADRIAS",
+  "MEDICAO_VIDROS",
+  "PEDIDO_VIDROS",
+  "INSTALACAO_VIDROS",
+  "ACABAMENTO",
+  "ENTREGA",
+  "OUTRA",
+] as const;
+
+export type TipoDeEtapa = (typeof TIPOS_DE_ETAPA)[number];
 
 export const ROTULO_TIPO_ETAPA: Record<TipoDeEtapa, string> = {
   MEDICAO_EXATA: "Medição exata",
@@ -43,7 +46,15 @@ export const ROTULO_GRUPO_PRAZO: Record<GrupoDePrazo, string> = {
   VIDROS_FINALIZACAO: "Vidros e finalização",
 };
 
-export type GatilhoDeEtapa = "ENTREGA_MATERIAL" | "ENTREGA_E_INSTALACAO";
+/** Só estes gatilhos de pagamento dependem de uma etapa da obra (R6). */
+export const GATILHOS_DE_ETAPA = ["ENTREGA_MATERIAL", "ENTREGA_E_INSTALACAO"] as const;
+
+export type GatilhoDeEtapa = (typeof GATILHOS_DE_ETAPA)[number];
+
+export const ROTULO_GATILHO_DE_ETAPA: Record<GatilhoDeEtapa, string> = {
+  ENTREGA_MATERIAL: "Entrega do material (esquadrias)",
+  ENTREGA_E_INSTALACAO: "Entrega dos vidros e instalação",
+};
 
 export type ItemDoModelo = {
   tipo: TipoDeEtapa;
@@ -57,6 +68,71 @@ export type ItemDoModelo = {
   exigeEsquadria: boolean;
   ativo: boolean;
 };
+
+export const PESO_MAXIMO_DE_ETAPA = 10;
+export const MAXIMO_DE_ETAPAS_NO_MODELO = 30;
+
+export type ValidacaoDoModelo = { ok: true } | { ok: false; erro: string };
+
+/**
+ * Confere o modelo de etapas antes de salvar (R7). Regras:
+ * - ao menos uma etapa ativa, e a MEDICAO_EXATA (que inicia o relógio do prazo, R8) ativa, única, primeira e fora de qualquer grupo;
+ * - cada tipo aparece uma vez entre as ativas (exceto "outra"): a obra tem uma etapa de cada tipo;
+ * - cada gatilho de pagamento liberado por no máximo uma etapa, e um único marco de garantia (valem para TODAS as
+ *   linhas, como o índice do banco); etapa inativa não pode liberar parcela nem marcar a garantia;
+ * - peso inteiro de 1 a 10.
+ */
+export function validarModeloDeEtapas(itens: readonly Pick<ItemDoModelo, "tipo" | "nome" | "grupoPrazo" | "peso" | "liberaGatilho" | "marcoGarantia" | "ativo">[]): ValidacaoDoModelo {
+  const erro = (mensagem: string): ValidacaoDoModelo => ({ ok: false, erro: mensagem });
+  if (itens.length > MAXIMO_DE_ETAPAS_NO_MODELO) return erro(`No máximo ${MAXIMO_DE_ETAPAS_NO_MODELO} etapas.`);
+  const ativos = itens.filter((i) => i.ativo);
+  if (ativos.length === 0) return erro("Deixe ao menos uma etapa ativa.");
+
+  for (const i of itens) {
+    if (!Number.isInteger(i.peso) || i.peso < 1 || i.peso > PESO_MAXIMO_DE_ETAPA) return erro(`O peso de "${i.nome}" deve ser um número de 1 a ${PESO_MAXIMO_DE_ETAPA}.`);
+    if (!i.ativo && i.liberaGatilho) return erro(`"${i.nome}" está inativa e não pode liberar parcela: ative a etapa ou tire o gatilho dela.`);
+    if (!i.ativo && i.marcoGarantia) return erro(`"${i.nome}" está inativa e não pode marcar o início da garantia.`);
+  }
+
+  const medicoes = ativos.filter((i) => i.tipo === "MEDICAO_EXATA");
+  if (medicoes.length === 0) return erro("A medição exata é obrigatória: é dela que o prazo da obra começa a contar.");
+  if (ativos[0].tipo !== "MEDICAO_EXATA") return erro("A medição exata precisa ser a primeira etapa.");
+  if (medicoes[0].grupoPrazo !== null) return erro("A medição exata não entra em nenhum prazo: ela só inicia o relógio.");
+
+  const vistos = new Set<TipoDeEtapa>();
+  for (const i of ativos) {
+    if (i.tipo === "OUTRA") continue;
+    if (vistos.has(i.tipo)) return erro(`A etapa "${ROTULO_TIPO_ETAPA[i.tipo]}" aparece mais de uma vez. Use o tipo "Outra etapa" para etapas extras.`);
+    vistos.add(i.tipo);
+  }
+
+  for (const gatilho of GATILHOS_DE_ETAPA) {
+    if (itens.filter((i) => i.liberaGatilho === gatilho).length > 1) return erro(`Só uma etapa pode liberar a parcela "${ROTULO_GATILHO_DE_ETAPA[gatilho]}".`);
+  }
+  if (itens.filter((i) => i.marcoGarantia).length > 1) return erro("Só uma etapa pode marcar o início da garantia.");
+
+  return { ok: true };
+}
+
+/**
+ * Avisos (não bloqueiam) sobre um modelo válido: o que ficaria sem funcionar. O gestor decide.
+ */
+export function avisosDoModelo(itens: readonly Pick<ItemDoModelo, "tipo" | "nome" | "grupoPrazo" | "liberaGatilho" | "marcoGarantia" | "ativo">[]): string[] {
+  const ativos = itens.filter((i) => i.ativo);
+  const avisos: string[] = [];
+  for (const gatilho of GATILHOS_DE_ETAPA) {
+    if (!ativos.some((i) => i.liberaGatilho === gatilho)) {
+      avisos.push(`Nenhuma etapa libera a parcela "${ROTULO_GATILHO_DE_ETAPA[gatilho]}": as parcelas com esse gatilho ficariam aguardando para sempre.`);
+    }
+  }
+  if (!ativos.some((i) => i.marcoGarantia)) {
+    avisos.push("Nenhuma etapa marca o início da garantia: os chamados de assistência não conseguem conferir o prazo de regulagem.");
+  }
+  for (const i of ativos) {
+    if (i.tipo !== "MEDICAO_EXATA" && i.grupoPrazo === null) avisos.push(`"${i.nome}" não pertence a nenhum prazo e ficará sem datas previstas.`);
+  }
+  return avisos;
+}
 
 export type EtapaGerada = {
   tipo: TipoDeEtapa;

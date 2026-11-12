@@ -10,6 +10,7 @@ const ABAS = [
   { titulo: "Usuários", href: "/configuracoes/usuarios" },
   { titulo: "Catálogos", href: "/configuracoes/catalogos" },
   { titulo: "Feriados e férias", href: "/configuracoes/feriados" },
+  { titulo: "Modelo de etapas", href: "/configuracoes/modelo-etapas" },
   { titulo: "Modelos de texto", href: "/configuracoes/modelos-texto" },
   { titulo: "Importação", href: "/configuracoes/importacao" },
   { titulo: "Auditoria", href: "/configuracoes/auditoria" },

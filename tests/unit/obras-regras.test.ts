@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import { MODELO_PADRAO_DE_ETAPAS } from "../../prisma/seed-obras";
 import { datasDeFeriado } from "../../src/lib/dominio/dias-uteis";
 import {
+  avisosDoModelo,
   entregaConcluida,
   etapaAtual,
   etapasDoModelo,
   statusDoProjetoPelasEtapas,
   transicaoPermitida,
+  validarModeloDeEtapas,
   type ItemDoModelo,
 } from "../../src/lib/dominio/etapas";
 import { classificarChamado } from "../../src/lib/dominio/garantia";
@@ -254,6 +256,93 @@ describe("etapas: geração a partir do modelo", () => {
       ["MEDICAO_EXATA", 1],
       ["ENTREGA", 2],
     ]);
+  });
+});
+
+describe("modelo de etapas: validação antes de salvar", () => {
+  const padrao = () => MODELO_PADRAO_DE_ETAPAS.map((i) => ({ ...i }));
+  const erroDe = (itens: ItemDoModelo[]) => {
+    const r = validarModeloDeEtapas(itens);
+    return r.ok ? null : r.erro;
+  };
+
+  it("o modelo padrão da seed é válido e não gera avisos", () => {
+    expect(validarModeloDeEtapas(padrao())).toEqual({ ok: true });
+    expect(avisosDoModelo(padrao())).toEqual([]);
+  });
+
+  it("exige ao menos uma etapa ativa", () => {
+    expect(erroDe(padrao().map((i) => ({ ...i, ativo: false })))).toContain("ao menos uma etapa ativa");
+    expect(erroDe([])).toContain("ao menos uma etapa ativa");
+  });
+
+  it("a medição exata é obrigatória, primeira e fora de qualquer grupo", () => {
+    expect(erroDe(padrao().filter((i) => i.tipo !== "MEDICAO_EXATA"))).toContain("medição exata é obrigatória");
+    const desativada = padrao();
+    desativada[0].ativo = false;
+    expect(erroDe(desativada)).toContain("medição exata é obrigatória");
+    const naoPrimeira = padrao();
+    [naoPrimeira[0], naoPrimeira[1]] = [naoPrimeira[1], naoPrimeira[0]];
+    expect(erroDe(naoPrimeira)).toContain("primeira etapa");
+    const comGrupo = padrao();
+    comGrupo[0].grupoPrazo = "MATERIAL";
+    expect(erroDe(comGrupo)).toContain("não entra em nenhum prazo");
+  });
+
+  it("cada tipo uma vez entre as ativas (a obra tem uma etapa de cada tipo), mas 'outra' pode repetir", () => {
+    const dupla = [...padrao(), { ...MODELO_PADRAO_DE_ETAPAS[2], ordem: 10, liberaGatilho: null }];
+    expect(erroDe(dupla)).toContain("Fabricação");
+    const extras = [
+      ...padrao(),
+      { ...MODELO_PADRAO_DE_ETAPAS[8], tipo: "OUTRA" as const, nome: "Vistoria", ordem: 10, liberaGatilho: null },
+      { ...MODELO_PADRAO_DE_ETAPAS[8], tipo: "OUTRA" as const, nome: "Limpeza", ordem: 11, liberaGatilho: null },
+    ];
+    expect(validarModeloDeEtapas(extras)).toEqual({ ok: true });
+  });
+
+  it("um tipo repetido só numa etapa inativa não atrapalha", () => {
+    const inativa = [...padrao(), { ...MODELO_PADRAO_DE_ETAPAS[2], ordem: 10, liberaGatilho: null, ativo: false }];
+    expect(validarModeloDeEtapas(inativa)).toEqual({ ok: true });
+  });
+
+  it("um gatilho de pagamento por etapa e um só marco de garantia (em todas as linhas, como o banco)", () => {
+    const doisGatilhos = padrao();
+    doisGatilhos[3].liberaGatilho = "ENTREGA_MATERIAL"; // FABRICACAO já libera
+    expect(erroDe(doisGatilhos)).toContain("Só uma etapa pode liberar");
+    const doisMarcos = padrao();
+    doisMarcos[8].marcoGarantia = true;
+    expect(erroDe(doisMarcos)).toContain("início da garantia");
+  });
+
+  it("etapa inativa não pode liberar parcela nem marcar a garantia", () => {
+    const semGatilho = padrao();
+    semGatilho[2].ativo = false; // FABRICACAO libera ENTREGA_MATERIAL
+    expect(erroDe(semGatilho)).toContain("não pode liberar parcela");
+    const semMarco = padrao();
+    semMarco[6].ativo = false;
+    semMarco[6].liberaGatilho = null; // INSTALACAO_VIDROS ainda é o marco
+    expect(erroDe(semMarco)).toContain("início da garantia");
+  });
+
+  it("peso inteiro de 1 a 10", () => {
+    for (const peso of [0, -1, 11, 1.5, Number.NaN]) {
+      const itens = padrao();
+      itens[1].peso = peso;
+      expect(erroDe(itens), String(peso)).toContain("peso");
+    }
+  });
+
+  it("avisa (sem bloquear) quando um gatilho, a garantia ou um grupo ficam sem etapa", () => {
+    const sem = padrao();
+    sem[2].liberaGatilho = null; // some o gatilho do material
+    sem[6].marcoGarantia = false; // some o marco
+    sem[7].grupoPrazo = null; // ACABAMENTO sem prazo
+    expect(validarModeloDeEtapas(sem)).toEqual({ ok: true });
+    const avisos = avisosDoModelo(sem);
+    expect(avisos).toHaveLength(3);
+    expect(avisos.join(" ")).toContain("Entrega do material");
+    expect(avisos.join(" ")).toContain("garantia");
+    expect(avisos.join(" ")).toContain("Acabamento");
   });
 });
 
