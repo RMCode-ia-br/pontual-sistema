@@ -24,9 +24,11 @@ Todas estão em `.env.example`. Os valores reais ficam só em `.env.local` (fora
 | `SUPABASE_SECRET_KEY` | chave secreta do servidor (Storage). **Nunca** no navegador | Supabase, API keys |
 | `SUPABASE_STORAGE_BUCKET` | nome do bucket privado (`anexos`) | fixo |
 | `AUTH_SECRET` | assina as sessões | gere: `npx auth secret` ou 32 bytes aleatórios |
-| `AUTH_URL` / `NEXT_PUBLIC_APP_URL` | endereço público do app | local: `http://localhost:3000` |
+| `AUTH_URL` / `NEXT_PUBLIC_APP_URL` | endereço público do **sistema**, sem barra no final, **iguais entre si**. Produção: `https://sistema.pontualmacae.com.br`. Nada no código tem o endereço fixo: o Auth.js lê `AUTH_URL`; o link do feed .ics, os metadados e o que vier depois leem `NEXT_PUBLIC_APP_URL` (`src/lib/url-base.ts`) | local: `http://localhost:3000` |
 | `CRON_SECRET` | protege `/api/cron/diario` | gere um valor aleatório longo |
-| `SITE_ALLOWED_ORIGINS` | origens do site com CORS em `/api/public` | `https://pontualmacae.com.br` |
+| `SITE_ALLOWED_ORIGINS` | origens do **site institucional** liberadas por CORS em `/api/public` (lista separada por vírgula, sem barra no final; `src/lib/cors.ts`). **Não** é o endereço do sistema. Origem fora da lista não recebe cabeçalho CORS | `https://pontualmacae.com.br` |
+
+**`NEXT_PUBLIC_APP_URL` é gravada no build:** ao mudá-la na Vercel, faça novo deploy (Redeploy). Para este endereço o PWA não tem nada a ajustar: `start_url` e `scope` são relativos (`/`) e valem para qualquer domínio.
 
 **Senha do banco com caracteres especiais** (`@ # : / ? %`) precisa ser codificada na URL com `encodeURIComponent`, senão a URL fica inválida e o Prisma não conecta.
 
@@ -42,7 +44,9 @@ Passos de referência (para refazer em outro projeto ou ambiente):
 2. No painel da Vercel (Settings, Environment Variables), cadastre **todas** as variáveis da seção 2 para Production, Preview e Development. `AUTH_URL` e `NEXT_PUBLIC_APP_URL` devem ser o endereço público daquele ambiente. **Ao trocar de banco, atualize `DATABASE_URL`, `DIRECT_URL` e as chaves do Supabase na Vercel e faça novo deploy.**
 3. Conecte o projeto ao repositório `RMCode-ia-br/pontual-sistema` (Settings, Git). O site (`rmcode-site`) **não deve ser alterado**.
 4. **Região das funções: `gru1` (São Paulo)**, em `vercel.json`, a mesma do banco no Supabase (`sa-east-1`), para minimizar a latência. (Antes era `iad1`, quando o banco estava em `us-east-1`; ver `docs/DECISOES.md`, itens 3 e 25.)
-5. Domínio: `sistema.pontualmacae.com.br`. Em Settings, Domains, adicione o domínio e crie no registro.br (DNS gerenciado pela RM Code) o registro que a **própria Vercel indicar** na tela.
+5. Domínio definitivo: `sistema.pontualmacae.com.br` (o site institucional é `pontualmacae.com.br`, outro projeto). Em Settings, Domains, adicione o domínio e crie no registro.br (DNS gerenciado pela RM Code) o registro que a **própria Vercel indicar** na tela. Depois ajuste `AUTH_URL`, `NEXT_PUBLIC_APP_URL` e confira `SITE_ALLOWED_ORIGINS` (seção 2) e faça novo deploy. Se quiser, deixe o domínio `*.vercel.app` redirecionando ao definitivo (Settings, Domains, Redirect).
+6. **Buscadores:** o sistema não deve aparecer no Google. Há três camadas, todas no código: `robots.txt` com `Disallow: /` (`src/app/robots.ts`, público no proxy), `<meta name="robots" content="noindex">` no layout e o cabeçalho `X-Robots-Tag: noindex, nofollow, noarchive` em toda resposta (`next.config.ts`, vale também para PDF e .ics). Vale para qualquer domínio, inclusive o `*.vercel.app`. O `robots.txt` só pede para não rastrear; quem impede de fato a indexação são o meta e o cabeçalho.
+7. **Ao trocar de endereço:** quem instalou o PWA pelo endereço antigo precisa remover o atalho e instalar de novo pelo novo (o navegador trata como outro app). Links de agenda (.ics) criados antes continuam funcionando no endereço antigo enquanto ele existir, mas valem a pena ser desligados e recriados em Agenda, Assinar no calendário, para o link novo sair com o endereço definitivo. Os cookies de sessão não passam de um domínio para o outro: todos entram de novo.
 
 Confira o primeiro deploy: `/api/health` deve responder `{"status":"ok"}` e o login deve abrir.
 
@@ -132,5 +136,5 @@ Não é necessário para o mês de teste. Antes de passar ao **uso definitivo**:
 - [ ] Usuário dedicado `prisma` no banco (hoje pode estar usando `postgres`).
 - [x] Segredos do backup cadastrados no GitHub (informado pela RM Code). [ ] `BACKUP_PASSPHRASE` guardada em cofre, workflow executado uma vez e **restauração testada**.
 - [ ] Monitor externo em `/api/health`.
-- [ ] Domínio `sistema.pontualmacae.com.br` com HTTPS.
+- [ ] Domínio `sistema.pontualmacae.com.br` com HTTPS, `AUTH_URL` e `NEXT_PUBLIC_APP_URL` apontando para ele e novo deploy feito.
 - [ ] Dados de demonstração removidos do banco de produção.

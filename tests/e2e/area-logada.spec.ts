@@ -30,6 +30,15 @@ test.describe("sem sessão: PWA, cabeçalhos e rotina diária", () => {
     expect((await request.get("/icons/inexistente.png")).status()).toBe(404);
   });
 
+  test("o sistema pede aos buscadores que não indexem (robots.txt público e X-Robots-Tag)", async ({ request }) => {
+    const robots = await request.get("/robots.txt", { maxRedirects: 0 });
+    expect(robots.status()).toBe(200);
+    const texto = await robots.text();
+    expect(texto).toContain("User-Agent: *");
+    expect(texto).toContain("Disallow: /");
+    expect((await request.get("/login")).headers()["x-robots-tag"]).toContain("noindex");
+  });
+
   test("a tela de login traz os cabeçalhos de segurança", async ({ request }) => {
     const h = (await request.get("/login")).headers();
     expect(h["content-security-policy"]).toContain("frame-ancestors 'none'");

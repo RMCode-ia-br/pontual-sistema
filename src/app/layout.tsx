@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { EstiloDaMarca } from "@/components/layout/estilo-da-marca";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca, SUPERFICIES } from "@/lib/tema/derivar";
+import { urlBaseDoApp } from "@/lib/url-base";
 import { obterCorDaMarca } from "@/modules/configuracoes/queries";
 
 import "./globals.css";
@@ -17,7 +18,11 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 // A cor da marca vem do banco (Configurações): nenhuma página pode ser gravada estática com a cor do momento do build.
 export const dynamic = "force-dynamic";
 
+const urlBase = urlBaseDoApp();
+
 export const metadata: Metadata = {
+  // Base dos endereços relativos de metadados (ícones, manifesto); vem do ambiente, nunca fixa.
+  ...(urlBase ? { metadataBase: new URL(urlBase) } : {}),
   title: { default: "Pontual Gestão", template: "%s | Pontual Gestão" },
   description: "Sistema de gestão da Pontual Soluções em Esquadrias e Vidros.",
   applicationName: "Pontual Gestão",

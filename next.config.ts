@@ -30,6 +30,8 @@ const cabecalhosDeSeguranca = [
   // Câmera só para o próprio site (fotos de medição no celular); o resto fica bloqueado.
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // Sistema interno: fora do Google e de outros buscadores (vale também para PDFs, ICS e qualquer arquivo).
+  { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
   ...(ehProducao ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
 ];
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatarDataHora } from "@/lib/formatadores";
+import { montarUrlDoApp } from "@/lib/url-base";
 
 import { criarFeedAgenda, revogarFeedAgenda } from "../actions/feed";
 import type { FeedDaAgenda } from "../queries";
@@ -34,7 +35,7 @@ export function AssinaturaDaAgenda({ feeds }: { feeds: FeedDaAgenda[] }) {
         toast.error(r.ok ? "Não foi possível criar o link." : r.erro);
         return;
       }
-      setNovoLink(`${window.location.origin}/api/public/agenda/${r.dados.token}`);
+      setNovoLink(montarUrlDoApp(`/api/public/agenda/${r.dados.token}`));
       setCopiado(false);
       router.refresh();
     });

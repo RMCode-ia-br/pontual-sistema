@@ -11,5 +11,6 @@ export default auth;
 
 export const config = {
   // Ignora arquivos estáticos, imagens do Next e arquivos públicos do PWA e do navegador (favicon, ícones).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|icons/|sw.js).*)"],
+  // robots.txt precisa ser público: sem isso o buscador receberia o redirecionamento ao login em vez do "não indexe".
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|robots.txt|icons/|sw.js).*)"],
 };
