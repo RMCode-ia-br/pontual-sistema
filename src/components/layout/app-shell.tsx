@@ -37,10 +37,10 @@ function Marca({ nome, logoUrl, compacta = false }: { nome: string; logoUrl: str
     <Link href="/" className="flex min-w-0 items-center gap-2" aria-label={`${nome}: ir para o painel`}>
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage
-        <img src={logoUrl} alt="" className="size-8 shrink-0 rounded-md object-contain" />
+        <img src={logoUrl} alt="" className="size-9 shrink-0 rounded-full object-contain shadow-sm ring-1 ring-black/5" />
       ) : (
         <span
-          className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
+          className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm"
           aria-hidden
         >
           {nome.trim().charAt(0).toUpperCase() || "P"}
@@ -184,7 +184,13 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
       <Sheet open={menuAberto} onOpenChange={setMenuAberto}>
         <SheetContent side="left" className="overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>{marca.nome}</SheetTitle>
+            <SheetTitle className="flex items-center gap-2">
+              {marca.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage
+                <img src={marca.logoUrl} alt="" className="size-9 shrink-0 rounded-full object-contain shadow-sm ring-1 ring-black/5" />
+              ) : null}
+              <span className="truncate">{marca.nome}</span>
+            </SheetTitle>
           </SheetHeader>
           <Navegacao aoNavegar={() => setMenuAberto(false)} />
         </SheetContent>

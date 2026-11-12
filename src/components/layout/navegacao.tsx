@@ -42,8 +42,8 @@ export function Navegacao({ recolhida = false, aoNavegar }: Props) {
               aria-current={rotaAtiva(caminho, grupo.href) ? "page" : undefined}
               title={recolhida ? grupo.titulo : undefined}
               className={cn(
-                "hover:bg-accent flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium",
-                rotaAtiva(caminho, grupo.href) && "bg-primary/10 text-primary",
+                "hover:bg-muted flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium",
+                rotaAtiva(caminho, grupo.href) && "bg-accent text-accent-foreground",
                 recolhida && "justify-center px-0",
               )}
             >
@@ -90,7 +90,7 @@ export function Navegacao({ recolhida = false, aoNavegar }: Props) {
               title={recolhida ? grupo.titulo : undefined}
               onClick={() => setAbertos((a) => ({ ...a, [grupo.titulo]: !a[grupo.titulo] }))}
               className={cn(
-                "hover:bg-accent flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium",
+                "hover:bg-muted flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium",
                 ativoGrupo && "text-primary",
                 recolhida && "justify-center px-0",
               )}
@@ -115,8 +115,8 @@ export function Navegacao({ recolhida = false, aoNavegar }: Props) {
                         onClick={aoNavegar}
                         aria-current={rotaAtiva(caminho, item.href) ? "page" : undefined}
                         className={cn(
-                          "hover:bg-accent flex min-h-9 items-center rounded-md px-2 text-sm",
-                          rotaAtiva(caminho, item.href) && "bg-primary/10 text-primary font-medium",
+                          "hover:bg-muted flex min-h-9 items-center rounded-md px-2 text-sm",
+                          rotaAtiva(caminho, item.href) && "bg-accent text-accent-foreground font-medium",
                         )}
                       >
                         {item.titulo}
