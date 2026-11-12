@@ -158,7 +158,11 @@ export default async function PaginaRelatorioDeObras({ searchParams }: { searchP
             <p className="text-muted-foreground text-sm">Nenhuma etapa concluída no período e nenhuma etapa atrasada hoje.</p>
           ) : (
             <>
-              <GraficoDeBarras dados={r.atrasosPorEtapa.map((l) => ({ nome: ROTULO_TIPO_ETAPA[l.tipo], valor: l.comAtraso }))} descricao="Etapas concluídas com atraso no período, por etapa" />
+              {r.atrasosPorEtapa.some((l) => l.comAtraso > 0) ? (
+                <GraficoDeBarras dados={r.atrasosPorEtapa.map((l) => ({ nome: ROTULO_TIPO_ETAPA[l.tipo], valor: l.comAtraso }))} descricao="Etapas concluídas com atraso no período, por etapa" />
+              ) : (
+                <p className="text-muted-foreground text-sm">Nenhuma etapa concluída com atraso no período.</p>
+              )}
               <div className="overflow-x-auto rounded-xl border">
                 <table className="w-full text-sm">
                   <caption className="sr-only">Atrasos por etapa</caption>

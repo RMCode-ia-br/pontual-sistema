@@ -184,7 +184,29 @@ export async function gerarEtapasDaObra(tx: Tx, e: EntradaGeracaoDeEtapas): Prom
     });
   }
 
-  if ((await tx.etapaProjeto.count({ where: { projetoId: e.projetoId, deletadoEm: null } })) > 0) return { ...vazio, jaExistiam: true };
+  if ((await tx.etapaProjeto.count({ where: { projetoId: e.projetoId, deletadoEm: null } })) > 0) {
+    // Segunda "parte" numa obra em andamento: as parcelas novas cujo gatilho JÁ aconteceu (etapa concluída ou dispensada)
+    // abrem agora, senão ficariam aguardando para sempre (a conclusão da etapa não vai se repetir).
+    const encerradas = await tx.etapaProjeto.findMany({
+      where: { projetoId: e.projetoId, deletadoEm: null, liberaGatilho: { not: null }, status: { in: ["CONCLUIDA", "DISPENSADA"] } },
+      select: { id: true, liberaGatilho: true, fimReal: true },
+    });
+    let liberadas = 0;
+    for (const et of encerradas) {
+      const concluidaEm = et.fimReal ? et.fimReal.toISOString().slice(0, 10) : e.aceitaEm;
+      liberadas += await abrirParcelasDoGatilho(tx, {
+        projetoId: e.projetoId,
+        gatilho: et.liberaGatilho as GatilhoDeEtapa, // só os dois gatilhos de etapa passam pelo CHECK do banco
+        etapaId: et.id,
+        // Uma parcela nova não vence antes do aceite que a criou.
+        vencimento: concluidaEm > e.aceitaEm ? concluidaEm : e.aceitaEm,
+        motivo: "A etapa que libera esta parcela já estava encerrada quando a proposta foi aprovada, então a parcela foi liberada na hora.",
+        usuario: e.usuario,
+        ip: e.ip,
+      });
+    }
+    return { ...vazio, jaExistiam: true, parcelasLiberadas: liberadas };
+  }
 
   const modelo = await tx.modeloEtapas.findFirst({
     where: { padrao: true, ativo: true, deletadoEm: null },

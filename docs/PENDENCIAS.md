@@ -125,6 +125,18 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Numeração dos chamados é global** (`#0001`...), sem zerar por ano. Se ele preferir `NNNN-AA` como as propostas, ajustar.
 - [ ] **Relatório de obras: atraso por etapa só vale com data prevista definitiva.** Etapas com data provisória (antes de a medição exata ser concluída e de o gestor aplicar as datas) entram na conta como as demais; se isso distorcer, excluir as provisórias. O sistema também não guarda o histórico de bloqueios: o relatório mostra os bloqueios de agora e as pausas do período. Se o Marcelo quiser "quantas vezes e por quantos dias cada motivo bloqueou", é preciso registrar as datas de bloqueio.
 - [ ] **Pontualidade do painel usa 90 dias fixos** (como o funil). Se ele quiser mês, trimestre ou ano, o relatório já aceita qualquer período; falta só um seletor no painel.
+## Da revisão sênior da Fase 4 (o que NÃO foi corrigido, e por quê)
+- [ ] **Segunda parte que traz esquadria não reativa etapas dispensadas pela primeira** (decisão 94c): se a primeira parte era só box e a segunda inclui esquadria, as etapas de esquadria seguem dispensadas até o gestor reativar na obra. Baixo risco; a obra mostra as etapas dispensadas.
+- [ ] **Alterar prazo ou justificativa de pausa em obra já concluída** é permitido (com auditoria) e muda a pontualidade passada. Avaliar recusar ou pedir confirmação.
+- [ ] **Modelo de etapas sem a etapa `ENTREGA`:** a regra "só entrega com as anteriores resolvidas" não vale e a obra conclui pela última etapa ativa. O modelo padrão tem a entrega; a validação do modelo poderia exigi-la.
+- [ ] **Kit de postagem entrega os bytes originais da foto:** se a compressão no navegador não rodou, o EXIF (GPS) vai junto. Remover metadados no servidor ao montar o ZIP e limitar o tamanho total do download (hoje: 20 fotos, 10 MB cada, em memória).
+- [ ] **Galeria e lista de obras limitam antes de filtrar** (600 fotos; 300 obras), então itens sem autorização ou fora do filtro de etapa/semáforo/equipe podem ocupar o limite. Mover os filtros para o SQL junto com a paginação (Fase 7).
+- [ ] **Ordem da conta a receber do chamado** (`ordem` = maior + 1) não tem unicidade quando a conta não tem proposta: pode repetir numa corrida rara. Sem efeito funcional hoje.
+- [ ] **Vidro avisado antes da instalação concluída** sai "fora da garantia" (sem marco não há como conferir); a spec diz "garantia até a instalação". Decisão 93i; o gestor ajusta. Confirmar com o Marcelo se deveria ser "em garantia".
+- [ ] **Limpeza de `SessaoRevogada` (cron, Fase 8):** o proxy renova o JWT a cada resposta, então o `exp` pode passar um pouco do `expiraEm` gravado; apagar só depois de `expiraEm` + 1 h.
+- [ ] **Testes de integração rodam contra o banco de desenvolvimento** e o de painel/relatório compara por diferença (frágil se alguém mexer em obras reais durante a execução). Um banco só de testes (ou schema separado) resolve; não há no plano gratuito.
+- [ ] **Sem teste de integração do Route Handler do kit** (R18, 403, limite de fotos, ZIP): só o E2E o exercita.
+
 - [ ] **Dias de pausa e prazo "sem pausas":** o "sem considerar pausas" é o prazo contado do relógio sem nenhuma pausa; conferir com o Marcelo se é essa a versão que ele quer ver.
 
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)

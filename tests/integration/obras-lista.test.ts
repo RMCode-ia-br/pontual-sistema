@@ -193,6 +193,10 @@ describe("instalações previstas sem agendamento", () => {
     const depois = (await listarEtapasSemAgendamento(AGORA)).filter((e) => e.projetoTitulo === `${PREFIXO} Agenda`).map((e) => e.etapaTipo);
     expect(depois).not.toContain("INSTALACAO_ESQUADRIAS");
 
+    // Remarcar muda o horário da mesma linha e a deixa REMARCADO: o compromisso continua vivo.
+    await prisma.eventoAgenda.update({ where: { id: evento.id }, data: { status: "REMARCADO", inicio: new Date("2026-07-03T11:00:00Z"), fim: new Date("2026-07-03T20:00:00Z") } });
+    expect((await listarEtapasSemAgendamento(AGORA)).some((e) => e.etapaId === instalacao.id)).toBe(false);
+
     await prisma.eventoAgenda.update({ where: { id: evento.id }, data: { status: "CANCELADO" } });
     expect((await listarEtapasSemAgendamento(AGORA)).some((e) => e.etapaId === instalacao.id)).toBe(true);
 

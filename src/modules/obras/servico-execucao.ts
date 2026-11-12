@@ -41,6 +41,8 @@ function validarDia(valor: string, nome: string): string {
   const data = REGEX_DIA.test(valor) ? paraData(valor) : null;
   // `toISOString` estoura em data impossível (ex.: 2026-13-45): confere antes.
   if (!data || Number.isNaN(data.getTime()) || data.toISOString().slice(0, 10) !== valor) throw new ErroNegocio(`Informe ${nome} válida.`);
+  // Um ano digitado errado (1926, 2926) estouraria o limite das contas de dias úteis com um erro genérico.
+  if (valor < "2015-01-01" || valor > "2060-12-31") throw new ErroNegocio(`Informe ${nome} entre 2015 e 2060.`);
   return valor;
 }
 
@@ -192,7 +194,8 @@ export async function mudarStatusDaEtapa(tx: Tx, e: EntradaMudancaDeEtapa): Prom
   if (!transicaoPermitida(de, para)) throw new ErroNegocio(`Não dá para passar a etapa de "${ROTULO_STATUS_ETAPA[de]}" para "${ROTULO_STATUS_ETAPA[para]}".`);
 
   const dataFato = validarDia(e.data ?? hoje, "a data");
-  if ((para === "CONCLUIDA" || (para === "EM_ANDAMENTO" && de === "PENDENTE")) && dataFato > hoje) throw new ErroNegocio("A data não pode ser no futuro.", { data: "Use hoje ou uma data passada." });
+  // Dispensar também não aceita data futura: ela vira o vencimento das parcelas liberadas.
+  if ((para === "CONCLUIDA" || para === "DISPENSADA" || (para === "EM_ANDAMENTO" && de === "PENDENTE")) && dataFato > hoje) throw new ErroNegocio("A data não pode ser no futuro.", { data: "Use hoje ou uma data passada." });
 
   // ----- a própria etapa -----
   const dados: Prisma.EtapaProjetoUncheckedUpdateInput = { status: para, atualizadoPorId: e.usuario.id };

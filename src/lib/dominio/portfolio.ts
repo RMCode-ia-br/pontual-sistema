@@ -36,10 +36,13 @@ export function montarLegenda(modelo: string, dados: DadosDaLegenda): { texto: s
   });
 }
 
-/** ["Janelas", "Guarda-corpo", "Box"] → "Janelas, guarda-corpo e box". */
-export function listaEmTexto(itens: readonly string[]): string {
+/**
+ * ["Janelas", "Guarda-corpo", "Box"] → "Janelas, guarda-corpo e box". Com `nomesProprios`, preserva as maiúsculas
+ * (["Gold", "Suprema"] → "Gold e Suprema").
+ */
+export function listaEmTexto(itens: readonly string[], opcoes: { nomesProprios?: boolean } = {}): string {
   const limpos = itens.map((i) => i.trim()).filter(Boolean);
-  const minusculo = (t: string, i: number) => (i === 0 ? t : t.charAt(0).toLowerCase() + t.slice(1));
+  const minusculo = (t: string, i: number) => (i === 0 || opcoes.nomesProprios ? t : t.charAt(0).toLowerCase() + t.slice(1));
   const formatados = limpos.map(minusculo);
   if (formatados.length <= 1) return formatados[0] ?? "";
   return `${formatados.slice(0, -1).join(", ")} e ${formatados[formatados.length - 1]}`;

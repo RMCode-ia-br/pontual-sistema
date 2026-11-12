@@ -441,6 +441,38 @@ describe("etapas da obra geradas na aprovação (R5 → R7)", () => {
     expect(await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId } })).toMatchObject({ prazoDias: 35, tipoDiasPrazo: "CORRIDOS" });
   });
 
+  it("segunda parte: a parcela nova cujo gatilho já aconteceu abre na hora (e não vence antes do aceite)", async () => {
+    const m = await montar("Etapas segunda parte gatilho");
+    await aprovar(m.propostaId, m.opcaoId);
+    const projeto = await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId }, select: { clienteId: true } });
+    const etapas = await etapasDaObra(m.projetoId);
+    const dasEtapas = (gatilho: string) => etapas.find((e) => e.liberaGatilho === gatilho)!;
+    // O material foi entregue ANTES do aceite da segunda parte; a instalação terminou DEPOIS dele.
+    await prisma.etapaProjeto.update({ where: { id: dasEtapas("ENTREGA_MATERIAL").id }, data: { status: "CONCLUIDA", inicioReal: new Date("2026-11-05T00:00:00Z"), fimReal: new Date("2026-11-10T00:00:00Z") } });
+    await prisma.etapaProjeto.update({ where: { id: dasEtapas("ENTREGA_E_INSTALACAO").id }, data: { status: "CONCLUIDA", inicioReal: new Date("2026-12-01T00:00:00Z"), fimReal: new Date("2026-12-05T00:00:00Z") } });
+    // As parcelas da primeira parte já foram abertas quando as etapas terminaram (aqui as etapas foram mexidas direto no banco).
+    await prisma.contaReceber.updateMany({ where: { projetoId: m.projetoId, status: "AGUARDANDO_GATILHO" }, data: { status: "ABERTA", vencimento: new Date("2026-11-10T00:00:00Z") } });
+    // Parcelas da segunda parte (extras), aguardando os dois gatilhos.
+    const nova = (ordem: number, descricao: string, gatilho: "ENTREGA_MATERIAL" | "ENTREGA_E_INSTALACAO") =>
+      prisma.contaReceber.create({ data: { projetoId: m.projetoId, clienteId: projeto.clienteId, ordem, descricao, valorCentavos: 10000, gatilho, status: "AGUARDANDO_GATILHO" } });
+    const material = await nova(91, "Extras — material", "ENTREGA_MATERIAL");
+    const final = await nova(92, "Extras — vidros", "ENTREGA_E_INSTALACAO");
+
+    const gerar = () =>
+      prisma.$transaction((tx) => gerarEtapasDaObra(tx, { projetoId: m.projetoId, propostaId: m.propostaId, opcaoId: m.opcaoId, usuario, aceitaEm: "2026-11-20", prazo: { modo: "NENHUM", tipoDias: "UTEIS" } }));
+    expect(await gerar()).toMatchObject({ jaExistiam: true, criadas: 0, parcelasLiberadas: 2 });
+
+    const [a, b] = await Promise.all([material, final].map((c) => prisma.contaReceber.findUniqueOrThrow({ where: { id: c.id } })));
+    expect(a).toMatchObject({ status: "ABERTA", etapaProjetoId: dasEtapas("ENTREGA_MATERIAL").id });
+    expect(dia(a.vencimento)).toBe("2026-11-20"); // a etapa terminou antes do aceite: vence no aceite
+    expect(b).toMatchObject({ status: "ABERTA", etapaProjetoId: dasEtapas("ENTREGA_E_INSTALACAO").id });
+    expect(dia(b.vencimento)).toBe("2026-12-05"); // a etapa terminou depois: vence na conclusão
+    expect(await prisma.tarefa.count({ where: { projetoId: m.projetoId, tipo: "COBRAR_PARCELA", chaveUnica: { in: [`cobranca:${material.id}`, `cobranca:${final.id}`] } } })).toBe(2);
+
+    // Repetir não abre nada de novo.
+    expect(await gerar()).toMatchObject({ jaExistiam: true, parcelasLiberadas: 0 });
+  });
+
   it("aprovações simultâneas não geram etapas em duplicidade", async () => {
     const m = await montar("Etapas concorrência");
     await Promise.allSettled([aprovar(m.propostaId, m.opcaoId), aprovar(m.propostaId, m.opcaoId), aprovar(m.propostaId, m.opcaoId)]);

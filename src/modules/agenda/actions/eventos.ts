@@ -32,6 +32,7 @@ const campos = {
   clienteId: true,
   projetoId: true,
   etapaProjetoId: true,
+  chamadoId: true,
   enderecoId: true,
   local: true,
   lembreteMin: true,
@@ -222,6 +223,9 @@ export async function editarEvento(_anterior: ResultadoAcao<{ id: string }> | nu
           lembreteMin: dados.lembreteMin ?? null,
           observacoes: dados.observacoes ?? null,
           ...(remarcou ? { status: "REMARCADO" as const } : {}),
+          // Trocar a obra ou o cliente do compromisso desliga a etapa e o chamado que ele cumpria (eram de outra obra/cliente).
+          ...(antes.projetoId !== (projeto?.id ?? null) ? { etapaProjetoId: null } : {}),
+          ...(antes.clienteId !== clienteId ? { chamadoId: null } : {}),
           atualizadoPorId: sessao.id,
         },
         select: campos,

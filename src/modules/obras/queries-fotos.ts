@@ -80,7 +80,7 @@ function legendaDoProjeto(p: ProjetoParaLegenda, modelo: string) {
   const linhas = [...new Set(p.propostas.flatMap((pr) => pr.itens.filter((i) => i.opcaoId === pr.opcaoAprovadaId && i.linha).map((i) => i.linha!.nome)))].sort();
   return montarLegenda(modelo, {
     tipoServico: tipos.length > 0 ? listaEmTexto(tipos) : null,
-    linha: linhas.length > 0 ? listaEmTexto(linhas) : null,
+    linha: linhas.length > 0 ? listaEmTexto(linhas, { nomesProprios: true }) : null,
     cidade: p.enderecoObra?.cidade?.trim() || null,
     regiao: p.enderecoObra?.uf?.trim() || null,
   });

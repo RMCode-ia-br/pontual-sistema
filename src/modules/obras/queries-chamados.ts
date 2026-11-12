@@ -87,7 +87,8 @@ export async function listarChamados(filtros: FiltrosDeChamados, agora: Date = n
 type ChamadoDoBanco = Prisma.ChamadoGetPayload<{ include: { cliente: { select: { nome: true } }; projeto: { select: { titulo: true } } } }>;
 
 function paraLinha(c: ChamadoDoBanco, agora: Date): ChamadoDaLista {
-  const ate = c.resolvidoEm ? dataLocalDoInstante(c.resolvidoEm) : dataLocalDoInstante(agora);
+  // O tempo para de correr quando o chamado se encerra (resolvido: na resolução; cancelado: na última alteração).
+  const ate = c.resolvidoEm ? dataLocalDoInstante(c.resolvidoEm) : c.status === "CANCELADO" ? dataLocalDoInstante(c.atualizadoEm) : dataLocalDoInstante(agora);
   const de = dataLocalDoInstante(c.abertoEm);
   return {
     id: c.id,

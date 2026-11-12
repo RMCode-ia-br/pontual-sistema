@@ -97,3 +97,15 @@ Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que 
 | Formato de imagem pelos bytes | `src/modules/propostas/pdf/logo.ts` | `formatoDaImagem`: PNG/JPEG pela assinatura. |
 
 **Para reaproveitar em outro projeto:** copie `src/lib/tema`, ajuste `SUPERFICIES` e o `:root`/`.dark` do `globals.css` (o teste `tests/unit/tema.test.ts` confere que os dois concordam e que a paleta passa em AA), meça no site do cliente as relações de `accent` e `chart-2` (ver `docs/IDENTIDADE_VISUAL.md`) e edite `CONFIG` em `scripts/gerar-icones.ts` para o disco e o símbolo da nova logo.
+
+## Blocos da Fase 4 (obras) — reutilizáveis
+| Bloco | Onde | O que entrega | Depende de |
+| --- | --- | --- | --- |
+| Dias úteis e feriados | `src/lib/dominio/{dias-uteis,calendario}.ts` | soma e contagem de dias úteis (fim de semana + só feriados do tipo FERIADO), versão "corridos", aviso de ano sem feriados; datas como texto `aaaa-mm-dd` | nenhuma |
+| Prazo, pausas e pontualidade | `src/lib/dominio/{prazo-obra,semaforo,pontualidade}.ts` | repartição de dias por peso (maior resto), união de pausas, prazo prometido com e sem pausas, semáforo e pontualidade com veredito coerente | dias úteis |
+| Máquina de estados de etapas | `src/lib/dominio/etapas.ts` | matriz de transições, validação do modelo, status derivado do conjunto | nenhuma |
+| Revogação de sessão por aparelho | `src/lib/auth/{config,sessao}.ts`, `SessaoRevogada` | `sid` no JWT e lista de revogados conferida na mesma consulta que valida o usuário; logout que realmente encerra | Auth.js v5 |
+| Fotos com momento e kit | `src/modules/anexos`, `src/modules/obras/servico-fotos.ts`, `src/app/api/obras/[id]/kit` | anexo com momento/portfólio, URLs assinadas curtas, ZIP sem nomes originais, legenda sem dado pessoal por construção | Storage, `fflate` |
+| Relatório com definição e CSV | `src/modules/relatorios/obras.ts`, `src/lib/dominio/relatorio-obras.ts`, `src/app/(app)/relatorios/obras` | período validado, seções com "como é calculado", CSV com os mesmos filtros e auditoria, aviso de truncamento | `@/lib/csv` |
+| Chamado com classificação automática | `src/lib/dominio/{garantia,chamados}.ts`, `src/modules/obras/servico-chamados.ts` | classificação sugerida com motivo escrito e ajuste auditado, cobrança gerada uma vez (trava por linha), contador atômico | nenhuma |
+**Da Pontual (não reutilizável):** o modelo de 9 etapas, o mapa gatilho → etapa, as janelas de garantia (regulagem × vidro) e os textos de legenda do portfólio.

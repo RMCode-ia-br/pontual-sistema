@@ -91,6 +91,24 @@ describe("pontualidade (R8), exemplos conferidos à mão", () => {
     expect(avaliarPontualidade(obra("2026-05-18", "2026-05-15", "2026-05-15"), NENHUM)).toMatchObject({ pontual: false, desvioDias: 1 });
   });
 
+  it("concluir no sábado ou no domingo depois de um prazo de sexta é atraso, com desvio de pelo menos 1 (nunca 'atrasada 0 dias')", () => {
+    // 16 sábado e 17 domingo: 0 dia útil depois da sexta 15, mas já passou do prazo.
+    for (const fimDeSemana of ["2026-05-16", "2026-05-17"]) {
+      expect(avaliarPontualidade(obra(fimDeSemana, "2026-05-15", "2026-05-15"), NENHUM)).toEqual({
+        avaliavel: true,
+        pontual: false,
+        desvioDias: 1,
+        pontualSemPausas: false,
+        desvioSemPausasDias: 1,
+      });
+    }
+    // Segunda-feira continua 1 dia útil (a regra não soma o fim de semana).
+    expect(avaliarPontualidade(obra("2026-05-18", "2026-05-15", "2026-05-15"), NENHUM)).toMatchObject({ pontual: false, desvioDias: 1 });
+    // O mesmo vale para o desvio "sem pausas": a pausa leva o prazo a segunda 18; concluir no sábado 16 é pontual
+    // (folga de 1 dia útil: a segunda) com as pausas e atrasada (1) sem elas.
+    expect(avaliarPontualidade(obra("2026-05-16", "2026-05-18", "2026-05-15"), NENHUM)).toMatchObject({ pontual: true, desvioDias: -1, pontualSemPausas: false, desvioSemPausasDias: 1 });
+  });
+
   it("a pausa justificada muda o veredito: pontual COM pausas, atrasada SEM", () => {
     // Prazo sem pausas 15/05; as pausas levaram o prometido a 20/05; concluída em 18/05.
     expect(avaliarPontualidade(obra("2026-05-18", "2026-05-20", "2026-05-15"), NENHUM)).toEqual({

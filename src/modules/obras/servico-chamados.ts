@@ -171,12 +171,28 @@ export async function mudarStatusDoChamado(tx: Tx, e: MudancaDeStatusDoChamado):
     if (solucao.length > 2000) throw new ErroNegocio("Use no máximo 2.000 caracteres na solução.", { solucao: "Máximo de 2.000 caracteres." });
   }
   const agora = e.agora ?? new Date();
+
+  // Cancelar um chamado cuja visita já virou conta a receber: a conta não pode ficar aberta e cobrável. Sem pagamento ela
+  // é cancelada junto (com auditoria); com pagamento o cancelamento é recusado e o estorno é do Financeiro.
+  let contaCancelada: string | null = null;
+  if (e.para === "CANCELADO" && antes.contaReceberId) {
+    const conta = await tx.contaReceber.findUnique({ where: { id: antes.contaReceberId }, select: { id: true, status: true } });
+    if (conta && (conta.status === "PARCIAL" || conta.status === "PAGA")) {
+      throw new ErroNegocio("A cobrança desta visita já tem pagamento: estorne no Financeiro antes de cancelar o chamado.");
+    }
+    if (conta && conta.status !== "CANCELADA") {
+      await tx.contaReceber.update({ where: { id: conta.id }, data: { status: "CANCELADA", atualizadoPorId: e.usuario.id } });
+      await registrarAuditoria(tx, { usuario: e.usuario, entidade: "ContaReceber", entidadeId: conta.id, acao: "CANCELAR", antes: { status: conta.status }, depois: { status: "CANCELADA", origem: "Chamado cancelado", chamadoId: antes.id }, ip: e.ip });
+      contaCancelada = conta.id;
+    }
+  }
+
   await tx.chamado.update({
     where: { id: antes.id },
     data: { status: e.para, solucao, resolvidoEm: e.para === "RESOLVIDO" ? agora : e.para === "ABERTO" ? null : antes.resolvidoEm, atualizadoPorId: e.usuario.id },
   });
   const frase = { ABERTO: "reaberto", AGENDADO: "com visita agendada", EM_ATENDIMENTO: "em atendimento", RESOLVIDO: `resolvido: ${solucao}`, CANCELADO: "cancelado" }[e.para];
-  await registrarInteracao(tx, { tipo: "SISTEMA", texto: `Chamado ${formatarNumeroDoChamado(antes.numero)} ${frase}.`, clienteId: antes.clienteId, projetoId: antes.projetoId, usuarioId: e.usuario.id });
+  await registrarInteracao(tx, { tipo: "SISTEMA", texto: `Chamado ${formatarNumeroDoChamado(antes.numero)} ${frase}.${contaCancelada ? " A cobrança da visita foi cancelada junto." : ""}`, clienteId: antes.clienteId, projetoId: antes.projetoId, usuarioId: e.usuario.id });
   await registrarAuditoria(tx, {
     usuario: e.usuario,
     entidade: "Chamado",

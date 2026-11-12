@@ -43,6 +43,9 @@ describe("lista em texto", () => {
     expect(listaEmTexto(["Janelas", "Guarda-corpo"])).toBe("Janelas e guarda-corpo");
     expect(listaEmTexto(["Janelas", "Guarda-corpo", "Box de banheiro"])).toBe("Janelas, guarda-corpo e box de banheiro");
     expect(listaEmTexto([])).toBe("");
+    // Linhas de alumínio são nomes próprios: não perdem a maiúscula.
+    expect(listaEmTexto(["Gold", "Suprema"], { nomesProprios: true })).toBe("Gold e Suprema");
+    expect(listaEmTexto(["Gold", "Suprema", "Linha 25"], { nomesProprios: true })).toBe("Gold, Suprema e Linha 25");
     expect(listaEmTexto(["  ", "Portas"])).toBe("Portas");
   });
 });

@@ -19,15 +19,26 @@ export type AvaliacaoDeObra =
   | { avaliavel: false }
   | { avaliavel: true; pontual: boolean; desvioDias: number; pontualSemPausas: boolean; desvioSemPausasDias: number };
 
+/**
+ * O veredito segue a DATA (concluir depois do prazo é atraso). Em dias úteis, concluir num sábado depois de um prazo de
+ * sexta tem 0 dia útil de desvio, o que contradiria o veredito: então atrasada nunca tem desvio menor que 1, e pontual
+ * nunca tem desvio positivo.
+ */
+function desvioCoerente(pontual: boolean, desvio: number): number {
+  return pontual ? Math.min(desvio, 0) : Math.max(desvio, 1);
+}
+
 export function avaliarPontualidade(obra: ObraConcluida, feriados: ReadonlySet<string>): AvaliacaoDeObra {
   if (!obra.prazoFinalPrometido) return { avaliavel: false };
   const semPausas = obra.prazoFinalSemPausas ?? obra.prazoFinalPrometido;
+  const pontual = obra.concluidaEm <= obra.prazoFinalPrometido;
+  const pontualSemPausas = obra.concluidaEm <= semPausas;
   return {
     avaliavel: true,
-    pontual: obra.concluidaEm <= obra.prazoFinalPrometido,
-    desvioDias: diasEntreDoTipo(obra.prazoFinalPrometido, obra.concluidaEm, obra.tipoDias, feriados),
-    pontualSemPausas: obra.concluidaEm <= semPausas,
-    desvioSemPausasDias: diasEntreDoTipo(semPausas, obra.concluidaEm, obra.tipoDias, feriados),
+    pontual,
+    desvioDias: desvioCoerente(pontual, diasEntreDoTipo(obra.prazoFinalPrometido, obra.concluidaEm, obra.tipoDias, feriados)),
+    pontualSemPausas,
+    desvioSemPausasDias: desvioCoerente(pontualSemPausas, diasEntreDoTipo(semPausas, obra.concluidaEm, obra.tipoDias, feriados)),
   };
 }
 

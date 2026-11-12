@@ -209,6 +209,23 @@ describe("cobrança da visita", () => {
     await ajustar(id, { classificacao: "EM_GARANTIA" }); // a classificação ainda pode ser corrigida
   });
 
+  it("cancelar o chamado cancela a cobrança da visita; com pagamento, o cancelamento é recusado", async () => {
+    const id = await chamadoParaCobrar(15000);
+    const { contaId } = await prisma.$transaction((tx) => gerarCobrancaDoChamado(tx, { id, usuario }));
+    await mudar(id, "CANCELADO");
+    expect((await prisma.contaReceber.findUniqueOrThrow({ where: { id: contaId } })).status).toBe("CANCELADA");
+    expect(await prisma.logAuditoria.count({ where: { entidade: "ContaReceber", entidadeId: contaId, acao: "CANCELAR" } })).toBe(1);
+    expect(await prisma.interacao.count({ where: { projetoId: obra, texto: { contains: "cobrança da visita foi cancelada junto" } } })).toBeGreaterThanOrEqual(1);
+
+    // Conta com pagamento (parcial ou paga): o chamado não pode ser cancelado e nada muda.
+    const outro = await chamadoParaCobrar(9000);
+    const { contaId: contaPaga } = await prisma.$transaction((tx) => gerarCobrancaDoChamado(tx, { id: outro, usuario }));
+    await prisma.contaReceber.update({ where: { id: contaPaga }, data: { status: "PARCIAL" } });
+    await expect(mudar(outro, "CANCELADO")).rejects.toThrow(/já tem pagamento/);
+    expect((await chamadoDe(outro)).status).toBe("ABERTO");
+    expect((await prisma.contaReceber.findUniqueOrThrow({ where: { id: contaPaga } })).status).toBe("PARCIAL");
+  });
+
   it("três pedidos ao mesmo tempo geram uma única conta", async () => {
     const id = await chamadoParaCobrar(12345);
     const r = await Promise.allSettled([1, 2, 3].map(() => prisma.$transaction((tx) => gerarCobrancaDoChamado(tx, { id, usuario }))));

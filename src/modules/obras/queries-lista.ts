@@ -225,8 +225,9 @@ export async function listarEtapasSemAgendamento(agora: Date = new Date()): Prom
       tipo: { in: Object.keys(EVENTO_DA_ETAPA) as TipoDeEtapa[] },
       status: { in: ["PENDENTE", "EM_ANDAMENTO", "BLOQUEADA"] },
       projeto: { deletadoEm: null, status: { in: ["APROVADO", "EM_EXECUCAO"] } },
-      // Compromisso vivo = agendado, confirmado ou já realizado; cancelado ou remarcado não conta.
-      eventos: { none: { deletadoEm: null, status: { in: ["AGENDADO", "CONFIRMADO", "REALIZADO"] } } },
+      // Compromisso vivo = em aberto (agendado, confirmado ou REMARCADO: remarcar muda o horário da mesma linha) ou já
+      // realizado; só o cancelado deixa a etapa sem agendamento.
+      eventos: { none: { deletadoEm: null, status: { in: ["AGENDADO", "CONFIRMADO", "REMARCADO", "REALIZADO"] } } },
     },
     orderBy: [{ inicioPrevisto: { sort: "asc", nulls: "last" } }, { ordem: "asc" }],
     take: LIMITE_SEM_AGENDAMENTO,
