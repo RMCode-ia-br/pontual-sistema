@@ -103,6 +103,6 @@ Decisões técnicas da fase:
 83. **Duplicar proposta copia os preços como estão** (não recalcula com a tabela/markup de hoje); o aviso de "custo desatualizado desde a emissão" (R13) cobre mudança de custo de produto. Mudança de fórmula/markup/tabela depois do cálculo não avisa ainda (PENDENCIAS).
 84. **`se()` nas fórmulas é preguiçoso** (só o ramo escolhido roda): `se(F>0; L/F; 0)` não divide por zero.
 
-## 2026-11-14 — Fase 3.5 (Identidade visual, tarefa extra entre fases)
+## 2026-11-11 — Fase 3.5 (Identidade visual, tarefa extra entre fases)
 
 85. **Fase 3.5 — Identidade visual não existe na especificação.** O dono pediu, entre as Fases 3 e 4, que o sistema inteiro adote a identidade do site da empresa (https://pontual-mu.vercel.app) e a logo `public/logo-pontual.png`. Escopo: tokens de tema, cor da marca vinda de Configurações, shell, login, componentes, PDFs, favicon e PWA. Fora do escopo: regras de negócio, schema e migrações. Segue o método da seção 0 (commit por bloco, revisão sênior, relatório `docs/revisoes/fase-3-5.md`) e para ao fim, sem iniciar a Fase 4. A extração dos valores do site está em `docs/IDENTIDADE_VISUAL.md`.

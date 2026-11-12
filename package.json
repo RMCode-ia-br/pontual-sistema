@@ -21,6 +21,7 @@
     "seed:demo": "tsx prisma/seed-demo.ts",
     "postinstall": "prisma generate",
     "storage:setup": "tsx scripts/storage-setup.ts",
+    "identidade:extrair": "tsx scripts/identidade/extrair-site.ts",
     "test:integracao": "vitest run --config vitest.integracao.config.mts"
   },
   "dependencies": {
