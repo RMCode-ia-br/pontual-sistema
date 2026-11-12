@@ -65,12 +65,20 @@ describe("fluxo projetado", () => {
     ],
   });
 
-  it("distribui cada título no período do seu vencimento e acumula o saldo projetado", () => {
+  it("distribui cada título no período do seu vencimento e acumula o saldo projetado (a pagar vencido sai no primeiro período)", () => {
     expect(fluxo.linhas.map((l) => [l.entradasCentavos, l.saidasCentavos, l.liquidoCentavos, l.saldoProjetadoCentavos])).toEqual([
-      [75_000, 20_000, 55_000, 155_000],
-      [30_000, 40_000, -10_000, 145_000],
-      [0, 0, 0, 145_000],
+      [75_000, 23_000, 52_000, 152_000], // 20.000 a vencer + 3.000 já vencidos
+      [30_000, 40_000, -10_000, 142_000],
+      [0, 0, 0, 142_000],
     ]);
+    expect(fluxo.linhas[0].saidasVencidasCentavos).toBe(3_000);
+    expect(fluxo.linhas[1].saidasVencidasCentavos).toBe(0);
+  });
+
+  it("a receber vencido NÃO entra no saldo (ninguém sabe se entra), mas a pagar vencido entra (é dívida certa)", () => {
+    const f = projetarFluxo({ hoje: HOJE, saldoAtualCentavos: 10_000, periodos: janelasDeDias(HOJE, [30]), aReceber: [{ data: "2026-11-01", valorCentavos: 5_000 }], aPagar: [{ data: "2026-11-05", valorCentavos: 3_000 }] });
+    expect(f.linhas[0].saldoProjetadoCentavos).toBe(10_000 - 3_000);
+    expect(f.vencidos).toEqual({ aReceberCentavos: 5_000, aPagarCentavos: 3_000 });
   });
 
   it("marca quanto da entrada vem só da previsão de uma etapa", () => {
@@ -102,7 +110,8 @@ describe("fluxo projetado", () => {
   it("a soma de tudo bate: nada some nem se repete", () => {
     const entradas = fluxo.linhas.reduce((s, l) => s + l.entradasCentavos, 0) + fluxo.vencidos.aReceberCentavos + fluxo.semPrevisao.aReceberCentavos + fluxo.aposOHorizonte.aReceberCentavos;
     expect(entradas).toBe(50_000 + 30_000 + 10_000 + 7_000 + 25_000 + 9_999);
-    const saidas = fluxo.linhas.reduce((s, l) => s + l.saidasCentavos, 0) + fluxo.vencidos.aPagarCentavos + fluxo.aposOHorizonte.aPagarCentavos;
+    // O vencido a pagar já está dentro da primeira linha: não se soma de novo.
+    const saidas = fluxo.linhas.reduce((s, l) => s + l.saidasCentavos, 0) + fluxo.aposOHorizonte.aPagarCentavos;
     expect(saidas).toBe(20_000 + 40_000 + 3_000);
   });
 });

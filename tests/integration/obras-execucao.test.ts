@@ -229,6 +229,8 @@ describe("gatilhos de pagamento (R6) — critério de aceite da Fase 4", () => {
     // E concluir de novo abre outra vez (a tarefa cancelada não impede a cobrança).
     await mudar(fab.id, "CONCLUIDA", { data: "2026-06-11" });
     expect((await contas(obra))[1]).toMatchObject({ status: "ABERTA" });
+    // E a cobrança volta a existir: a tarefa cancelada na reversão é reaberta, em vez de a parcela ficar aberta sem tarefa.
+    expect((await prisma.tarefa.findFirstOrThrow({ where: { projetoId: obra.projetoId, tipo: "COBRAR_PARCELA" } })).status).toBe("ABERTA");
   });
 
   it("não reabre a etapa se a parcela que ela liberou já tem pagamento", async () => {

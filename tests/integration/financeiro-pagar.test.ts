@@ -235,6 +235,50 @@ describe("pagamento (baixa)", () => {
   });
 });
 
+describe("correções da revisão sênior", () => {
+  it("conta ainda pagável depois que a categoria foi inativada", async () => {
+    const cat = await prisma.categoriaFinanceira.create({ data: { nome: `${PREFIXO} Inativável`, tipo: "DESPESA", grupo: "DESPESAS_FIXAS", grupoDre: "Despesas fixas" } });
+    const r = await nova({ descricao: `${PREFIXO} Categoria inativada`, categoriaId: cat.id, valor: "50,00" });
+    await prisma.categoriaFinanceira.update({ where: { id: cat.id }, data: { ativo: false } });
+    expect(await pagar(r.primeiraId, "50,00")).toMatchObject({ status: "PAGA" });
+    // Já criar uma conta NOVA com a categoria inativa continua recusado.
+    await expect(nova({ categoriaId: cat.id })).rejects.toThrow(/categoria de despesa/);
+  });
+
+  it("recorrência com início no passado não gera dezenas de contas atrasadas (só do mês anterior em diante)", async () => {
+    const r = await nova({ descricao: `${PREFIXO} Início antigo`, modo: "RECORRENTE", valor: "10,00", vencimento: "2016-01-10" });
+    const lista = await prisma.contaPagar.findMany({ where: { recorrenciaId: r.recorrenciaId! }, orderBy: { vencimento: "asc" } });
+    // Hoje é 20/11/2026: nascem de outubro/2026 até o horizonte (fevereiro/2027), e não 130 contas desde 2016.
+    expect(lista.map((c) => dia(c.vencimento))).toEqual(["2026-10-10", "2026-11-10", "2026-12-10", "2027-01-10", "2027-02-10"]);
+  });
+
+  it("antecipar o fim da recorrência cancela as ocorrências já geradas depois dele (em aberto e sem pagamento)", async () => {
+    const r = await nova({ descricao: `${PREFIXO} Fim antecipado`, modo: "RECORRENTE", valor: "10,00", vencimento: "2026-12-10" });
+    const edicao = recorrenciaSchema.parse({ recorrenciaId: r.recorrenciaId!, descricao: `${PREFIXO} Fim antecipado`, categoriaId: categoriaDespesa, valor: "10,00", diaVencimento: "10", fim: "2026-12-31" });
+    await tx((t) => editarRecorrencia(t, edicao, ctx()));
+    const status = (await prisma.contaPagar.findMany({ where: { recorrenciaId: r.recorrenciaId! }, orderBy: { vencimento: "asc" } })).map((c) => c.status);
+    expect(status).toEqual(["ABERTA", "CANCELADA", "CANCELADA"]);
+  });
+
+  it("parcelamento de valor pequeno (R$ 0,08 em 5x) cria parcelas válidas", async () => {
+    const r = await nova({ descricao: `${PREFIXO} Pequeno`, modo: "PARCELADA", valor: "0,08", parcelas: "5" });
+    expect(r.criadas).toBe(5);
+    const valores = (await prisma.contaPagar.findMany({ where: { descricao: { startsWith: `${PREFIXO} Pequeno` } }, orderBy: { parcelaNumero: "asc" } })).map((c) => c.valorCentavos);
+    expect(valores).toEqual([1, 1, 1, 1, 4]);
+  });
+
+  it("estorno e pagamento simultâneos nunca deixam o valor pago diferente da soma dos lançamentos não estornados", async () => {
+    const r = await nova({ descricao: `${PREFIXO} Estorno concorrente`, valor: "200,00" });
+    const primeiro = await pagar(r.primeiraId, "80,00");
+    const res = await Promise.allSettled([tx((t) => estornarLancamento(t, primeiro.lancamentoId, "Concorrência", ctx())), pagar(r.primeiraId, "150,00")]);
+    expect(res.filter((x) => x.status === "fulfilled").length).toBeGreaterThanOrEqual(1);
+    const c = await de(r.primeiraId);
+    const lanc = await prisma.lancamento.findMany({ where: { contaPagarId: r.primeiraId, estornadoEm: null } });
+    expect(c.valorPagoCentavos).toBe(lanc.reduce((s, l) => s + l.valorCentavos, 0));
+    expect(c.valorPagoCentavos).toBeLessThanOrEqual(c.valorCentavos);
+  });
+});
+
 describe("ajuste, cancelamento e reabertura", () => {
   it("desconto não vai abaixo do pago; igualar quita; novo vencimento é gravado", async () => {
     const r = await nova({ valor: "100,00" });

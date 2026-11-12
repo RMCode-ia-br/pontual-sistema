@@ -12,7 +12,7 @@ export type Regime = "caixa" | "competencia";
 
 export type PeriodoDoDre = { de: string; ate: string; meses: string[]; regime: Regime };
 
-/** Período do DRE a partir da URL: padrão = os 6 últimos meses, regime de caixa. Mês final nunca passa de hoje + 0. */
+/** Período do DRE a partir da URL: padrão = os 6 últimos meses até o mês de hoje, regime de caixa. Mês futuro é aceito e vem zerado no caixa. */
 export function lerPeriodoDoDre(bruto: Record<string, string | string[] | undefined>, hoje: string): PeriodoDoDre {
   const primeiro = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const mes = (v: string | undefined) => (v && /^\d{4}-(0[1-9]|1[0-2])$/.test(v) ? v : null);

@@ -3,8 +3,9 @@
 //
 // Regras:
 // - Realizado: só lançamentos não estornados, sem transferências entre contas (somam zero no total).
-// - Projetado: o que já venceu e não foi pago NÃO entra nos períodos (ninguém sabe se entra): vai para
-//   "vencidos", à parte. Parcela que aguarda etapa usa a data prevista da etapa (marcada como previsão); sem
+// - Projetado: a RECEBER que já venceu e não foi pago NÃO entra nos períodos (ninguém sabe se entra): vai para
+//   "vencidos", à parte. A PAGAR vencido é dívida certa: sai no PRIMEIRO período (e é mostrado à parte também), para o saldo
+//   projetado nunca ser otimista. Parcela que aguarda etapa usa a data prevista da etapa (marcada como previsão); sem
 //   data, vai para "sem previsão". O que cai depois do horizonte fica de fora.
 
 import { somarDias } from "./calendario";
@@ -69,6 +70,8 @@ export type LinhaDoFluxoProjetado = PeriodoDoFluxo & {
   saidasCentavos: number;
   /** Parte das entradas que vem só da previsão de uma etapa (sem vencimento definido ainda). */
   entradasPrevistasPorEtapaCentavos: number;
+  /** Parte das saídas que são contas a pagar já vencidas (só no primeiro período). */
+  saidasVencidasCentavos: number;
   liquidoCentavos: number;
   /** Saldo projetado ao FIM do período: saldo atual + líquido acumulado (sem os vencidos). */
   saldoProjetadoCentavos: number;
@@ -95,7 +98,7 @@ export function projetarFluxo(args: {
   const aposOHorizonte = { aReceberCentavos: 0, aPagarCentavos: 0 };
   const ultimoDia = periodos.length ? periodos[periodos.length - 1].fim : hoje;
 
-  const linhas = periodos.map((p) => ({ ...p, entradasCentavos: 0, saidasCentavos: 0, entradasPrevistasPorEtapaCentavos: 0, liquidoCentavos: 0, saldoProjetadoCentavos: 0 }));
+  const linhas = periodos.map((p) => ({ ...p, entradasCentavos: 0, saidasCentavos: 0, entradasPrevistasPorEtapaCentavos: 0, saidasVencidasCentavos: 0, liquidoCentavos: 0, saldoProjetadoCentavos: 0 }));
 
   const distribuir = (lista: readonly MovimentoDoFluxo[], lado: "ENTRADA" | "SAIDA") => {
     for (const m of lista) {
@@ -124,6 +127,12 @@ export function projetarFluxo(args: {
   };
   distribuir(args.aReceber, "ENTRADA");
   distribuir(args.aPagar, "SAIDA");
+
+  // Conta a pagar vencida sai já no primeiro período: é dinheiro que vai sair, e o saldo projetado não pode ignorá-lo.
+  if (linhas.length > 0 && vencidos.aPagarCentavos > 0) {
+    linhas[0].saidasCentavos += vencidos.aPagarCentavos;
+    linhas[0].saidasVencidasCentavos = vencidos.aPagarCentavos;
+  }
 
   let saldo = args.saldoAtualCentavos;
   for (const l of linhas) {

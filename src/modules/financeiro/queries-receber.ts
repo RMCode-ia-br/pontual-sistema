@@ -175,7 +175,8 @@ export async function listarContasAReceber(parametros: ParametrosLista, filtros:
   const [linhas, contagensLista, somaDaAba, somaAtrasada] = await Promise.all([
     prisma.contaReceber.findMany({ where, orderBy: ordenacao(parametros), skip: paginacao.skip, take: paginacao.take, select: selecaoDaLista }),
     Promise.all(ABAS_A_RECEBER.map((a) => prisma.contaReceber.count({ where: { AND: [base, condicaoDaAba(a.id, hoje, limite)] } }))),
-    prisma.contaReceber.aggregate({ where, _sum: { valorCentavos: true, valorPagoCentavos: true } }),
+    // Conta cancelada não é dinheiro a receber: fica fora dos totais (em qualquer aba).
+    prisma.contaReceber.aggregate({ where: { AND: [where, { status: { not: "CANCELADA" } }] }, _sum: { valorCentavos: true, valorPagoCentavos: true } }),
     prisma.contaReceber.aggregate({ where: { AND: [base, condicaoDaAba("atrasadas", hoje, limite)] }, _sum: { valorCentavos: true, valorPagoCentavos: true } }),
   ]);
   const contagens = Object.fromEntries(ABAS_A_RECEBER.map((a, i) => [a.id, contagensLista[i]])) as Record<AbaAReceber, number>;

@@ -69,6 +69,7 @@ export async function registrarRecebimento(tx: Tx, e: EntradaDeRecebimento, ctx:
       clienteId: conta.clienteId,
       contaReceberId: conta.id,
       observacao: e.observacao,
+      vinculoExistente: e.categoriaId === null,
     },
     ctx,
   );
@@ -186,7 +187,10 @@ export async function reabrirContaAReceber(tx: Tx, contaReceberId: string, ctx: 
   if (conta.status !== "CANCELADA") throw new ErroNegocio("Só se reabre uma conta cancelada.");
   const status = statusParaValores(conta.valorCentavos, conta.valorPagoCentavos, conta.vencimento ? "ABERTA" : "AGUARDANDO_GATILHO");
   const depois = await tx.contaReceber.update({ where: { id: conta.id }, data: { status: status as "ABERTA" | "AGUARDANDO_GATILHO", atualizadoPorId: ctx.usuario.id } });
-  await tx.tarefa.updateMany({ where: { chaveUnica: `cobranca:${conta.id}`, status: "CANCELADA", deletadoEm: null }, data: { status: "ABERTA", concluidaEm: null } });
+  // Só volta a cobrar quando a conta volta a ser cobrável (com vencimento); aguardando a etapa, a tarefa nasce na liberação.
+  if (status !== "AGUARDANDO_GATILHO") {
+    await tx.tarefa.updateMany({ where: { chaveUnica: `cobranca:${conta.id}`, status: "CANCELADA", deletadoEm: null }, data: { status: "ABERTA", concluidaEm: null } });
+  }
   await registrarAuditoria(tx, { usuario: ctx.usuario, entidade: "ContaReceber", entidadeId: conta.id, acao: "REABRIR", antes: { status: "CANCELADA" }, depois: { status: depois.status }, ip: ctx.ip });
 }
 
@@ -219,6 +223,11 @@ export async function liberarParcelaAntesDaEtapa(tx: Tx, e: { contaReceberId: st
       },
     ],
     skipDuplicates: true,
+  });
+  // Tarefa de uma liberação anterior (cancelada ao reverter): volta a valer com o novo vencimento.
+  await tx.tarefa.updateMany({
+    where: { chaveUnica: `cobranca:${conta.id}`, status: "CANCELADA", deletadoEm: null },
+    data: { status: "ABERTA", concluidaEm: null, vencimento: comoData(dataDoLembreteDeCobranca(e.vencimento, dias, hoje)) },
   });
   await registrarAuditoria(tx, {
     usuario: ctx.usuario,

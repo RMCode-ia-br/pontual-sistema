@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { competenciaDe, gerarParcelamento, horizonteDaRecorrencia, ocorrenciasDaRecorrencia, ultimoDiaDoMes } from "@/lib/dominio/parcelamento";
+import { competenciaDe, gerarParcelamento, horizonteDaRecorrencia, ocorrenciasDaRecorrencia, somarMeses, ultimoDiaDoMes } from "@/lib/dominio/parcelamento";
 import { ajustarValor, aplicarPagamento, podeCancelar, statusParaValores } from "@/lib/dominio/titulos";
 import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
@@ -49,11 +49,15 @@ type RecorrenciaRegistro = Awaited<ReturnType<Tx["recorrenciaPagar"]["findFirstO
  * faz o banco ignorar o que já existe, então rodar de novo (cron atrasado, duas vezes, retry) nunca duplica; uma
  * ocorrência cancelada continua existindo e por isso não é recriada. Devolve quantas criou.
  */
-export async function gerarOcorrenciasDaRecorrencia(tx: Tx, r: RecorrenciaRegistro, ate: string, usuario: Usuario): Promise<number> {
+export async function gerarOcorrenciasDaRecorrencia(tx: Tx, r: RecorrenciaRegistro, ate: string, usuario: Usuario, hoje: string = dataLocalDoInstante(new Date())): Promise<number> {
   if (!r.ativo || r.deletadoEm) return 0;
+  // Sem retroatividade absurda: início digitado no passado (ou com o ano errado) não gera dezenas de contas atrasadas; só
+  // nascem as ocorrências do mês anterior em diante. Contas mais antigas, se existirem, entram à mão.
+  const primeiraGerada = somarMeses(competenciaDe(hoje), -1);
+  const de = comoTexto(r.inicio)! > primeiraGerada ? comoTexto(r.inicio)! : primeiraGerada;
   const ocorrencias = ocorrenciasDaRecorrencia(
     { diaVencimento: r.diaVencimento, periodicidade: r.periodicidade, inicio: comoTexto(r.inicio)!, fim: comoTexto(r.fim) },
-    comoTexto(r.inicio)!,
+    de,
     ate,
   );
   if (ocorrencias.length === 0) return 0;
@@ -89,7 +93,7 @@ export async function estenderRecorrencias(tx: Tx, hoje: string, opcoes: { apena
   const ate = horizonteDaRecorrencia(hoje, config?.mesesRecorrenciaAFrente ?? 3);
   const lista = await tx.recorrenciaPagar.findMany({ where: { ativo: true, deletadoEm: null, ...(opcoes.apenas ? { id: { in: opcoes.apenas } } : {}) } });
   let criadas = 0;
-  for (const r of lista) criadas += await gerarOcorrenciasDaRecorrencia(tx, r, ate, null);
+  for (const r of lista) criadas += await gerarOcorrenciasDaRecorrencia(tx, r, ate, null, hoje);
   return { recorrencias: lista.length, ocorrenciasCriadas: criadas };
 }
 
@@ -205,6 +209,7 @@ export async function registrarPagamento(tx: Tx, e: DadosDoPagamento, ctx: Conte
       projetoId: conta.projetoId,
       contaPagarId: conta.id,
       observacao: e.observacao,
+      vinculoExistente: true,
     },
     ctx,
   );
@@ -340,6 +345,16 @@ export async function editarRecorrencia(tx: Tx, d: DadosDaRecorrencia, ctx: Cont
   }
   if (futuras.length > 0) {
     await registrarAuditoria(tx, { usuario: ctx.usuario, entidade: "RecorrenciaPagar", entidadeId: antes.id, acao: "PROPAGAR", depois: { ocorrenciasAtualizadas: futuras.length }, ip: ctx.ip });
+  }
+  // Fim antecipado: as ocorrências já geradas depois do novo fim, ainda em aberto e sem pagamento, são canceladas.
+  if (d.fim) {
+    const alemDoFim = await tx.contaPagar.updateMany({
+      where: { recorrenciaId: antes.id, status: "ABERTA", valorPagoCentavos: 0, vencimento: { gt: comoData(d.fim) }, deletadoEm: null },
+      data: { status: "CANCELADA", atualizadoPorId: ctx.usuario.id },
+    });
+    if (alemDoFim.count > 0) {
+      await registrarAuditoria(tx, { usuario: ctx.usuario, entidade: "RecorrenciaPagar", entidadeId: antes.id, acao: "CANCELAR_APOS_FIM", depois: { ocorrenciasCanceladas: alemDoFim.count, fim: d.fim }, ip: ctx.ip });
+    }
   }
   return { atualizadas: futuras.length };
 }

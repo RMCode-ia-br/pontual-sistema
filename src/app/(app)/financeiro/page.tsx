@@ -224,8 +224,8 @@ export default async function PaginaDoFluxo({ searchParams }: { searchParams: Pr
               <p className="flex items-start gap-1">
                 <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden />
                 <span>
-                  Fora do fluxo, porque já venceram: <Link href="/financeiro/receber?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aReceberCentavos)} a receber</Link> e{" "}
-                  <Link href="/financeiro/pagar?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aPagarCentavos)} a pagar</Link>. Ninguém sabe se entram ou saem na data; trate-os nas listas.
+                  Já venceram: <Link href="/financeiro/receber?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aReceberCentavos)} a receber</Link> (fora do fluxo: ninguém sabe se entra na data) e{" "}
+                  <Link href="/financeiro/pagar?aba=atrasadas" className="underline">{formatarMoeda(projetado.vencidos.aPagarCentavos)} a pagar</Link> (já descontados das saídas do primeiro período, porque são dívida certa). Trate-os nas listas.
                 </span>
               </p>
             ) : null}

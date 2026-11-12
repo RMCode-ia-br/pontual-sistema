@@ -145,7 +145,7 @@ export default async function PaginaDoDre({ searchParams }: { searchParams: Prom
                 {detalhe
                   .filter((d) => d.grupo === null)
                   .map((i) => (
-                    <li key="sem" className="flex items-center justify-between gap-2">
+                    <li key={i.categoriaId ?? i.nome} className="flex items-center justify-between gap-2">
                       <span>{i.nome}</span>
                       <span className="tabular-nums">{formatarMoeda(i.totalCentavos)}</span>
                     </li>

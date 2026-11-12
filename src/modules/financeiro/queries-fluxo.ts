@@ -52,7 +52,8 @@ export async function carregarDadosDoFluxo(hoje: string, opcoes: { desde: string
   const [contasAtivas, realizados, titulosReceber, titulosPagar, recorrencias] = await Promise.all([
     listarContasFinanceiras(hoje),
     prisma.lancamento.findMany({
-      where: { estornadoEm: null, deletadoEm: null, transferenciaId: null, data: { gte: comoData(opcoes.desde), lte: comoData(hoje) } },
+      // Só contas ativas, como o saldo do mesmo cartão: realizado e saldo falam das mesmas contas.
+      where: { estornadoEm: null, deletadoEm: null, transferenciaId: null, contaFinanceira: { ativo: true, deletadoEm: null }, data: { gte: comoData(opcoes.desde), lte: comoData(hoje) } },
       select: { data: true, tipo: true, valorCentavos: true },
     }),
     prisma.contaReceber.findMany({
@@ -112,7 +113,8 @@ export async function carregarDadosDoFluxo(hoje: string, opcoes: { desde: string
   let virtuais = 0;
   if (recorrencias.length > 0) {
     const existentes = await prisma.contaPagar.findMany({
-      where: { recorrenciaId: { in: recorrencias.map((r) => r.id) }, deletadoEm: null },
+      // Só interessam as competências que ainda podem virar ocorrência virtual (do mês de hoje em diante).
+      where: { recorrenciaId: { in: recorrencias.map((r) => r.id) }, deletadoEm: null, competencia: { gte: comoData(`${hoje.slice(0, 7)}-01`) } },
       select: { recorrenciaId: true, competencia: true },
     });
     const jaExiste = new Set(existentes.map((e) => `${e.recorrenciaId}|${comoTexto(e.competencia)}`));

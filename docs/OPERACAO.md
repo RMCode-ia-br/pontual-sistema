@@ -48,7 +48,7 @@ Confira o primeiro deploy: `/api/health` deve responder `{"status":"ok"}` e o lo
 
 ### Rotina diária (cron)
 
-`vercel.json` agenda `GET /api/cron/diario` uma vez por dia. A Vercel envia `Authorization: Bearer <CRON_SECRET>` sozinha quando `CRON_SECRET` existe. A rotina é **idempotente** e hoje só apaga tentativas de login com mais de 30 dias; nas próximas fases gera notificações e recorrências. O sistema **não depende** dela para estar correto. O plano Hobby só permite agendamentos diários.
+`vercel.json` agenda `GET /api/cron/diario` uma vez por dia. A Vercel envia `Authorization: Bearer <CRON_SECRET>` sozinha quando `CRON_SECRET` existe. A rotina é **idempotente** e faz duas coisas: apaga tentativas de login com mais de 30 dias e **gera as contas a pagar das recorrências** (aluguel, energia, DAS, salários) até o horizonte configurado (Configurações → Empresa → Financeiro; padrão 3 meses à frente). Rodar atrasada ou duas vezes não duplica nada (chave única por recorrência e mês de competência), e o fluxo de caixa já enxerga as ocorrências ainda não geradas; notificações chegam na Fase 8. O sistema **não depende** dela para estar correto. O plano Hobby só permite agendamentos diários.
 
 ## 4. Banco de dados
 

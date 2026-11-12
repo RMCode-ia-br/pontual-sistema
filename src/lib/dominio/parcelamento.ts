@@ -1,7 +1,6 @@
 // Parcelamento e recorrência de contas a pagar. Funções puras sobre datas de calendário "aaaa-mm-dd" e
-// dinheiro em centavos. A última parcela absorve a diferença do arredondamento (convenção do projeto).
-
-import { dividirArredondando } from "./preco";
+// dinheiro em centavos. Cada parcela vale o piso de total ÷ quantidade e a última absorve a diferença (convenção do projeto):
+// assim a última nunca é menor que as outras, e nenhuma parcela fica zero ou negativa quando o total cobre 1 centavo por parcela.
 
 export const MAXIMO_DE_PARCELAS = 60;
 
@@ -50,8 +49,8 @@ export type ParcelaDePagar = {
 };
 
 /**
- * Divide um valor em `quantidade` parcelas mensais. Cada parcela vale o total ÷ quantidade (meio centavo para
- * cima) e a última recebe o que sobrou, então a soma é SEMPRE igual ao total. O vencimento repete o dia do
+ * Divide um valor em `quantidade` parcelas mensais. Cada parcela vale o piso de total ÷ quantidade e a última recebe o
+ * que sobrou, então a soma é SEMPRE igual ao total e todas valem pelo menos 1 centavo. O vencimento repete o dia do
  * primeiro (ajustado nos meses curtos).
  */
 export function gerarParcelamento(totalCentavos: number, quantidade: number, primeiroVencimento: string): ParcelaDePagar[] {
@@ -62,7 +61,7 @@ export function gerarParcelamento(totalCentavos: number, quantidade: number, pri
   if (totalCentavos < quantidade) throw new RangeError("O valor é menor que o número de parcelas (cada parcela precisa de ao menos 1 centavo).");
   const { dia } = partes(primeiroVencimento);
 
-  const cada = Number(dividirArredondando(BigInt(totalCentavos), BigInt(quantidade)));
+  const cada = Math.floor(totalCentavos / quantidade);
   let acumulado = 0;
   return Array.from({ length: quantidade }, (_, i) => {
     const ultima = i === quantidade - 1;

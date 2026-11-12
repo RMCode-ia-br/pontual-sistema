@@ -34,6 +34,8 @@ export type EntradaDeLancamento = {
   contaReceberId?: string | null;
   contaPagarId?: string | null;
   observacao?: string | null;
+  /** Categoria e fornecedor já vêm do título: ele continua pagável mesmo que a categoria tenha sido inativada depois. */
+  vinculoExistente?: boolean;
 };
 
 /**
@@ -49,7 +51,7 @@ export async function registrarLancamento(tx: Tx, e: EntradaDeLancamento, ctx: C
   if (!conta) throw new ErroNegocio("Conta financeira não encontrada ou inativa.", { contaFinanceiraId: "Escolha uma conta ativa." });
 
   if (e.categoriaId) {
-    const categoria = await tx.categoriaFinanceira.findFirst({ where: { id: e.categoriaId, ativo: true, deletadoEm: null }, select: { tipo: true } });
+    const categoria = await tx.categoriaFinanceira.findFirst({ where: { id: e.categoriaId, ...(e.vinculoExistente ? {} : { ativo: true, deletadoEm: null }) }, select: { tipo: true } });
     if (!categoria) throw new ErroNegocio("Categoria não encontrada ou inativa.", { categoriaId: "Escolha uma categoria ativa." });
     const esperado = e.tipo === "ENTRADA" ? "RECEITA" : "DESPESA";
     if (categoria.tipo !== esperado) {
@@ -58,7 +60,7 @@ export async function registrarLancamento(tx: Tx, e: EntradaDeLancamento, ctx: C
       });
     }
   }
-  if (e.fornecedorId) {
+  if (e.fornecedorId && !e.vinculoExistente) {
     const fornecedor = await tx.fornecedor.findFirst({ where: { id: e.fornecedorId, deletadoEm: null }, select: { id: true } });
     if (!fornecedor) throw new ErroNegocio("Fornecedor não encontrado.", { fornecedorId: "Fornecedor inválido." });
   }
@@ -156,13 +158,17 @@ export async function conciliarLancamento(tx: Tx, lancamentoId: string, concilia
  *   (a linha do título fica travada, então dois estornos ou um estorno e um pagamento simultâneos não se atropelam).
  */
 export async function estornarLancamento(tx: Tx, lancamentoId: string, motivo: string, ctx: ContextoFinanceiro) {
+  // Descobre as pontas SEM travar e trava todas de uma vez, em ordem de id: dois estornos das duas pontas da mesma
+  // transferência (abas diferentes) pedem os mesmos locks na mesma ordem e nunca se esperam em ciclo.
   const [base] = await tx.$queryRaw<{ id: string; transferenciaId: string | null }[]>`
-    SELECT "id", "transferenciaId" FROM "Lancamento" WHERE "id" = ${lancamentoId} AND "deletadoEm" IS NULL FOR UPDATE`;
+    SELECT "id", "transferenciaId" FROM "Lancamento" WHERE "id" = ${lancamentoId} AND "deletadoEm" IS NULL`;
   if (!base) throw new ErroNegocio("Lançamento não encontrado.");
 
-  const ids = base.transferenciaId
-    ? (await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Lancamento" WHERE "transferenciaId" = ${base.transferenciaId} AND "deletadoEm" IS NULL ORDER BY "id" FOR UPDATE`).map((l) => l.id)
-    : [base.id];
+  const travadas = base.transferenciaId
+    ? await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Lancamento" WHERE "transferenciaId" = ${base.transferenciaId} AND "deletadoEm" IS NULL ORDER BY "id" FOR UPDATE`
+    : await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Lancamento" WHERE "id" = ${base.id} AND "deletadoEm" IS NULL FOR UPDATE`;
+  const ids = travadas.map((l) => l.id);
+  if (ids.length === 0) throw new ErroNegocio("Lançamento não encontrado.");
   const lancamentos = await tx.lancamento.findMany({ where: { id: { in: ids } } });
   if (lancamentos.some((l) => l.estornadoEm)) throw new ErroNegocio("Este lançamento já foi estornado.");
 

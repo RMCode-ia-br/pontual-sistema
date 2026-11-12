@@ -107,13 +107,15 @@ export async function atualizarPrazoFinal(tx: Tx, projetoId: string, hoje: strin
 // ---------------------------------------------------------------------------------------------------------
 
 async function reverterParcelasDaEtapa(tx: Tx, e: { etapaId: string; usuario: Usuario; ip?: string | null }): Promise<number> {
+  // Trava as parcelas antes de decidir: um recebimento simultâneo não pode escapar da conferência de "já tem pagamento".
+  await tx.$queryRaw`SELECT "id" FROM "ContaReceber" WHERE "etapaProjetoId" = ${e.etapaId} AND "deletadoEm" IS NULL ORDER BY "id" FOR UPDATE`;
   const contas = await tx.contaReceber.findMany({ where: { etapaProjetoId: e.etapaId, deletadoEm: null }, select: { id: true, descricao: true, status: true }, orderBy: { ordem: "asc" } });
   const comPagamento = contas.find((c) => c.status === "PARCIAL" || c.status === "PAGA");
   if (comPagamento) throw new ErroNegocio(`A parcela "${comPagamento.descricao}" já tem pagamento registrado. Estorne o pagamento antes de reabrir a etapa.`);
   const abertas = contas.filter((c) => c.status === "ABERTA");
   if (abertas.length === 0) return 0;
 
-  await tx.contaReceber.updateMany({ where: { id: { in: abertas.map((c) => c.id) } }, data: { status: "AGUARDANDO_GATILHO", vencimento: null, etapaProjetoId: null, atualizadoPorId: e.usuario.id } });
+  await tx.contaReceber.updateMany({ where: { id: { in: abertas.map((c) => c.id) }, status: "ABERTA", valorPagoCentavos: 0 }, data: { status: "AGUARDANDO_GATILHO", vencimento: null, etapaProjetoId: null, atualizadoPorId: e.usuario.id } });
   await tx.tarefa.updateMany({
     where: { chaveUnica: { in: abertas.map((c) => `cobranca:${c.id}`) }, status: "ABERTA", deletadoEm: null },
     data: { status: "CANCELADA", atualizadoPorId: e.usuario.id },

@@ -176,6 +176,7 @@ export async function mudarStatusDoChamado(tx: Tx, e: MudancaDeStatusDoChamado):
   // é cancelada junto (com auditoria); com pagamento o cancelamento é recusado e o estorno é do Financeiro.
   let contaCancelada: string | null = null;
   if (e.para === "CANCELADO" && antes.contaReceberId) {
+    await tx.$queryRaw`SELECT "id" FROM "ContaReceber" WHERE "id" = ${antes.contaReceberId} FOR UPDATE`;
     const conta = await tx.contaReceber.findUnique({ where: { id: antes.contaReceberId }, select: { id: true, status: true } });
     if (conta && (conta.status === "PARCIAL" || conta.status === "PAGA")) {
       throw new ErroNegocio("A cobrança desta visita já tem pagamento: estorne no Financeiro antes de cancelar o chamado.");

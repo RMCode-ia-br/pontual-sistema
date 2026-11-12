@@ -118,6 +118,11 @@ export async function abrirParcelasDoGatilho(
     })),
     skipDuplicates: true,
   });
+  // Concluir, reabrir e concluir a etapa de novo: a tarefa cancelada na reversão volta a valer (o createMany acima a ignora).
+  await tx.tarefa.updateMany({
+    where: { chaveUnica: { in: contas.map((c) => `cobranca:${c.id}`) }, status: "CANCELADA", deletadoEm: null },
+    data: { status: "ABERTA", concluidaEm: null, vencimento: vencimentoDaTarefa, atualizadoPorId: e.usuario.id },
+  });
   for (const c of contas) {
     await registrarAuditoria(tx, {
       usuario: e.usuario,

@@ -191,3 +191,17 @@ Diferenças pequenas já corrigidas (quadro por item com colunas nº | quantidad
 - [ ] **Formas de pagamento como catálogo editável** (hoje a lista é fixa: PIX, transferência, espécie, cartão de crédito e boleto): melhoria futura, se o Marcelo pedir outra forma no mês de teste.
 - [ ] **Gerar contas de salário a partir do cadastro de funcionários** (spec 7.9, opcional): fora por ora; salários e aluguel entram como recorrência mensal de conta a pagar.
 - [ ] **Fase 6 (R15, custo real e margem por obra):** o imposto da obra deixa de ser alíquota × receita. O imposto real é a despesa "Impostos (DAS)" lançada à mão; a Fase 6 decide como (e se) ratear por obra.
+
+## Da revisão sênior da Fase 5 (o que NÃO foi corrigido, e por quê)
+Corrigidos na fase: tarefa de cobrança que não voltava depois de concluir, reabrir e concluir a etapa; conta a pagar impossível de pagar depois de a categoria ser inativada; recorrência com início antigo gerando dezenas de contas atrasadas; totais das listas somando contas canceladas; fim antecipado da recorrência sem cancelar as já geradas; parcelamento que podia gerar parcela zero ou negativa; ordem de trava no estorno de transferência; reversão de parcela e cancelamento de chamado sem travar a conta; realizado do fluxo com contas inativas; saldo projetado ignorando contas a pagar vencidas (ver `docs/revisoes/fase-5.md`).
+- [ ] **Saldo projetado desconta o "a pagar" vencido no primeiro período** (e deixa o "a receber" vencido de fora). É a escolha conservadora (dívida certa × recebimento incerto); decisão minha, **confirmar com o Marcelo**.
+- [ ] **Recorrência com início antigo só gera do mês anterior em diante** (e o ano digitado errado não cria centenas de contas). Contas mais antigas, se existirem, entram à mão. Avisar na tela se o Marcelo estranhar.
+- [ ] **Editar uma recorrência sobrescreve ajustes manuais** (valor ou vencimento alterados à mão) das ocorrências futuras em aberto, sem aviso na tela, e não trava a recorrência (um pagamento simultâneo é barrado pelos CHECKs, com erro genérico).
+- [ ] **Pagamento ou recebimento com data anterior à data do saldo inicial da conta** não mexe no saldo (o extrato marca "já incluído no saldo inicial"); o diálogo ainda não avisa na hora.
+- [ ] **Tarefa "Cobrar parcela" concluída à mão e depois estorno:** o estorno reabre toda tarefa concluída da parcela, inclusive a que o usuário concluiu antes de qualquer pagamento. Efeito cosmético.
+- [ ] **Extrato da conta e visão geral leem sem limite no banco** (todos os lançamentos da conta; todos os títulos em aberto). Sem problema no volume de um mês de teste; restringir por período no SQL e paginar quando crescer (Fase 7).
+- [ ] **Sem filtros salvos nas listas do Financeiro** (a spec pede filtros salvos nas listas) e sem "escolha de colunas" no extrato; as listas têm busca, abas, filtros por URL, ordenação, paginação e CSV.
+- [ ] **Comprovante só no lançamento** (pagar e receber não anexam no diálogo): abra o lançamento depois do pagamento.
+- [ ] **A cobrança é uma tarefa, não uma notificação** (lembrete antes do vencimento, parâmetro de Configurações): o aviso no sino e o lembrete automático por cron são da Fase 8.
+- [ ] **`seed:demo` com financeiro fictício não foi executado** (o banco tem dados reais; regra do dono). Rodar só em banco de desenvolvimento sem dados reais.
+- [ ] **Teste de integração do Route Handler dos CSVs financeiros:** só o E2E exercita (status, tipo e bloqueio sem sessão).

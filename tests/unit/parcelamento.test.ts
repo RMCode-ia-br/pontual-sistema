@@ -41,16 +41,27 @@ describe("parcelamento (a última parcela absorve a diferença)", () => {
     expect(p.map((x) => `${x.numero}/${x.total}`)).toEqual(["1/3", "2/3", "3/3"]);
   });
 
-  it("R$ 200,00 em 3x: arredonda para cima nas primeiras (66,67) e a última fica com 66,66", () => {
+  it("R$ 200,00 em 3x: piso nas primeiras (66,66) e a última absorve a diferença (66,68)", () => {
     const p = gerarParcelamento(20_000, 3, "2026-05-10");
-    expect(p.map((x) => x.valorCentavos)).toEqual([6_667, 6_667, 6_666]);
+    expect(p.map((x) => x.valorCentavos)).toEqual([6_666, 6_666, 6_668]);
+  });
+
+  it("valor pequeno nunca gera parcela zero ou negativa: R$ 0,08 em 5x e R$ 1,00 em 60x", () => {
+    expect(gerarParcelamento(8, 5, "2026-05-10").map((x) => x.valorCentavos)).toEqual([1, 1, 1, 1, 4]);
+    const sessenta = gerarParcelamento(100, 60, "2026-05-10").map((x) => x.valorCentavos);
+    expect(sessenta.slice(0, 59).every((v) => v === 1)).toBe(true);
+    expect(sessenta[59]).toBe(41);
+    expect(sessenta.reduce((s, v) => s + v, 0)).toBe(100);
   });
 
   it("a soma é sempre o total (varre totais e quantidades)", () => {
     for (let total = 1; total <= 200; total += 7) {
       for (let n = 1; n <= Math.min(total, 24); n++) {
-        const soma = gerarParcelamento(total, n, "2026-02-28").reduce((s, p) => s + p.valorCentavos, 0);
-        expect(soma, `${total} em ${n}`).toBe(total);
+        const parcelas = gerarParcelamento(total, n, "2026-02-28");
+        expect(parcelas.reduce((s, p) => s + p.valorCentavos, 0), `${total} em ${n}`).toBe(total);
+        // Nenhuma parcela zero ou negativa, e a última nunca é menor que as outras.
+        expect(parcelas.every((p) => p.valorCentavos >= 1), `${total} em ${n}`).toBe(true);
+        expect(parcelas[n - 1].valorCentavos, `${total} em ${n}`).toBeGreaterThanOrEqual(parcelas[0].valorCentavos);
       }
     }
   });
