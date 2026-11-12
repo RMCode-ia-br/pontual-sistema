@@ -1,4 +1,4 @@
-import { FileText, Plus } from "lucide-react";
+import { FileText, HardHat, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -72,7 +72,16 @@ export default async function PaginaProjeto({ params, searchParams }: { params: 
       <CabecalhoPagina
         titulo={projeto.titulo}
         descricao={`${projeto.codigo} · ${projeto.cliente.nome}${projeto.cliente.whatsapp || projeto.cliente.telefone ? ` · ${formatarTelefone(projeto.cliente.whatsapp || projeto.cliente.telefone)}` : ""}`}
-        acoes={<ControleDoProjeto projeto={{ id: projeto.id, titulo: projeto.titulo, status: projeto.status }} motivos={motivos} />}
+        acoes={
+          <>
+            {["APROVADO", "EM_EXECUCAO", "CONCLUIDO"].includes(projeto.status) ? (
+              <Link href={`/obras/${projeto.id}`} className={buttonVariants({ variant: "outline" })}>
+                <HardHat aria-hidden /> Acompanhar obra
+              </Link>
+            ) : null}
+            <ControleDoProjeto projeto={{ id: projeto.id, titulo: projeto.titulo, status: projeto.status }} motivos={motivos} />
+          </>
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

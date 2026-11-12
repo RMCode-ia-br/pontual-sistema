@@ -3,7 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { datasDeFeriado, type TipoDiasDoPrazo } from "@/lib/dominio/dias-uteis";
+import { datasDeFeriado, type PeriodoDeFeriado, type TipoDiasDoPrazo } from "@/lib/dominio/dias-uteis";
 import { etapasDoModelo, type GatilhoDeEtapa, type ItemDoModelo } from "@/lib/dominio/etapas";
 import { distribuirDatas, prazoDaProposta, type PrazoDaProposta } from "@/lib/dominio/prazo-obra";
 import { dataLocalDoInstante } from "@/lib/formatadores";
@@ -12,6 +12,12 @@ type Tx = Prisma.TransactionClient;
 type Usuario = { id: string; nome: string };
 
 const paraData = (dia: string) => new Date(`${dia}T00:00:00.000Z`);
+
+/** Feriados, férias coletivas e outros períodos cadastrados e ativos (só o tipo FERIADO desconta dias úteis). */
+export async function carregarPeriodosDeFeriado(db: Tx | Pick<Tx, "feriado">): Promise<PeriodoDeFeriado[]> {
+  const lista = await db.feriado.findMany({ where: { ativo: true, deletadoEm: null }, select: { data: true, dataFim: true, tipo: true }, orderBy: { data: "asc" } });
+  return lista.map((f) => ({ data: f.data.toISOString().slice(0, 10), dataFim: f.dataFim ? f.dataFim.toISOString().slice(0, 10) : null, tipo: f.tipo }));
+}
 
 // ---------------------------------------------------------------------------------------------------------
 // Modelo de etapas (R7)
@@ -204,13 +210,7 @@ export async function gerarEtapasDaObra(tx: Tx, e: EntradaGeracaoDeEtapas): Prom
   const agendada = medicao ? dataLocalDoInstante(medicao.inicio) : null;
   const base = agendada && agendada >= e.aceitaEm ? agendada : e.aceitaEm;
 
-  const feriados = datasDeFeriado(
-    (await tx.feriado.findMany({ where: { ativo: true, deletadoEm: null }, select: { data: true, dataFim: true, tipo: true } })).map((f) => ({
-      data: f.data.toISOString().slice(0, 10),
-      dataFim: f.dataFim ? f.dataFim.toISOString().slice(0, 10) : null,
-      tipo: f.tipo,
-    })),
-  );
+  const feriados = datasDeFeriado(await carregarPeriodosDeFeriado(tx));
   const datas = distribuirDatas(
     etapas.map((et) => ({ id: String(et.ordem), tipo: et.tipo, ordem: et.ordem, grupoPrazo: et.grupoPrazo, peso: et.peso, dispensada: et.status === "DISPENSADA" })),
     base,

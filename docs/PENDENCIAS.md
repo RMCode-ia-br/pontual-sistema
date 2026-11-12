@@ -106,6 +106,10 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Feriados municipais de Macaé e férias coletivas** (dezembro e Carnaval) precisam estar cadastrados em Configurações → Feriados para o prazo em dias úteis ficar certo e para os avisos aparecerem. Só os feriados nacionais (2026 a 2030) e o Carnaval como ponto facultativo vêm da seed. A obra avisa quando a data final cai num ano sem nenhum feriado cadastrado.
 - [ ] **Texto da legenda do portfólio** (`portfolio.legenda`) é um texto simples proposto por mim e marcado "revisar texto"; o Marcelo ajusta o tom em Configurações → Modelos de texto. A "região" da legenda usa a UF do endereço da obra (não há cadastro de regiões); nunca entram nome, telefone ou endereço do cliente.
 - [ ] **Pausa depois de vencido o prazo** também estende o prazo prometido (a spec não limita). Se o Marcelo achar que distorce a pontualidade, limitar a pausas anteriores ao prazo original.
+- [ ] **Bloquear uma etapa × pausar a obra:** hoje são independentes: bloquear com motivo justificado (alvenaria, cliente, condomínio) **não** estende o prazo; só a pausa estende. Confirmar com o Marcelo se bloquear por motivo justificado deveria abrir a pausa sozinho (evitaria registrar duas vezes, mas dá menos controle).
+- [ ] **A entrega só conclui com as etapas anteriores resolvidas** (concluídas ou dispensadas). Confirmar com o Marcelo se isso atrapalha o dia a dia (etapas que ele nunca registra podem ser removidas do modelo ou dispensadas).
+- [ ] **Obras da Fase 3 já aprovadas no banco de São Paulo** (se houver) não têm etapas: usar o botão "Gerar etapas" na obra. Não há dados reais lá (só demonstração).
+- [ ] **Atribuição de equipe e responsável por etapa** é manual (diálogo "Editar"); a escala de equipes por data entra com o calendário de instalação (Bloco 4).
 - [ ] **Dias de pausa e prazo "sem pausas":** o "sem considerar pausas" é o prazo contado do relógio sem nenhuma pausa; conferir com o Marcelo se é essa a versão que ele quer ver.
 
 ## Da revisão sênior da Fase 3 (o que NÃO foi corrigido, e por quê)

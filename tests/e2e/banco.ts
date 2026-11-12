@@ -155,6 +155,85 @@ export async function prepararUsuarioE2E(opcoes: OpcoesUsuario = {}): Promise<vo
   });
 }
 
+/**
+ * Cria uma obra de teste (projeto aprovado com parcelas 50/25/25) e, por padrão, as etapas copiadas do modelo
+ * padrão, todas pendentes e SEM datas nem prazo (o teste os define pela interface). Tudo com prefixo "E2E ",
+ * que a limpeza apaga. Devolve o id do projeto.
+ */
+export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boolean; status?: "APROVADO" | "NOVO_LEAD" } = {}): Promise<string> {
+  return comConexao(async (c) => {
+    const clienteId = randomUUID();
+    const projetoId = randomUUID();
+    await c.query(`INSERT INTO "Cliente" (id, "tipoPessoa", nome, "atualizadoEm") VALUES ($1, 'PF', $2, now())`, [clienteId, `E2E Cliente ${nome}`]);
+    await c.query(`INSERT INTO "Projeto" (id, codigo, titulo, "clienteId", status, "atualizadoEm") VALUES ($1, $2, $3, $4, $5::"StatusProjeto", now())`, [
+      projetoId,
+      `P-0000-${randomUUID().slice(0, 8)}`,
+      `E2E Obra ${nome}`,
+      clienteId,
+      opcoes.status ?? "APROVADO",
+    ]);
+    const parcelas: [number, string, number, string, string][] = [
+      [1, "Sinal", 500000, "CONFIRMACAO", "ABERTA"],
+      [2, "Entrega do material", 250000, "ENTREGA_MATERIAL", "AGUARDANDO_GATILHO"],
+      [3, "Vidros e instalação", 250000, "ENTREGA_E_INSTALACAO", "AGUARDANDO_GATILHO"],
+    ];
+    for (const [ordem, descricao, valor, gatilho, status] of parcelas) {
+      await c.query(
+        `INSERT INTO "ContaReceber" (id, "projetoId", "clienteId", ordem, descricao, "valorCentavos", gatilho, status, "atualizadoEm")
+         VALUES ($1, $2, $3, $4, $5, $6, $7::"GatilhoPagamento", $8::"StatusContaReceber", now())`,
+        [randomUUID(), projetoId, clienteId, ordem, descricao, valor, gatilho, status],
+      );
+    }
+    if (!opcoes.semEtapas) {
+      const itens = await c.query<{ tipo: string; nome: string; ordem: number; grupoPrazo: string | null; peso: number; liberaGatilho: string | null; marcoGarantia: boolean }>(
+        `SELECT i.tipo, i.nome, i.ordem, i."grupoPrazo", i.peso, i."liberaGatilho", i."marcoGarantia"
+           FROM "ModeloEtapaItem" i JOIN "ModeloEtapas" m ON m.id = i."modeloId"
+          WHERE m.padrao AND m."deletadoEm" IS NULL AND i."deletadoEm" IS NULL AND i.ativo ORDER BY i.ordem`,
+      );
+      if (itens.rows.length === 0) throw new Error("O modelo de etapas padrão não existe no banco de teste (rode a seed).");
+      for (const [indice, i] of itens.rows.entries()) {
+        await c.query(
+          `INSERT INTO "EtapaProjeto" (id, "projetoId", tipo, nome, ordem, "grupoPrazo", peso, "liberaGatilho", "marcoGarantia", "atualizadoEm")
+           VALUES ($1, $2, $3::"TipoEtapa", $4, $5, $6::"GrupoPrazo", $7, $8::"GatilhoPagamento", $9, now())`,
+          [randomUUID(), projetoId, i.tipo, i.nome, indice + 1, i.grupoPrazo, i.peso, i.liberaGatilho, i.marcoGarantia],
+        );
+      }
+    }
+    return projetoId;
+  });
+}
+
+/** Atalho de teste: deixa concluídas as etapas abertas anteriores à entrega (a interface exige resolver cada uma). */
+export async function concluirEtapasAnterioresDaObra(projetoId: string): Promise<void> {
+  await comConexao((c) =>
+    c.query(
+      `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = COALESCE("inicioReal", CURRENT_DATE), "fimReal" = CURRENT_DATE
+        WHERE "projetoId" = $1 AND "deletadoEm" IS NULL AND status IN ('PENDENTE', 'EM_ANDAMENTO', 'BLOQUEADA')
+          AND ordem < (SELECT ordem FROM "EtapaProjeto" WHERE "projetoId" = $1 AND tipo = 'ENTREGA' AND "deletadoEm" IS NULL)`,
+      [projetoId],
+    ),
+  );
+}
+
+/** Parcelas da obra de teste (descrição, situação e se foram ligadas a uma etapa). */
+export async function parcelasDaObra(projetoId: string): Promise<{ descricao: string; status: string; vencimento: string | null; etapaId: string | null }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ descricao: string; status: string; vencimento: Date | null; etapaProjetoId: string | null }>(
+      `SELECT descricao, status::text AS status, vencimento, "etapaProjetoId" FROM "ContaReceber" WHERE "projetoId" = $1 ORDER BY ordem`,
+      [projetoId],
+    );
+    return r.rows.map((x) => ({ descricao: x.descricao, status: x.status, vencimento: x.vencimento ? x.vencimento.toISOString().slice(0, 10) : null, etapaId: x.etapaProjetoId }));
+  });
+}
+
+/** Tarefas do projeto de teste por tipo (para conferir cobranças e follow-ups). */
+export async function tarefasDaObra(projetoId: string): Promise<{ tipo: string | null; titulo: string; status: string }[]> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ tipo: string | null; titulo: string; status: string }>(`SELECT tipo, titulo, status::text AS status FROM "Tarefa" WHERE "projetoId" = $1 ORDER BY "criadoEm"`, [projetoId]);
+    return r.rows;
+  });
+}
+
 /** Ids dos itens ativos do modelo de etapas padrão (para restaurar depois de um teste que o edita). */
 export async function tirarSnapshotDoModeloDeEtapas(): Promise<{ modeloId: string; itemIds: string[] }> {
   return comConexao(async (c) => {
