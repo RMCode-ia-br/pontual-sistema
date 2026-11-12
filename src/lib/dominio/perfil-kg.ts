@@ -1,3 +1,5 @@
+import { textoParaDecimal } from "./numeros";
+
 // Perfil de alumínio comprado por kg (Fase 6). Funções puras; dinheiro em centavos; peso por metro em MILÉSIMOS de kg por
 // metro (0,500 kg/m = 500) e quantidades em milésimos, para nunca somar ponto flutuante.
 //
@@ -85,4 +87,27 @@ export function barrasInteirasSugeridas(kgMilesimos: number, d: Pick<DadosDoPerf
 export function valorDaEntrega(quantidadeMilesimos: number, precoUnitarioCentavos: number | null): number | null {
   if (precoUnitarioCentavos === null) return null;
   return Math.round((quantidadeMilesimos * precoUnitarioCentavos) / 1000);
+}
+
+/** "5", "+5", "-3,5%" digitado → pontos-base (500, 500, −350); vazio, zero, inválido ou acima de ±1.000% → null. */
+export function lerPercentualEmPb(texto: string): number | null {
+  const limpo = texto.replace(/\s/g, "").replace(/%$/, "");
+  const negativo = limpo.startsWith("-");
+  const n = textoParaDecimal(limpo.replace(/^[+-]/, ""), 2);
+  if (n === null || n === 0) return null;
+  const pb = Math.round(n * 100) * (negativo ? -1 : 1);
+  return Math.abs(pb) > 100_000 ? null : pb;
+}
+
+/** Teto do preço do kg em centavos (R$ 100.000,00/kg: só para barrar digitação absurda). */
+export const PRECO_KG_MAXIMO_CENTAVOS = 10_000_000;
+
+/**
+ * Reajuste do preço do kg em pontos-base (+5% = 500; −3% = −300): preço × (1 + pb/10000), arredondado em centavos. Preço
+ * vazio fica vazio (não há o que reajustar); resultado fora de 1 centavo até o teto é recusado (null), nunca zero ou negativo.
+ */
+export function reajustarPrecoKg(custoKgCentavos: number | null, percentualPb: number): number | null {
+  if (custoKgCentavos === null || !Number.isInteger(percentualPb)) return null;
+  const novo = Math.round((custoKgCentavos * (10_000 + percentualPb)) / 10_000);
+  return novo >= 1 && novo <= PRECO_KG_MAXIMO_CENTAVOS ? novo : null;
 }

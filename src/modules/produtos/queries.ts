@@ -172,6 +172,7 @@ export type ProdutoDetalhe = {
   fornecedorPrincipalId: string | null;
   custoUnitarioCentavos: number | null;
   custoAtualizadoEm: string | null;
+  custoPorKg: boolean;
   comprimentoBarraMm: number | null;
   pesoKgPorMetro: string | null;
   larguraMm: number | null;
@@ -197,6 +198,7 @@ export async function obterProduto(id: string): Promise<ProdutoDetalhe | null> {
     fornecedorPrincipalId: p.fornecedorPrincipalId,
     custoUnitarioCentavos: p.custoUnitarioCentavos,
     custoAtualizadoEm: p.custoAtualizadoEm?.toISOString() ?? null,
+    custoPorKg: p.custoPorKg,
     comprimentoBarraMm: p.comprimentoBarraMm,
     pesoKgPorMetro: p.pesoKgPorMetro?.toString() ?? null,
     larguraMm: p.larguraMm,

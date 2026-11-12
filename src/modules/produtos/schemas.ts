@@ -4,6 +4,7 @@ import { textoParaDecimal } from "@/lib/dominio/numeros";
 import { CUSTO_MAXIMO_CENTAVOS, type RegraReajuste } from "@/lib/dominio/reajuste";
 import { valorParaCentavos } from "@/lib/dominio/numeros";
 import {
+  campoCaixa,
   campoDecimalOpcional,
   campoIdObrigatorio,
   campoIdOpcional,
@@ -42,6 +43,8 @@ const produtoBase = z.object({
   fornecedorPrincipalId: campoIdOpcional,
   /** Digitado em reais e guardado em centavos. Vazio = custo ainda não informado. */
   custo: campoMoedaOpcional("Custo unitário", CUSTO_MAXIMO_CENTAVOS),
+  /** Perfil comprado por kg: o custo nasce do preço do kg do acabamento (Preço do kg do alumínio). */
+  custoPorKg: campoCaixa,
   comprimentoBarraMm: campoInteiroOpcional("Comprimento da barra", 20000),
   pesoKgPorMetro: campoDecimalOpcional("Peso por metro", 1000, 3),
   larguraMm: campoInteiroOpcional("Largura", 20000),

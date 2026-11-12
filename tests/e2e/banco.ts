@@ -149,6 +149,10 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "LoteImportacao" WHERE "criadoPorId" = ANY($1)`, [ids]);
   await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (SELECT id FROM "Produto" WHERE codigo LIKE 'E2E-%')`);
   await c.query(`DELETE FROM "Produto" WHERE codigo LIKE 'E2E-%'`);
+  // Fase 6: preço do kg e acabamento de teste (o acabamento só sai depois dos produtos que o usam).
+  await c.query(`DELETE FROM "HistoricoPrecoKg" WHERE "precoKgId" IN (SELECT id FROM "PrecoKgAluminio" WHERE "acabamentoId" IN (SELECT id FROM "AcabamentoAluminio" WHERE nome LIKE 'E2E %'))`);
+  await c.query(`DELETE FROM "PrecoKgAluminio" WHERE "acabamentoId" IN (SELECT id FROM "AcabamentoAluminio" WHERE nome LIKE 'E2E %')`);
+  await c.query(`DELETE FROM "AcabamentoAluminio" WHERE nome LIKE 'E2E %'`);
   await c.query(`DELETE FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %'`);
   await c.query(`DELETE FROM "EquipeMembro" WHERE "equipeId" IN (SELECT id FROM "Equipe" WHERE nome LIKE 'E2E %') OR "funcionarioId" IN (SELECT id FROM "Funcionario" WHERE nome LIKE 'E2E %')`);
   await c.query(`DELETE FROM "Equipe" WHERE nome LIKE 'E2E %'`);
@@ -587,5 +591,27 @@ export async function estoqueDoProdutoDeTeste(codigo: string): Promise<{ saldoCa
       [codigo],
     );
     return { saldoCache: Number(r.rows[0].saldo), somaDosMovimentos: Number(r.rows[0].soma), movimentos: r.rows[0].n };
+  });
+}
+
+/** Acabamento de teste ("E2E ..."): o preço do kg dos testes nunca toca nos acabamentos reais. */
+export async function criarAcabamentoDeTeste(nome: string): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(`INSERT INTO "AcabamentoAluminio" (id, nome, ordem, "atualizadoEm") VALUES ($1, $2, 9999, now())`, [id, nome]);
+    return id;
+  });
+}
+
+/** Perfil por kg de teste (barra de 6.000 mm), com peso por metro opcional (kg/m). */
+export async function criarPerfilPorKgDeTeste(codigo: string, descricao: string, acabamentoId: string, pesoKgPorMetro: string | null): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(
+      `INSERT INTO "Produto" (id, codigo, descricao, unidade, "custoPorKg", "acabamentoId", "pesoKgPorMetro", "comprimentoBarraMm", "atualizadoEm")
+       VALUES ($1, $2, $3, 'BARRA', true, $4, $5, 6000, now())`,
+      [id, codigo, descricao, acabamentoId, pesoKgPorMetro],
+    );
+    return id;
   });
 }

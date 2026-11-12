@@ -7,7 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { CampoMascarado } from "@/components/campo-mascarado";
-import { AreaTexto, Campo, Selecao, ariaDoCampo } from "@/components/formulario";
+import { AreaTexto, CaixaMarcacao, Campo, Selecao, ariaDoCampo } from "@/components/formulario";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ResultadoAcao } from "@/lib/acoes";
@@ -33,6 +33,7 @@ export function FormProduto({ produto, opcoes }: Props) {
   const editando = !!produto;
   const [sujo, setSujo] = useState(false);
   const [unidade, setUnidade] = useState<string>(produto?.unidade ?? "UN");
+  const [porKg, setPorKg] = useState(produto?.custoPorKg ?? false);
   useProtecaoDeSaida(sujo);
 
   const { estado, pendente, aoEnviar } = useAcaoDeFormulario<{ id: string }>(
@@ -117,11 +118,19 @@ export function FormProduto({ produto, opcoes }: Props) {
         <h2 id="sec-custo-produto" className="font-medium sm:col-span-2">
           Custo
         </h2>
+        <div className="grid gap-2 sm:col-span-2">
+          <CaixaMarcacao id="custoPorKg" name="custoPorKg" rotulo="Perfil de alumínio comprado por kg: o custo vem do preço do kg do acabamento" checked={porKg} onChange={(e) => setPorKg(e.target.checked)} />
+          {porKg ? (
+            <p className="text-muted-foreground text-xs">
+              O custo por barra e por metro é calculado do <Link href="/estoque/preco-do-kg" className="underline">preço do kg</Link> do acabamento escolhido, do peso por metro e do comprimento da barra. Falta alguma dessas informações? O custo continua vazio (“sem custo”), nunca zero.
+            </p>
+          ) : null}
+        </div>
         <Campo
           id="custo"
           rotulo="Custo unitário (R$)"
           erro={erros.custo}
-          dica={produto?.custoAtualizadoEm ? "Cada mudança de valor fica registrada na aba Histórico de preço." : "Deixe vazio se ainda não souber: o sistema nunca inventa preço."}
+          dica={porKg ? "Calculado pelo preço do kg." : produto?.custoAtualizadoEm ? "Cada mudança de valor fica registrada na aba Histórico de preço." : "Deixe vazio se ainda não souber: o sistema nunca inventa preço."}
         >
           <CampoMascarado
             id="custo"
@@ -131,6 +140,7 @@ export function FormProduto({ produto, opcoes }: Props) {
             inputMode="numeric"
             autoComplete="off"
             placeholder="0,00"
+            disabled={porKg}
             {...ariaDoCampo("custo", erros.custo)}
           />
         </Campo>

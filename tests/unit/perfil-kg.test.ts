@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { barrasDoPeso, barrasInteirasSugeridas, custoDoPerfil, custoUnitarioDoPerfil, pesoDasBarras, precoKgDoPerfil, valorDaEntrega } from "../../src/lib/dominio/perfil-kg";
+import { PRECO_KG_MAXIMO_CENTAVOS, lerPercentualEmPb, barrasDoPeso, barrasInteirasSugeridas, custoDoPerfil, custoUnitarioDoPerfil, pesoDasBarras, precoKgDoPerfil, reajustarPrecoKg, valorDaEntrega } from "../../src/lib/dominio/perfil-kg";
 
 // Valores só de TESTE (o sistema nunca traz preço do kg nem peso por metro de fábrica).
 const PERFIL = { custoKgCentavos: 5000, pesoMilesimosKgPorMetro: 500, comprimentoBarraMm: 6000 }; // R$ 50,00/kg, 0,5 kg/m, barra de 6 m
@@ -80,5 +80,34 @@ describe("valor da entrega", () => {
   it("quantidade fracionada arredonda em centavos", () => {
     expect(valorDaEntrega(333, 1000)).toBe(333); // 0,333 × R$ 10,00 = R$ 3,33
     expect(valorDaEntrega(1_500, 333)).toBe(500); // 1,5 × R$ 3,33 = R$ 4,995 → R$ 5,00
+  });
+});
+
+describe("reajuste do preço do kg", () => {
+  it("+5% de R$ 50,00 = R$ 52,50; −10% = R$ 45,00; arredonda em centavos", () => {
+    expect(reajustarPrecoKg(5000, 500)).toBe(5250);
+    expect(reajustarPrecoKg(5000, -1000)).toBe(4500);
+    expect(reajustarPrecoKg(4999, 333)).toBe(5165); // 4999 × 1,0333 = 5165,45
+    expect(reajustarPrecoKg(5000, 0)).toBe(5000);
+  });
+  it("preço vazio não é reajustado; resultado zero, negativo ou acima do teto é recusado", () => {
+    expect(reajustarPrecoKg(null, 500)).toBeNull();
+    expect(reajustarPrecoKg(5000, -10_000)).toBeNull(); // −100% daria zero
+    expect(reajustarPrecoKg(5000, -20_000)).toBeNull();
+    expect(reajustarPrecoKg(PRECO_KG_MAXIMO_CENTAVOS, 100)).toBeNull();
+    expect(reajustarPrecoKg(5000, 1.5)).toBeNull();
+  });
+});
+
+describe("percentual digitado do reajuste", () => {
+  it("lê 5, +5, 5%, -3,5 e 1.5 em pontos-base", () => {
+    expect(lerPercentualEmPb("5")).toBe(500);
+    expect(lerPercentualEmPb("+5")).toBe(500);
+    expect(lerPercentualEmPb("5%")).toBe(500);
+    expect(lerPercentualEmPb("-3,5")).toBe(-350);
+    expect(lerPercentualEmPb(" 12,25 % ")).toBe(1225);
+  });
+  it("recusa vazio, zero, texto e percentual absurdo", () => {
+    for (const ruim of ["", "0", "abc", "5,555", "1001", "-1001", "--5"]) expect(lerPercentualEmPb(ruim)).toBeNull();
   });
 });

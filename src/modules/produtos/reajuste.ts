@@ -66,7 +66,7 @@ export async function montarPrevia(entrada: EntradaDeReajuste): Promise<Previa> 
     },
     orderBy: { codigo: "asc" },
     take: LIMITE_REAJUSTE + 1,
-    select: { id: true, codigo: true, descricao: true, custoUnitarioCentavos: true, fornecedorPrincipalId: true, fornecedorPrincipal: { select: { razaoSocial: true } } },
+    select: { id: true, codigo: true, descricao: true, custoUnitarioCentavos: true, custoPorKg: true, fornecedorPrincipalId: true, fornecedorPrincipal: { select: { razaoSocial: true } } },
   });
   if (produtos.length > LIMITE_REAJUSTE) {
     throw new ErroDePrevia(`Esse reajuste atingiria mais de ${LIMITE_REAJUSTE} produtos. Divida por categoria ou por fornecedor.`);
@@ -74,6 +74,19 @@ export async function montarPrevia(entrada: EntradaDeReajuste): Promise<Previa> 
 
   const itens: ItemDaPrevia[] = produtos.map((p) => {
     const r = calcularReajuste(p.custoUnitarioCentavos, regra);
+    // Perfil por kg: o custo nasce do preço do kg do acabamento; reajusta-se lá (Estoque e compras → Preço do kg).
+    if (p.custoPorKg) {
+      return {
+        id: p.id,
+        codigo: p.codigo,
+        descricao: p.descricao,
+        fornecedor: p.fornecedorPrincipal?.razaoSocial ?? null,
+        fornecedorId: p.fornecedorPrincipalId,
+        custoAtualCentavos: p.custoUnitarioCentavos,
+        custoNovoCentavos: null,
+        motivoIgnorado: "Perfil por kg: reajuste pelo preço do kg (Estoque e compras → Preço do kg)",
+      };
+    }
     return {
       id: p.id,
       codigo: p.codigo,

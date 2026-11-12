@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissoes";
 
 import { buscarProdutoPorCodigo } from "../queries";
+import { recalcularCustoDoPerfil } from "../servico-preco-kg";
 import { COMPRIMENTO_BARRA_PADRAO_MM, editarProdutoSchema, idsSchema, produtoSchema } from "../schemas";
 
 const campos = {
@@ -24,6 +25,7 @@ const campos = {
   fornecedorPrincipalId: true,
   custoUnitarioCentavos: true,
   custoAtualizadoEm: true,
+  custoPorKg: true,
   comprimentoBarraMm: true,
   pesoKgPorMetro: true,
   larguraMm: true,
@@ -74,6 +76,7 @@ function paraBanco(v: Valores) {
     linhaId: v.linhaId ?? null,
     acabamentoId: v.acabamentoId ?? null,
     fornecedorPrincipalId: v.fornecedorPrincipalId ?? null,
+    custoPorKg: v.custoPorKg,
     pesoKgPorMetro: v.pesoKgPorMetro ?? null,
     larguraMm: v.larguraMm ?? null,
     alturaMm: v.alturaMm ?? null,
@@ -101,8 +104,9 @@ export async function criarProduto(_anterior: ResultadoAcao<{ id: string }> | nu
         const novo = await tx.produto.create({
           data: {
             ...paraBanco(v),
-            custoUnitarioCentavos: v.custo ?? null,
-            custoAtualizadoEm: v.custo !== undefined ? new Date() : null,
+            // Perfil por kg: o custo vem do preço do kg (recalculado logo abaixo), não do campo digitado.
+            custoUnitarioCentavos: v.custoPorKg ? null : (v.custo ?? null),
+            custoAtualizadoEm: !v.custoPorKg && v.custo !== undefined ? new Date() : null,
             // Perfil vendido por barra: 6.000 mm é o padrão da spec quando nada foi informado.
             comprimentoBarraMm: v.comprimentoBarraMm ?? (v.unidade === "BARRA" ? COMPRIMENTO_BARRA_PADRAO_MM : null),
             criadoPorId: sessao.id,
@@ -127,6 +131,7 @@ export async function criarProduto(_anterior: ResultadoAcao<{ id: string }> | nu
           });
         }
         await registrarAuditoria(tx, { usuario: sessao, entidade: "Produto", entidadeId: novo.id, acao: "CRIAR", depois: novo, ip });
+        if (novo.custoPorKg) await recalcularCustoDoPerfil(tx, novo.id, { usuario: sessao, ip });
         return novo;
       });
       revalidar();
@@ -158,7 +163,8 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
         // vale (um reajuste em lote aplicado no meio-tempo não pode ser desfeito por um formulário velho).
         const original = v.custoOriginal === undefined || v.custoOriginal === "" ? null : Number(v.custoOriginal);
         const digitado = v.custo ?? null;
-        const pessoaMexeuNoCusto = v.custoOriginal === undefined ? digitado !== antes.custoUnitarioCentavos : digitado !== original;
+        // Perfil por kg: o campo de custo fica desligado na tela e o custo vem do preço do kg.
+        const pessoaMexeuNoCusto = v.custoPorKg ? false : v.custoOriginal === undefined ? digitado !== antes.custoUnitarioCentavos : digitado !== original;
         if (pessoaMexeuNoCusto) {
           if (v.custoOriginal !== undefined && original !== antes.custoUnitarioCentavos) {
             throw new ErroNegocio("O custo deste produto foi alterado por outra pessoa enquanto você editava. Recarregue a página e confira o valor.", { custo: "Mudou enquanto você editava. Recarregue a página." });
@@ -196,6 +202,8 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
           });
         }
         await registrarAuditoria(tx, { usuario: sessao, entidade: "Produto", entidadeId: id, acao: "ATUALIZAR", antes, depois, ip });
+        // Peso, comprimento, acabamento ou linha podem ter mudado: o custo do perfil por kg acompanha.
+        if (depois.custoPorKg) await recalcularCustoDoPerfil(tx, id, { usuario: sessao, ip });
       });
       revalidar(id);
       return sucesso({ id }, "Produto atualizado.");
