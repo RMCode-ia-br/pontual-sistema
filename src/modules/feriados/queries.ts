@@ -11,9 +11,19 @@ export type FeriadoLista = {
   ativo: boolean;
 };
 
+/**
+ * Itens que tocam o ano: começam nele OU são períodos (férias coletivas) que começaram antes e terminam nele
+ * (ex.: 22/12/2030 a 05/01/2031 aparece em 2030 e em 2031).
+ */
+export function filtroDoAno(ano: number) {
+  const inicio = new Date(Date.UTC(ano, 0, 1));
+  const fim = new Date(Date.UTC(ano, 11, 31));
+  return { data: { lte: fim }, OR: [{ data: { gte: inicio } }, { dataFim: { gte: inicio } }] };
+}
+
 export async function listarFeriados(ano: number): Promise<FeriadoLista[]> {
   return prisma.feriado.findMany({
-    where: { deletadoEm: null, data: { gte: new Date(Date.UTC(ano, 0, 1)), lte: new Date(Date.UTC(ano, 11, 31)) } },
+    where: { deletadoEm: null, ...filtroDoAno(ano) },
     orderBy: [{ data: "asc" }, { nome: "asc" }],
     select: { id: true, data: true, dataFim: true, nome: true, tipo: true, ativo: true },
   });

@@ -28,7 +28,7 @@
 - Plano de corte otimizado, OCR de tabelas de fornecedor, conciliação bancária (fora do escopo).
 
 ## Surgidas na Fase 0 (autenticação e seed)
-- [ ] **Feriados municipais de Macaé** não foram inventados: o gestor precisa cadastrá-los em Configurações → Feriados (o seed só traz os nacionais, 2026–2030, e o Carnaval como ponto facultativo).
+- [x] **Feriados municipais de Macaé:** cadastrados em 2026-11-12 (São João Batista 24/06, emancipação 29/07 e Dia do Comerciário, 3ª segunda de outubro, como regra), mais São Jorge e Corpus Christi (decisão 100). Falta só aplicar o seed no banco de São Paulo (aguarda OK) e conferir com o Marcelo se há outros feriados locais.
 - [ ] **Primeiro acesso do `admin` no banco novo (São Paulo):** o usuário foi criado pelo seed com a senha de `ADMIN_SENHA_INICIAL` (não a pública) e `precisaTrocarSenha = true`. Entre uma vez e troque a senha; depois cadastre Marcelo e Luan e desative o `admin`.
 - [ ] **IP do cliente no bloqueio de login** vem de `x-forwarded-for`. Na Vercel o cabeçalho é definido pela plataforma; em outra hospedagem, só confiar nele atrás de um proxy que o sobrescreva (senão o bloqueio por IP pode ser contornado).
 - [ ] **`npm audit`** reportou 7 vulnerabilidades moderadas após a instalação: avaliar na revisão sênior (podem ser só de ferramentas de desenvolvimento).
@@ -57,7 +57,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [x] **Anexo:** `descricao`, `momento` (antes/durante/depois) e `usarNoPortfolio` agora são gravados e editáveis (fotos da obra e galeria, Fase 4; decisão 97).
 - [ ] **Busca:** sem índice trigram/GIN para `unaccent(...) ILIKE` (sem problema com poucos dados; criar função `unaccent` imutável e o índice quando o volume crescer).
 - [ ] **Atalho de teclado para "Novo"** (a spec pede, além do Ctrl+K).
-- [ ] **Feriados nacionais cobrem 2026 a 2030:** regerar a cada ano (e avisar quando o horizonte acabar, antes de a Fase 4 usar dias úteis). Férias coletivas que atravessam o ano aparecem só no ano de início.
+- [ ] **Feriados nacionais cobrem 2026 a 2030:** regerar a cada ano (e avisar quando o horizonte acabar, antes de a Fase 4 usar dias úteis). Férias coletivas que atravessam o ano agora aparecem nos dois anos (decisão 100e).
 - [ ] **`registrarInteracao`** ainda não tem teste de integração (a linha do tempo chega com Clientes, Fase 1).
 - [ ] **Troca de senha** (`/trocar-senha`) ainda usa `<form action>`: os três campos de senha se limpam após um erro (aceitável para senhas, mas incoerente com os outros formulários).
 - [ ] **Erro "Já existe um item..." nos catálogos** permanece na tela até o próximo envio.
@@ -78,7 +78,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 - [ ] **Prazo "sem retorno" (7 dias) e follow-up (3 dias)** são padrões de configuração, não dados da Pontual: o Marcelo confirma em Configurações → Empresa ("Funil e acompanhamento").
 - [ ] **Faixas de porte** (médio/grande) ficam vazias; sem elas o porte é sempre manual (R10).
 - [ ] **Horário comercial e duração da visita** usam os padrões da spec; conferir com o Marcelo (inclui sábado até 12h).
-- [ ] **Férias coletivas e feriados de Macaé** precisam estar cadastrados em Configurações → Feriados para a agenda avisar (a de dezembro/Carnaval não vêm prontas).
+- [ ] **Férias coletivas** (dezembro/Carnaval) ainda não definidas: cadastrar em Configurações → Feriados quando o Marcelo definir, para a agenda avisar. (Feriados de Macaé: resolvido, decisão 100.)
 - [x] **Importar medidas da visita para a proposta:** feito na Fase 3 (botão no editor).
 - [ ] **Tipologia nas medidas-rascunho** é texto livre com sugestões; vira vínculo com `Tipologia` na Fase 3.
 - [ ] **Follow-ups de avaliação (D+2) e de fim da garantia** dependem de obra concluída (Fase 4); notificações e lembrete de visita 24 h por cron (sino) são da Fase 8 (hoje: lista no painel + botão de WhatsApp).
@@ -103,7 +103,7 @@ Corrigidos na própria fase: bloqueio de login contornável por requisições si
 ## Surgidas na Fase 4 (obras)
 - [ ] **Confirmar o mapa gatilho → etapa e o marco da garantia** do modelo de etapas (padrão: entrega do material = FABRICACAO concluída; entrega e instalação = INSTALACAO_VIDROS concluída, que também inicia os 90 dias de regulagem). Editável em Configurações → Modelo de etapas.
 - [ ] **Durações das etapas:** não existem no sistema de propósito. Os dias vêm de cada proposta (por grupo: material, execução, vidros e finalização; ou total). O Marcelo pode querer durações padrão por tipo de obra; só depois de ele informar.
-- [ ] **Feriados municipais de Macaé e férias coletivas** (dezembro e Carnaval) precisam estar cadastrados em Configurações → Feriados para o prazo em dias úteis ficar certo e para os avisos aparecerem. Só os feriados nacionais (2026 a 2030) e o Carnaval como ponto facultativo vêm da seed. A obra avisa quando a data final cai num ano sem nenhum feriado cadastrado.
+- [ ] **Férias coletivas** (dezembro e Carnaval) precisam estar cadastradas em Configurações → Feriados para os avisos aparecerem (não afetam dia útil). Os feriados nacionais, de Macaé, São Jorge e Corpus Christi (2026 a 2030) e o Carnaval como ponto facultativo vêm da seed (decisão 100). A obra avisa quando a data final cai num ano sem nenhum feriado cadastrado.
 - [ ] **Texto da legenda do portfólio** (`portfolio.legenda`) é um texto simples proposto por mim e marcado "revisar texto"; o Marcelo ajusta o tom em Configurações → Modelos de texto. A "região" da legenda usa a UF do endereço da obra (não há cadastro de regiões); nunca entram nome, telefone ou endereço do cliente.
 - [ ] **Pausa depois de vencido o prazo** também estende o prazo prometido (a spec não limita). Se o Marcelo achar que distorce a pontualidade, limitar a pausas anteriores ao prazo original.
 - [ ] **Bloquear uma etapa × pausar a obra:** hoje são independentes: bloquear com motivo justificado (alvenaria, cliente, condomínio) **não** estende o prazo; só a pausa estende. Confirmar com o Marcelo se bloquear por motivo justificado deveria abrir a pausa sozinho (evitaria registrar duas vezes, mas dá menos controle).

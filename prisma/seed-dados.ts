@@ -1,5 +1,7 @@
 // Dados iniciais da Fase 0 (spec seção 13). Sem clientes fictícios e sem valores de negócio inventados.
 
+import { expandirRegras, type DefinicaoDeFeriado } from "../src/lib/dominio/regras-feriado";
+
 export const LINHAS = ["Suprema", "Gold", "23", "25", "28", "30", "Euroshow"];
 
 export const ACABAMENTOS = [
@@ -206,59 +208,53 @@ export const MODELOS_TEXTO: { chave: string; titulo: string; categoria: Categori
   },
 ];
 
-// ---------- Feriados nacionais ----------
+// ---------- Feriados (nacionais, estadual RJ e municipais de Macaé) ----------
 
-const NOMES_MESES_FIXOS: { mes: number; dia: number; nome: string }[] = [
-  { mes: 1, dia: 1, nome: "Confraternização Universal" },
-  { mes: 4, dia: 21, nome: "Tiradentes" },
-  { mes: 5, dia: 1, nome: "Dia do Trabalhador" },
-  { mes: 9, dia: 7, nome: "Independência do Brasil" },
-  { mes: 10, dia: 12, nome: "Nossa Senhora Aparecida" },
-  { mes: 11, dia: 2, nome: "Finados" },
-  { mes: 11, dia: 15, nome: "Proclamação da República" },
-  { mes: 11, dia: 20, nome: "Dia da Consciência Negra" },
-  { mes: 12, dia: 25, nome: "Natal" },
+/**
+ * Regras que se repetem todo ano. Os nomes NÃO podem mudar depois de semeados: a unicidade do banco é
+ * (data, nome) e um nome novo duplicaria a data. Carnaval é ponto facultativo (OUTRO: aviso, não desconta
+ * dia útil). Férias coletivas NÃO entram aqui (ainda não definidas): o gestor as cadastra em Configurações.
+ */
+export const DEFINICOES_DE_FERIADO: readonly DefinicaoDeFeriado[] = [
+  // Nacionais fixos
+  { nome: "Confraternização Universal", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 1, dia: 1 } },
+  { nome: "Tiradentes", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 4, dia: 21 } },
+  { nome: "Dia do Trabalhador", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 5, dia: 1 } },
+  { nome: "Independência do Brasil", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 9, dia: 7 } },
+  { nome: "Nossa Senhora Aparecida", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 10, dia: 12 } },
+  { nome: "Finados", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 11, dia: 2 } },
+  { nome: "Proclamação da República", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 11, dia: 15 } },
+  { nome: "Dia da Consciência Negra", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 11, dia: 20 } },
+  { nome: "Natal", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 12, dia: 25 } },
+  // Móveis (dependem da Páscoa)
+  { nome: "Carnaval (segunda-feira, ponto facultativo)", tipo: "OUTRO", regra: { tipo: "PASCOA", deslocamento: -48 } },
+  { nome: "Carnaval (terça-feira, ponto facultativo)", tipo: "OUTRO", regra: { tipo: "PASCOA", deslocamento: -47 } },
+  { nome: "Sexta-feira Santa", tipo: "FERIADO", regra: { tipo: "PASCOA", deslocamento: -2 } },
+  { nome: "Corpus Christi", tipo: "FERIADO", regra: { tipo: "PASCOA", deslocamento: 60 } },
+  // Estadual (RJ)
+  { nome: "Dia de São Jorge (estadual RJ)", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 4, dia: 23 } },
+  // Municipais de Macaé (informados pelo dono em 2026-11-12)
+  {
+    nome: "São João Batista, padroeiro de Macaé (Lei Municipal 513/1975)",
+    tipo: "FERIADO",
+    regra: { tipo: "FIXA", mes: 6, dia: 24 },
+  },
+  { nome: "Aniversário de emancipação de Macaé", tipo: "FERIADO", regra: { tipo: "FIXA", mes: 7, dia: 29 } },
+  // Regra, não data fixa: a 3ª segunda-feira de outubro muda a cada ano.
+  {
+    nome: "Dia do Comerciário (Macaé, 3ª segunda-feira de outubro)",
+    tipo: "FERIADO",
+    regra: { tipo: "NESIMO_DIA_DA_SEMANA", mes: 10, ordem: 3, diaSemana: 1 },
+  },
 ];
-
-/** Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher), em UTC. */
-export function domingoDePascoa(ano: number): Date {
-  const a = ano % 19;
-  const b = Math.floor(ano / 100);
-  const c = ano % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const mes = Math.floor((h + l - 7 * m + 114) / 31);
-  const dia = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(Date.UTC(ano, mes - 1, dia));
-}
-
-function somarDias(data: Date, dias: number): Date {
-  return new Date(data.getTime() + dias * 86_400_000);
-}
 
 export type FeriadoSeed = { data: Date; nome: string; tipo: "FERIADO" | "OUTRO" };
 
-/**
- * Feriados nacionais (e Carnaval como ponto facultativo, tipo OUTRO, que não desconta dias úteis).
- * Feriados municipais de Macaé NÃO são inventados: ficam para o gestor cadastrar (docs/PENDENCIAS.md).
- */
-export function feriadosNacionais(anoInicial: number, anoFinal: number): FeriadoSeed[] {
-  const lista: FeriadoSeed[] = [];
-  for (let ano = anoInicial; ano <= anoFinal; ano++) {
-    for (const f of NOMES_MESES_FIXOS) {
-      lista.push({ data: new Date(Date.UTC(ano, f.mes - 1, f.dia)), nome: f.nome, tipo: "FERIADO" });
-    }
-    const pascoa = domingoDePascoa(ano);
-    lista.push({ data: somarDias(pascoa, -2), nome: "Sexta-feira Santa", tipo: "FERIADO" });
-    lista.push({ data: somarDias(pascoa, -48), nome: "Carnaval (segunda-feira, ponto facultativo)", tipo: "OUTRO" });
-    lista.push({ data: somarDias(pascoa, -47), nome: "Carnaval (terça-feira, ponto facultativo)", tipo: "OUTRO" });
-  }
-  return lista;
+/** Linhas de `Feriado` para o intervalo de anos (uma por data; o banco guarda datas, não regras). */
+export function feriadosDoSeed(anoInicial: number, anoFinal: number): FeriadoSeed[] {
+  return expandirRegras(DEFINICOES_DE_FERIADO, anoInicial, anoFinal).map((f) => ({
+    data: new Date(`${f.data}T00:00:00Z`),
+    nome: f.nome,
+    tipo: f.tipo,
+  }));
 }

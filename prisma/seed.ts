@@ -19,7 +19,7 @@ import {
   CATEGORIAS_FINANCEIRAS,
   CATEGORIAS_PRODUTO,
   ESPESSURAS_VIDRO_MM,
-  feriadosNacionais,
+  feriadosDoSeed,
   FORNECEDORES,
   LINHAS,
   MODELOS_TEXTO,
@@ -168,9 +168,9 @@ async function catalogos(): Promise<string> {
 
 async function feriados(): Promise<string> {
   const anoAtual = new Date().getUTCFullYear();
-  const lista = feriadosNacionais(anoAtual, anoAtual + 4);
+  const lista = feriadosDoSeed(anoAtual, anoAtual + 4);
   await prisma.feriado.createMany({ data: lista, skipDuplicates: true });
-  return `feriados nacionais: ${lista.length} (${anoAtual} a ${anoAtual + 4})`;
+  return `feriados (nacionais, RJ e Macaé): ${lista.length} (${anoAtual} a ${anoAtual + 4})`;
 }
 
 async function modelosTexto(): Promise<string> {
