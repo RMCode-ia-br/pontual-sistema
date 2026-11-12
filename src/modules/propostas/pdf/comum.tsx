@@ -1,10 +1,31 @@
 import { Font, Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
 
 import { ALTURA_QUADRO, gerarDesenho, LARGURA_QUADRO, type TipoDesenho } from "@/lib/dominio/desenho";
+import { FAMILIA_PDF, registrarFontesDoPdf } from "@/lib/pdf/fontes";
 import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca } from "@/lib/tema/derivar";
+
+export { FAMILIA_PDF };
 
 // As propostas reais não hifenizam palavras ("TEM-PERADO"): desliga a hifenização automática do react-pdf.
 Font.registerHyphenationCallback((palavra) => [palavra]);
+// Geist, a mesma fonte da interface (os TTF vão junto no deploy; ver next.config.ts).
+registrarFontesDoPdf();
+
+/** Negrito dos títulos: Geist SemiBold (600), como os títulos do site. */
+export const NEGRITO = { fontFamily: FAMILIA_PDF, fontWeight: 600 } as const;
+
+/** Neutros do site da empresa (docs/IDENTIDADE_VISUAL.md), em vez dos cinzas genéricos de antes. */
+export const COR_PDF = {
+  texto: "#121921",
+  textoForte: "#414853",
+  suave: "#5e646c",
+  linha: "#b9bec4",
+  borda: "#dee2e5",
+  fundoSuave: "#e8ebef",
+  /** Preenchimento do vidro nos desenhos esquemáticos (accent do site). */
+  vidro: "#e5f0fc",
+  alerta: "#e40014",
+} as const;
 
 /**
  * Cor da marca vinda de Configurações para o PDF (fundo branco): a variante do tema claro, que já tem
@@ -31,9 +52,9 @@ export function DesenhoPdf({ tipo, folhas, larguraMm, alturaMm, largura = 96 }: 
       {formas.map((f, i) =>
         f.t === "rect" ? (
           // A primeira forma é a moldura (perfil de alumínio): traço grosso, como nos desenhos das propostas reais.
-          <Rect key={i} x={f.x} y={f.y} width={f.w} height={f.h} fill={f.vidro ? "#dbeafe" : "none"} stroke="#111827" strokeWidth={i === 0 ? 2.6 : 0.9} />
+          <Rect key={i} x={f.x} y={f.y} width={f.w} height={f.h} fill={f.vidro ? COR_PDF.vidro : "none"} stroke={COR_PDF.texto} strokeWidth={i === 0 ? 2.6 : 0.9} />
         ) : (
-          <Line key={i} x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#111827" strokeWidth={0.7} strokeDasharray={f.tracejada ? "2 1.6" : undefined} />
+          <Line key={i} x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke={COR_PDF.texto} strokeWidth={0.7} strokeDasharray={f.tracejada ? "2 1.6" : undefined} />
         ),
       )}
     </Svg>
@@ -43,8 +64,8 @@ export function DesenhoPdf({ tipo, folhas, larguraMm, alturaMm, largura = 96 }: 
 /** Título em caixa cinza centralizada ("ESCOPO DO SERVIÇO", "NOTAS IMPORTANTES", "TERMOS COMERCIAIS"), como nas propostas reais. */
 export function CaixaTitulo({ texto }: { texto: string }) {
   return (
-    <View style={{ backgroundColor: "#e5e7eb", borderWidth: 1, borderColor: "#111827", paddingVertical: 5, marginBottom: 8 }}>
-      <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", textAlign: "center" }}>{texto}</Text>
+    <View style={{ backgroundColor: COR_PDF.fundoSuave, borderWidth: 1, borderColor: COR_PDF.texto, paddingVertical: 5, marginBottom: 8 }}>
+      <Text style={{ fontSize: 9.5, ...NEGRITO, textAlign: "center" }}>{texto}</Text>
     </View>
   );
 }
@@ -53,8 +74,8 @@ export function CaixaTitulo({ texto }: { texto: string }) {
 export function Rodape({ texto, cor }: { texto: string; cor: string }) {
   return (
     <View fixed style={{ position: "absolute", left: 36, right: 36, bottom: 18, borderTopWidth: 1, borderTopColor: cor, paddingTop: 4 }}>
-      <Text style={{ fontSize: 7, color: "#374151", textAlign: "center" }}>{texto}</Text>
-      <Text style={{ fontSize: 7, color: "#6b7280", textAlign: "center", marginTop: 1 }} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+      <Text style={{ fontSize: 7, color: COR_PDF.textoForte, textAlign: "center" }}>{texto}</Text>
+      <Text style={{ fontSize: 7, color: COR_PDF.suave, textAlign: "center", marginTop: 1 }} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
     </View>
   );
 }

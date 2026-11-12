@@ -35,6 +35,11 @@ const cabecalhosDeSeguranca = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Os PDFs leem as fontes (TTF) do disco em tempo de execução: sem isto o deploy serverless não as inclui.
+  outputFileTracingIncludes: {
+    "/api/propostas/[id]/pdf": ["./src/lib/pdf/fontes/**/*"],
+    "/api/propostas/[id]/producao": ["./src/lib/pdf/fontes/**/*"],
+  },
   experimental: {
     // A importação de planilhas envia as linhas já lidas (até ~2.000 linhas) numa Server Action; o padrão do
     // Next (1 MB) é pequeno para isso. O navegador também barra acima de 4 MB antes de enviar.

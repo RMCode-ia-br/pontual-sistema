@@ -7,20 +7,20 @@ import { criarUrlDeDownload } from "@/lib/storage";
 
 import type { ConteudoProposta } from "../conteudo";
 import { construirConteudo } from "../servico-ciclo";
+import { formatoDaImagem } from "./logo";
 import { ProducaoPdf } from "./producao-pdf";
 import { PropostaPdf, type LogoPdf } from "./proposta-pdf";
 
 /** O react-pdf lê PNG e JPEG (WebP não): outro formato simplesmente fica sem logo no PDF. */
 async function carregarLogo(caminho: string | null): Promise<LogoPdf> {
   if (!caminho) return null;
-  const extensao = caminho.toLowerCase().split(".").pop();
-  const format = extensao === "png" ? "png" : extensao === "jpg" || extensao === "jpeg" ? "jpg" : null;
-  if (!format) return null;
   try {
     const url = await criarUrlDeDownload(caminho, 120);
     const resposta = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!resposta.ok) return null;
-    return { data: Buffer.from(await resposta.arrayBuffer()), format };
+    const data = Buffer.from(await resposta.arrayBuffer());
+    const format = formatoDaImagem(data); // pelos bytes: a extensão do arquivo pode mentir
+    return format ? { data, format } : null;
   } catch {
     return null;
   }
@@ -43,5 +43,6 @@ export async function gerarPdfDaProposta(conteudo: ConteudoProposta, aviso: stri
 }
 
 export async function gerarPdfDeProducao(conteudo: ConteudoProposta, opcaoId: string | null): Promise<Buffer> {
-  return renderToBuffer(<ProducaoPdf c={conteudo} opcaoId={opcaoId} />);
+  const logo = await carregarLogo(conteudo.empresa.logoCaminho);
+  return renderToBuffer(<ProducaoPdf c={conteudo} opcaoId={opcaoId} logo={logo} />);
 }

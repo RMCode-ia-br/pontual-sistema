@@ -4,7 +4,7 @@ import { linhasDePagamento, linhasDePrazo, notasNumeradas, textoDoRodape } from 
 import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
 
 import type { ConteudoProposta } from "../conteudo";
-import { CaixaTitulo, corDaMarca, DesenhoPdf, dataBr, moeda, Rodape } from "./comum";
+import { CaixaTitulo, COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, moeda, NEGRITO, Rodape } from "./comum";
 
 export type LogoPdf = { data: Buffer; format: "png" | "jpg" } | null;
 
@@ -28,10 +28,10 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
 
   return (
     <Document title={`Proposta ${c.numero}`} author={nomeEmpresa} subject="Proposta comercial">
-      <Page size="A4" style={{ paddingTop: 36, paddingBottom: 60, paddingHorizontal: 36, fontFamily: "Helvetica", fontSize: 9, color: "#111827" }}>
+      <Page size="A4" style={{ paddingTop: 36, paddingBottom: 60, paddingHorizontal: 36, fontFamily: FAMILIA_PDF, fontSize: 9, color: COR_PDF.texto }}>
         <Rodape cor={cor} texto={textoDoRodape({ ...c.empresa })} />
         {aviso ? (
-          <Text fixed style={{ position: "absolute", top: 14, left: 36, right: 36, fontSize: 8, fontFamily: "Helvetica-Bold", color: "#b91c1c", textAlign: "center" }}>
+          <Text fixed style={{ position: "absolute", top: 14, left: 36, right: 36, fontSize: 8, ...NEGRITO, color: COR_PDF.alerta, textAlign: "center" }}>
             {aviso}
           </Text>
         ) : null}
@@ -41,8 +41,8 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
           {/* eslint-disable-next-line jsx-a11y/alt-text -- Image do react-pdf (PDF), não é <img> HTML */}
           {logo ? <Image src={logo} style={{ width: 44, height: 44, objectFit: "contain" }} /> : null}
           <View>
-            <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: cor }}>{nomeEmpresa}</Text>
-            {c.empresa.razaoSocial && c.empresa.razaoSocial !== nomeEmpresa ? <Text style={{ fontSize: 8, color: "#4b5563" }}>{c.empresa.razaoSocial}</Text> : null}
+            <Text style={{ fontSize: 13, ...NEGRITO, color: cor }}>{nomeEmpresa}</Text>
+            {c.empresa.razaoSocial && c.empresa.razaoSocial !== nomeEmpresa ? <Text style={{ fontSize: 8, color: COR_PDF.suave }}>{c.empresa.razaoSocial}</Text> : null}
           </View>
         </View>
 
@@ -70,16 +70,16 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         {/* Escopo */}
         {c.opcoes.map((o) => (
           <View key={o.id} style={{ marginBottom: 10 }}>
-            {varias ? <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", backgroundColor: cor, color: "#ffffff", padding: 4, marginTop: 6, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
+            {varias ? <Text style={{ fontSize: 10, ...NEGRITO, backgroundColor: cor, color: "#ffffff", padding: 4, marginTop: 6, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
             {o.secoes.map((s, si) => (
               <View key={si}>
-                {s.grupo ? <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", marginTop: 8, marginBottom: 4 }}>• {s.grupo.toUpperCase()};</Text> : null}
+                {s.grupo ? <Text style={{ fontSize: 9.5, ...NEGRITO, marginTop: 8, marginBottom: 4 }}>• {s.grupo.toUpperCase()};</Text> : null}
                 {s.itens.map((i) => {
                   const comAnotacoes = i.medidas.some((m) => !!m.local);
                   return (
-                    <View key={i.numero} wrap={false} style={{ flexDirection: "row", borderWidth: 1, borderColor: "#111827", marginBottom: -1 }}>
-                      <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: "#111827" }}>{String(i.numero).padStart(2, "0")}</Text>
-                      <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: "#111827" }}>{String(i.quantidade).padStart(2, "0")}</Text>
+                    <View key={i.numero} wrap={false} style={{ flexDirection: "row", borderWidth: 1, borderColor: COR_PDF.texto, marginBottom: -1 }}>
+                      <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: COR_PDF.texto }}>{String(i.numero).padStart(2, "0")}</Text>
+                      <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: COR_PDF.texto }}>{String(i.quantidade).padStart(2, "0")}</Text>
                       <View style={{ flex: 1, padding: 5 }}>
                         <Text>{maiusculas(i.descricao)}</Text>
                         {i.local ? <Text style={{ fontSize: 8.5, marginTop: 4 }}>LOCAL: {maiusculas(i.local)}</Text> : null}
@@ -100,7 +100,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
                         </View>
                       </View>
                       {c.exibirValorPorItem ? (
-                        <View style={{ width: 84, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: "#111827", justifyContent: "center", alignItems: "center" }}>
+                        <View style={{ width: 84, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: COR_PDF.texto, justifyContent: "center", alignItems: "center" }}>
                           <Text>{moeda(i.precoTotalCentavos)}</Text>
                         </View>
                       ) : null}
@@ -116,8 +116,8 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
               {o.totais.descontoCentavos > 0 ? <Totais rotulo="Desconto" valor={`− ${moeda(o.totais.descontoCentavos)}`} /> : null}
               {c.comNotaFiscal ? <Totais rotulo={`Acréscimo da nota fiscal (${pontosBaseParaPercentual(c.acrescimoNotaPb)}%)`} valor={moeda(o.totais.acrescimoNotaCentavos)} /> : null}
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
-                <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10 }}>{varias ? `TOTAL ${o.nome.toUpperCase()}` : "TOTAL"}</Text>
-                <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: cor }}>{moeda(o.totais.totalCentavos)}</Text>
+                <Text style={{ ...NEGRITO, fontSize: 10 }}>{varias ? `TOTAL ${o.nome.toUpperCase()}` : "TOTAL"}</Text>
+                <Text style={{ ...NEGRITO, fontSize: 10, color: cor }}>{moeda(o.totais.totalCentavos)}</Text>
               </View>
             </View>
           </View>
@@ -138,10 +138,10 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         {/* Termos comerciais */}
         <View style={{ marginTop: 12 }} wrap={false}>
           <CaixaTitulo texto="TERMOS COMERCIAIS" />
-          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9.5, marginBottom: 4 }}>1.0 FORMA DE PAGAMENTO:</Text>
+          <Text style={{ ...NEGRITO, fontSize: 9.5, marginBottom: 4 }}>1.0 FORMA DE PAGAMENTO:</Text>
           {c.opcoes.map((o) => (
             <View key={o.id} style={{ marginBottom: 4 }}>
-              <Text style={{ fontFamily: "Helvetica-Bold" }}>
+              <Text style={{ ...NEGRITO }}>
                 • VALOR TOTAL {nomeNoTotal(o.nome)}
                 {moeda(o.totais.totalCentavos)}
                 {c.comNotaFiscal ? " (com nota fiscal)" : ""};
@@ -153,11 +153,11 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
               ))}
             </View>
           ))}
-          {c.pagamento.dadosPagamento ? <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8.5, marginTop: 4 }}>{c.pagamento.dadosPagamento}</Text> : null}
+          {c.pagamento.dadosPagamento ? <Text style={{ ...NEGRITO, fontSize: 8.5, marginTop: 4 }}>{c.pagamento.dadosPagamento}</Text> : null}
 
           {prazo.length > 0 ? (
             <View style={{ marginTop: 8 }}>
-              <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9 }}>• PRAZO DE ENTREGA (APÓS MEDIÇÃO EXATA PARA PRODUÇÃO):</Text>
+              <Text style={{ ...NEGRITO, fontSize: 9 }}>• PRAZO DE ENTREGA (APÓS MEDIÇÃO EXATA PARA PRODUÇÃO):</Text>
               {prazo.map((l, i) => (
                 <Text key={i} style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
                   {l};
@@ -167,7 +167,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
           ) : null}
 
           <View style={{ marginTop: 8 }}>
-            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 9 }}>• Validade da proposta:</Text>
+            <Text style={{ ...NEGRITO, fontSize: 9 }}>• Validade da proposta:</Text>
             <Text style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
               {c.validade.encerradaPorReajuste ? "Encerrada por reajuste de fornecedor." : `${[c.validade.texto, c.validade.ate ? `até ${dataBr(c.validade.ate)}` : null].filter(Boolean).join(" — ") || "Até alteração dos fornecedores"}.`}
             </Text>
@@ -177,7 +177,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         {c.consultor.nome ? (
           <View style={{ marginTop: 16 }} wrap={false}>
             <Text style={{ fontSize: 9 }}>Att,</Text>
-            <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, marginTop: 14 }}>{c.consultor.nome.toUpperCase()}</Text>
+            <Text style={{ ...NEGRITO, fontSize: 10, marginTop: 14 }}>{c.consultor.nome.toUpperCase()}</Text>
             {c.consultor.cargo ? <Text style={{ fontSize: 8.5 }}>{c.consultor.cargo.toUpperCase()}</Text> : null}
           </View>
         ) : null}
@@ -189,7 +189,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
 function Campo({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <Text style={{ fontSize: 8.5, marginBottom: 2 }}>
-      <Text style={{ fontFamily: "Helvetica-Bold" }}>{rotulo}: </Text>
+      <Text style={{ ...NEGRITO }}>{rotulo}: </Text>
       {valor}
     </Text>
   );
@@ -198,8 +198,8 @@ function Campo({ rotulo, valor }: { rotulo: string; valor: string }) {
 function Direita({ rotulo, valor, destaque = false }: { rotulo: string; valor: string; destaque?: boolean }) {
   return (
     <View style={{ flexDirection: "row", marginBottom: 2 }}>
-      <Text style={{ width: 128, textAlign: "right", fontSize: 7.5, paddingRight: 4, color: "#374151" }}>{rotulo} |</Text>
-      <Text style={{ flex: 1, fontSize: destaque ? 10 : 8.5, fontFamily: destaque ? "Helvetica-Bold" : "Helvetica" }}>{valor}</Text>
+      <Text style={{ width: 128, textAlign: "right", fontSize: 7.5, paddingRight: 4, color: COR_PDF.textoForte }}>{rotulo} |</Text>
+      <Text style={{ flex: 1, fontSize: destaque ? 10 : 8.5, ...(destaque ? NEGRITO : { fontFamily: FAMILIA_PDF }) }}>{valor}</Text>
     </View>
   );
 }
@@ -207,7 +207,7 @@ function Direita({ rotulo, valor, destaque = false }: { rotulo: string; valor: s
 function Totais({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 1 }}>
-      <Text style={{ fontSize: 8.5, color: "#374151" }}>{rotulo}</Text>
+      <Text style={{ fontSize: 8.5, color: COR_PDF.textoForte }}>{rotulo}</Text>
       <Text style={{ fontSize: 8.5 }}>{valor}</Text>
     </View>
   );
