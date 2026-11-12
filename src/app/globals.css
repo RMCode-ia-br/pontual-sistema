@@ -83,6 +83,8 @@
   --chart-3: #7a8189;
   --chart-4: #414853;
   --chart-5: #b9bec4;
+  /* Segunda série dos gráficos de relatório (laranja validado: CVD ΔE 24 e contraste ≥ 3:1 com o azul da marca). */
+  --serie-2: #eb6834;
   --radius: 0.5rem;
   --sidebar: #fafafa;
   --sidebar-foreground: #121921;
@@ -119,6 +121,7 @@
   --chart-3: #80878f;
   --chart-4: #b2b8bf;
   --chart-5: #505963;
+  --serie-2: #d95926;
   --sidebar: #0e1319;
   --sidebar-foreground: #f1f4f7;
   --sidebar-primary: #3f90e5;
@@ -144,5 +147,43 @@
   h2,
   h3 {
     @apply font-semibold tracking-tight;
+  }
+}
+
+/* Impressão dos relatórios (Fase 7): só o conteúdo. Some o menu, a barra de cima, a barra de baixo do celular e os avisos;
+   a tabela repete o cabeçalho a cada página e não parte uma linha ao meio. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  aside,
+  header.sticky,
+  nav.fixed,
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  main#conteudo {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr,
+  figure {
+    break-inside: avoid;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
   }
 }
