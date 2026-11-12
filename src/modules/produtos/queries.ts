@@ -84,6 +84,10 @@ export type ProdutoDaLista = {
   custoUnitarioCentavos: number | null;
   custoAtualizadoEm: string | null;
   localizacao: string | null;
+  /** Saldo em estoque (cache dos movimentos), em milésimos. */
+  saldoMilesimos: number;
+  /** Mínimo em milésimos; null = sem alerta (campo vazio). */
+  minimoMilesimos: number | null;
   ativo: boolean;
   atualizadoEm: string;
 };
@@ -96,6 +100,8 @@ const selecaoDaLista = {
   custoUnitarioCentavos: true,
   custoAtualizadoEm: true,
   localizacao: true,
+  saldoCache: true,
+  estoqueMinimo: true,
   ativo: true,
   atualizadoEm: true,
   categoria: { select: { nome: true } },
@@ -117,6 +123,8 @@ function paraLista(p: Prisma.ProdutoGetPayload<{ select: typeof selecaoDaLista }
     custoUnitarioCentavos: p.custoUnitarioCentavos,
     custoAtualizadoEm: p.custoAtualizadoEm?.toISOString() ?? null,
     localizacao: p.localizacao,
+    saldoMilesimos: Math.round(Number(p.saldoCache.toString()) * 1000),
+    minimoMilesimos: p.estoqueMinimo ? Math.round(Number(p.estoqueMinimo.toString()) * 1000) : null,
     ativo: p.ativo,
     atualizadoEm: p.atualizadoEm.toISOString(),
   };

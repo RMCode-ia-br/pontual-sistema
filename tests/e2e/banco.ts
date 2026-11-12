@@ -55,12 +55,26 @@ async function limpar(c: Client): Promise<void> {
   // referenciam (todas as chaves são Restrict). Só o que tem o prefixo "E2E " é tocado.
   const clientesE2E = `SELECT id FROM "Cliente" WHERE nome LIKE 'E2E %'`;
   const projetosFinanceiro = `SELECT id FROM "Projeto" WHERE titulo LIKE 'E2E %' OR "clienteId" IN (${clientesE2E})`;
+  // Fase 6 (estoque e compras): movimentos, retalhos e sucata dos produtos "E2E-" e das obras "E2E " saem primeiro.
+  const produtosE2E = `SELECT id FROM "Produto" WHERE codigo LIKE 'E2E-%'`;
+  await c.query(`UPDATE "MovimentoEstoque" SET "estornoDeId" = NULL WHERE "produtoId" IN (${produtosE2E}) OR "projetoId" IN (${projetosFinanceiro})`);
+  await c.query(`DELETE FROM "MovimentoEstoque" WHERE "produtoId" IN (${produtosE2E}) OR "projetoId" IN (${projetosFinanceiro})`);
+  await c.query(`DELETE FROM "Retalho" WHERE "produtoId" IN (${produtosE2E}) OR "origemProjetoId" IN (${projetosFinanceiro}) OR "consumidoProjetoId" IN (${projetosFinanceiro})`);
+  await c.query(`DELETE FROM "MovimentoSucata" WHERE "produtoId" IN (${produtosE2E}) OR "projetoId" IN (${projetosFinanceiro})`);
   await c.query(
     `DELETE FROM "Lancamento" WHERE descricao LIKE 'E2E %' OR "contaFinanceiraId" IN (SELECT id FROM "ContaFinanceira" WHERE nome LIKE 'E2E %')
        OR "clienteId" IN (${clientesE2E}) OR "projetoId" IN (${projetosFinanceiro})`,
   );
   await c.query(`DELETE FROM "ContaPagar" WHERE descricao LIKE 'E2E %'`);
   await c.query(`DELETE FROM "RecorrenciaPagar" WHERE descricao LIKE 'E2E %'`);
+  const comprasE2E = `SELECT id FROM "Compra" WHERE "projetoId" IN (${projetosFinanceiro}) OR "fornecedorId" IN (SELECT id FROM "Fornecedor" WHERE "razaoSocial" LIKE 'E2E %')`;
+  await c.query(`UPDATE "HistoricoPreco" SET "compraId" = NULL WHERE "compraId" IN (${comprasE2E})`);
+  await c.query(`DELETE FROM "HistoricoPrecoKg" WHERE "compraId" IN (${comprasE2E})`);
+  await c.query(`DELETE FROM "MovimentoEstoque" WHERE "itemRecebimentoId" IN (SELECT id FROM "ItemRecebimento" WHERE "itemCompraId" IN (SELECT id FROM "ItemCompra" WHERE "compraId" IN (${comprasE2E})))`);
+  await c.query(`DELETE FROM "ItemRecebimento" WHERE "itemCompraId" IN (SELECT id FROM "ItemCompra" WHERE "compraId" IN (${comprasE2E}))`);
+  await c.query(`DELETE FROM "RecebimentoCompra" WHERE "compraId" IN (${comprasE2E})`);
+  await c.query(`DELETE FROM "ItemCompra" WHERE "compraId" IN (${comprasE2E})`);
+  await c.query(`DELETE FROM "Compra" WHERE id IN (${comprasE2E})`);
   await c.query(`DELETE FROM "ContaFinanceira" WHERE nome LIKE 'E2E %'`);
 
   // Fase 4 (assistência): os chamados dos clientes de teste saem antes das contas (a cobrança aponta para a conta)
@@ -547,5 +561,31 @@ export async function prazoDaParcela(projetoId: string, ordem: number): Promise<
       [projetoId, ordem],
     );
     return r.rows[0];
+  });
+}
+
+/** Produto de teste ("E2E-...") com unidade UN e, opcionalmente, custo. Nasce com saldo zero e sem movimentos. */
+export async function criarProdutoDeTeste(codigo: string, descricao: string, custoCentavos: number | null = null): Promise<string> {
+  return comConexao(async (c) => {
+    const id = randomUUID();
+    await c.query(
+      `INSERT INTO "Produto" (id, codigo, descricao, unidade, "custoUnitarioCentavos", "atualizadoEm") VALUES ($1, $2, $3, 'UN', $4, now())`,
+      [id, codigo, descricao, custoCentavos],
+    );
+    return id;
+  });
+}
+
+/** Saldo em cache, soma real dos movimentos e quantidade de movimentos do produto (para conferir que o cache bate). */
+export async function estoqueDoProdutoDeTeste(codigo: string): Promise<{ saldoCache: number; somaDosMovimentos: number; movimentos: number }> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ saldo: string; soma: string; n: number }>(
+      `SELECT p."saldoCache"::text AS saldo,
+              COALESCE((SELECT sum(m.quantidade) FROM "MovimentoEstoque" m WHERE m."produtoId" = p.id), 0)::text AS soma,
+              (SELECT count(*)::int FROM "MovimentoEstoque" m WHERE m."produtoId" = p.id) AS n
+         FROM "Produto" p WHERE p.codigo = $1`,
+      [codigo],
+    );
+    return { saldoCache: Number(r.rows[0].saldo), somaDosMovimentos: Number(r.rows[0].soma), movimentos: r.rows[0].n };
   });
 }

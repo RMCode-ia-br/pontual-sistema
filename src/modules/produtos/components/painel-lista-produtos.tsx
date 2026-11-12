@@ -7,6 +7,7 @@ import { FiltrosSalvos } from "@/components/lista/filtros-salvos";
 import { ListaDeRegistros, type ColunaLista, type LinhaLista } from "@/components/lista/lista-de-registros";
 import { PaginacaoLista } from "@/components/lista/paginacao-lista";
 import { buttonVariants } from "@/components/ui/button";
+import { abaixoDoMinimo, formatarQuantidade } from "@/lib/dominio/estoque";
 import { formatarData, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta, type ParametrosBrutos } from "@/lib/listas/parametros";
 import { listarFiltrosSalvos } from "@/modules/filtros/queries";
@@ -22,6 +23,7 @@ const COLUNAS: ColunaLista[] = [
   { id: "categoria", rotulo: "Categoria" },
   { id: "fornecedor", rotulo: "Fornecedor" },
   { id: "custo", rotulo: "Custo unitário", ordenavel: "custo" },
+  { id: "saldo", rotulo: "Em estoque" },
   { id: "linha", rotulo: "Linha / acabamento", escondidaPorPadrao: true },
   { id: "localizacao", rotulo: "Localização", escondidaPorPadrao: true },
   { id: "atualizadoEm", rotulo: "Atualizado em", ordenavel: "atualizadoEm", escondidaPorPadrao: true },
@@ -41,6 +43,11 @@ function paraLinha(p: ProdutoDaLista): LinhaLista {
         p.custoUnitarioCentavos !== null
           ? { texto: `${formatarMoeda(p.custoUnitarioCentavos)} / ${SIGLA_UNIDADE[p.unidade]}`, sub: p.custoAtualizadoEm ? `em ${formatarData(p.custoAtualizadoEm)}` : undefined }
           : { texto: "", marcas: [{ texto: "Sem custo", variante: "outline" as const }] },
+      saldo: {
+        texto: `${formatarQuantidade(p.saldoMilesimos)} ${SIGLA_UNIDADE[p.unidade]}`,
+        marcas: abaixoDoMinimo(p.saldoMilesimos, p.minimoMilesimos) ? [{ texto: "Abaixo do mínimo", variante: "destructive" as const }] : undefined,
+        direita: true,
+      },
       linha: [p.linha, p.acabamento].filter(Boolean).join(" · ") || null,
       localizacao: p.localizacao,
       atualizadoEm: formatarData(p.atualizadoEm),
