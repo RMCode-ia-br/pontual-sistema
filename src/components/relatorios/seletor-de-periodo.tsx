@@ -16,7 +16,9 @@ const PARAMETROS_DO_PERIODO = ["mes", "periodo", "de", "ate", "pagina"];
  * períodos prontos e as datas livres. Tudo vai para a URL (`mes`, `periodo` ou `de`/`ate`), preservando os outros filtros,
  * então o link da página já reproduz o que está na tela e a lista de destino de cada número usa o mesmo período.
  */
-export function SeletorDePeriodo({ periodo, tipo, hoje }: { periodo: Periodo; tipo: TipoDePeriodo; hoje: string }) {
+type Props = { periodo: Periodo; tipo: TipoDePeriodo; hoje: string };
+
+function SeletorInterno({ periodo, tipo, hoje }: Props) {
   const router = useRouter();
   const caminho = usePathname();
   const parametros = useSearchParams();
@@ -45,7 +47,7 @@ export function SeletorDePeriodo({ periodo, tipo, hoje }: { periodo: Periodo; ti
           <Button type="button" variant="outline" size="icon" aria-label="Mês anterior" onClick={() => ir({ mes: anterior })}>
             <ChevronLeft aria-hidden />
           </Button>
-          <p className="min-w-40 px-2 text-center text-base font-medium capitalize" aria-live="polite">
+          <p className="min-w-40 px-2 text-center text-base font-medium first-letter:uppercase" aria-live="polite">
             {rotuloDoPeriodo(periodo)}
           </p>
           <Button type="button" variant="outline" size="icon" aria-label="Mês seguinte" disabled={seguinte > mesAtual} onClick={() => ir({ mes: seguinte })}>
@@ -112,4 +114,9 @@ export function SeletorDePeriodo({ periodo, tipo, hoje }: { periodo: Periodo; ti
       ) : null}
     </div>
   );
+}
+
+/** O período vem da URL: ao navegar (setas do mês, botão voltar) o seletor é remontado e as datas do formulário acompanham. */
+export function SeletorDePeriodo(props: Props) {
+  return <SeletorInterno key={`${props.periodo.de}|${props.periodo.ate}|${props.tipo}`} {...props} />;
 }

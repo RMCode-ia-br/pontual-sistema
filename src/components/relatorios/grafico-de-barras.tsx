@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarMoeda } from "@/lib/formatadores";
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 /** Cores das séries, na ordem fixa: azul da marca e laranja (validados em claro e escuro, ver `--serie-2` em globals.css). */
@@ -18,10 +19,11 @@ type Props = {
   orientacao?: "horizontal" | "vertical";
   /** Empilha as séries numa mesma barra (partes de um total). Padrão: lado a lado. */
   empilhado?: boolean;
-  /** Formata o valor no tooltip, no eixo e nos rótulos (ex.: reais). */
-  formatarValor?: (n: number) => string;
-  /** Formato curto do eixo (ex.: "120 mil"). Padrão: o mesmo de `formatarValor`. */
-  formatarEixo?: (n: number) => string;
+  /**
+   * Como mostrar os valores: "numero" (padrão) ou "reais" (os valores já vêm em REAIS, não em centavos: tooltip e rótulos em R$ completos,
+   * eixo curto como "120 mil"). É um texto, e não uma função, porque a página (servidor) não pode passar função para este componente (cliente).
+   */
+  formato?: "numero" | "reais";
   /** Escreve o valor na ponta da barra (só para poucas barras; com muitas, use o tooltip e a tabela). */
   rotulosNasBarras?: boolean;
 };
@@ -53,9 +55,13 @@ function DicaDoGrafico({ ativo, payload, label, formatarValor, series }: { ativo
  * exporta). Marcas finas com ponta arredondada, 2 px de respiro entre barras, grade e eixos discretos, valor só no
  * tooltip (ou na ponta, quando poucas barras), texto sempre na cor de texto e legenda quando há mais de uma série.
  */
-export function GraficoDeBarras({ dados, series, descricao, orientacao = "horizontal", empilhado = false, formatarValor = (n) => String(n), formatarEixo, rotulosNasBarras = false }: Props) {
+export function GraficoDeBarras({ dados, series, descricao, orientacao = "horizontal", empilhado = false, formato = "numero", rotulosNasBarras = false }: Props) {
+  const formatarValor = formato === "reais" ? (n: number) => formatarMoeda(Math.round(n * 100)) : (n: number) => String(n);
+  const formatarEixo = formato === "reais" ? (n: number) => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000)} mil` : String(n)) : formatarValor;
   const horizontal = orientacao === "horizontal";
-  const altura = horizontal ? Math.max(140, dados.length * (series.length > 1 && !empilhado ? 52 : 36) + 32) : 280;
+  // Com muitas colunas (12 meses) os rótulos do eixo se sobrepõem: giram para caber, também no celular.
+  const muitasCategorias = !horizontal && dados.length > 6;
+  const altura = horizontal ? Math.max(140, dados.length * (series.length > 1 && !empilhado ? 52 : 36) + 32) : muitasCategorias ? 310 : 280;
   const raio: [number, number, number, number] = horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0];
   return (
     <figure className="w-full" aria-label={descricao}>
@@ -80,8 +86,8 @@ export function GraficoDeBarras({ dados, series, descricao, orientacao = "horizo
               </>
             ) : (
               <>
-                <XAxis dataKey="nome" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={{ stroke: "var(--border)" }} interval={0} />
-                <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} width={64} tickFormatter={(v) => (formatarEixo ?? formatarValor)(Number(v))} />
+                <XAxis dataKey="nome" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={{ stroke: "var(--border)" }} interval={0} angle={muitasCategorias ? -40 : 0} textAnchor={muitasCategorias ? "end" : "middle"} height={muitasCategorias ? 56 : 30} />
+                <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} width={64} tickFormatter={(v) => formatarEixo(Number(v))} />
               </>
             )}
             <Tooltip cursor={{ fill: "var(--accent)", opacity: 0.5 }} content={(p) => <DicaDoGrafico ativo={p.active} payload={p.payload} label={p.label} formatarValor={formatarValor} series={series} />} />

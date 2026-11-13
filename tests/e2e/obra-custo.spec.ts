@@ -56,6 +56,8 @@ test("o relatório 'Margem por obra' lista a obra com margem INCOMPLETA (fora da
   await expect(linha).toBeVisible();
   await expect(linha.getByText("Incompleta")).toBeVisible();
   await expect(linha.getByText(/Falta:/)).toBeVisible();
+  // A definição fica atrás do botão "Como é calculado" (aberta no toque, no teclado e no clique).
+  await page.getByRole("button", { name: "Como é calculado" }).click();
   await expect(page.getByText(/A conta a pagar de uma compra não entra/)).toBeVisible();
   await semRolagemHorizontal(page);
 

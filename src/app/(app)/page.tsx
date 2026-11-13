@@ -1,430 +1,167 @@
-import { CheckCircle2, ClipboardList, Handshake, History, ListChecks, PackageX, TriangleAlert, UserPlus, UserRound, Users } from "lucide-react";
+import { History, ListChecks, PackageX, TriangleAlert, UserPlus, Users, Handshake } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
+import { NumeroDoPainel, type Comparativo } from "@/components/relatorios/numero-do-painel";
+import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { exigirSessao } from "@/lib/auth/sessao";
-import { formatarDataCalendario } from "@/lib/formatadores";
-import { cn } from "@/lib/utils";
-import { resumoDeCadastros } from "@/modules/cadastros/resumo";
-import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
-import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
-import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
-import { resumoComercial } from "@/modules/comercial/resumo";
-import { resumoDePropostas } from "@/modules/propostas/resumo";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
+import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
+import { percentualDaMeta } from "@/lib/dominio/indicadores";
+import { dataLocalDoInstante, formatarDataCalendario, formatarDataHora, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
+import { ehMesInteiro, lerPeriodo, mesDaData, parametrosDoPeriodo, periodoDeComparacao, rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
+import { cn } from "@/lib/utils";
 import { ROTULO_TIPO_EVENTO, type TipoEvento } from "@/modules/agenda/schemas";
+import { resumoDeCadastros } from "@/modules/cadastros/resumo";
+import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
+import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
+import { resumoComercial } from "@/modules/comercial/resumo";
 import { resumoDeEstoque } from "@/modules/estoque/resumo";
 import { resumoFinanceiro } from "@/modules/financeiro/resumo";
-import { DIAS_DA_PONTUALIDADE_NO_PAINEL, resumoDeObras } from "@/modules/obras/resumo";
-import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
-import { dataLocalDoInstante, formatarDataHora, formatarMoeda } from "@/lib/formatadores";
-import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
+import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
+import { DIAS_DA_JANELA_DE_FECHAMENTO, fechamentoNaJanela, janelaDeFechamento, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
+import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
+import { vendidoNoPeriodo } from "@/modules/indicadores/vendas";
+import { resumoDeObras } from "@/modules/obras/resumo";
+import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
+import { resumoDePropostas } from "@/modules/propostas/resumo";
+import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
 
 export const metadata: Metadata = { title: "Painel" };
 
-type Cartao = {
-  titulo: string;
-  valor: number;
-  href: string;
-  icone: typeof ClipboardList;
-  /** Como o número é calculado (a especificação exige mostrar a definição de cada indicador). */
-  definicao: string;
-  alerta?: boolean;
-};
+const pct = (n: number | null) => (n === null ? "—" : `${n.toLocaleString("pt-BR")}%`);
 
-export default async function PaginaPainel() {
+function Secao({ id, titulo, href, rotuloDoLink, children }: { id: string; titulo: string; href?: string; rotuloDoLink?: string; children: React.ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="mt-10">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 id={id} className="text-lg font-medium">
+          {titulo}
+        </h2>
+        {href ? (
+          <Link href={href} className="text-primary text-sm hover:underline">
+            {rotuloDoLink}
+          </Link>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export default async function PaginaPainel({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const usuario = await exigirSessao();
-  const [resumo, proximas, cadastros, comercial, propostas, obras, fin, estoque] = await Promise.all([
+  const agora = new Date();
+  const hoje = dataLocalDoInstante(agora);
+  const { periodo, tipo, aviso } = lerPeriodo(await searchParams, hoje);
+  const cmp = periodoDeComparacao(periodo, hoje);
+  const janela = janelaDeFechamento(periodo, hoje);
+  const doPeriodo = parametrosDoPeriodo(periodo);
+  const consultaDoPeriodo = montarConsulta(doPeriodo);
+  // O relatório do funil só lê "de" e "ate" (não "mes"): o link leva as datas do período, para a lista bater com o número.
+  const consultaDeAte = montarConsulta({ de: periodo.de, ate: periodo.ate });
+
+  const [vendido, vendidoAnterior, vendidoAnoPassado, recebido, recebidoAnterior, recebidoAnoPassado, comNota, fechamento, tempo, fabrica, resumo, proximas, cadastros, comercial, propostas, obras, fin, estoque] = await Promise.all([
+    vendidoNoPeriodo(periodo),
+    vendidoNoPeriodo(cmp.anterior),
+    vendidoNoPeriodo(cmp.anoPassado),
+    recebidoNoPeriodo(periodo),
+    recebidoNoPeriodo(cmp.anterior),
+    recebidoNoPeriodo(cmp.anoPassado),
+    faturamentoComNota(hoje),
+    fechamentoNaJanela(janela),
+    tempoVisitaAteProposta(periodo),
+    ocupacaoAtualDaFabrica(hoje),
     resumoDeTarefas(usuario.id),
     listarTarefas({ status: "abertas" }),
     resumoDeCadastros(),
-    resumoComercial(),
+    resumoComercial(periodo),
     resumoDePropostas(),
-    resumoDeObras(),
+    resumoDeObras(agora, periodo),
     resumoFinanceiro(),
-    resumoDeEstoque(dataLocalDoInstante(new Date())),
+    resumoDeEstoque(hoje),
   ]);
-  const percentualDaMeta = fin.metaMensalCentavos > 0 ? Math.min(100, Math.round((fin.recebidoNoMesCentavos * 100) / fin.metaMensalCentavos)) : null;
+
+  const mesInteiro = ehMesInteiro(periodo);
+  const meta = fin.metaMensalCentavos > 0 ? fin.metaMensalCentavos : null;
+  const nomeDoMes = (p: Periodo) => rotuloDoPeriodo(mesDaData(p.de));
+  const rotuloDeComparacao = (p: Periodo) => (cmp.emAndamento && mesInteiro ? `${nomeDoMes(p)} (até o dia ${Number(p.ate.slice(8))})` : rotuloDoPeriodo(p));
+  const comparar = (atual: number, anterior: number, anoPassado: number): Comparativo[] => [
+    { rotulo: rotuloDeComparacao(cmp.anterior), atual, comparacao: anterior, formatar: formatarMoeda },
+    { rotulo: rotuloDeComparacao(cmp.anoPassado), atual, comparacao: anoPassado, formatar: formatarMoeda },
+  ];
+  const metaDetalhe = (valor: number) => (mesInteiro && meta ? `${pct(percentualDaMeta(valor, meta))} da meta de ${formatarMoeda(meta)}` : null);
   const pontualidade = obras.pontualidade;
-
-  const cartoes: Cartao[] = [
-    {
-      titulo: "Tarefas abertas",
-      valor: resumo.abertas,
-      href: "/tarefas?status=abertas",
-      icone: ClipboardList,
-      definicao: "Tarefas que ainda não foram concluídas.",
-    },
-    {
-      titulo: "Tarefas vencidas",
-      valor: resumo.vencidas,
-      href: "/tarefas?status=abertas",
-      icone: TriangleAlert,
-      definicao: "Tarefas abertas cujo vencimento é anterior a hoje.",
-      alerta: resumo.vencidas > 0,
-    },
-    {
-      titulo: "Minhas tarefas",
-      valor: resumo.minhasAbertas,
-      href: "/tarefas?status=abertas&quem=minhas",
-      icone: UserRound,
-      definicao: "Tarefas abertas em que você é o responsável.",
-    },
-    {
-      titulo: "Concluídas na semana",
-      valor: resumo.concluidasNos7Dias,
-      href: "/tarefas?status=concluidas",
-      icone: CheckCircle2,
-      definicao: "Tarefas concluídas nos últimos 7 dias.",
-    },
-  ];
-
-  const cartoesDeCadastros: Cartao[] = [
-    { titulo: "Clientes ativos", valor: cadastros.clientesAtivos, href: "/clientes", icone: Users, definicao: "Clientes cadastrados e ativos (fora da lixeira)." },
-    { titulo: "Novos clientes no mês", valor: cadastros.clientesNovosNoMes, href: "/clientes?ordem=criadoEm&direcao=desc", icone: UserPlus, definicao: "Clientes ativos cadastrados desde o dia 1º do mês atual." },
-    { titulo: "Parceiros", valor: cadastros.parceiros, href: "/parceiros", icone: Handshake, definicao: "Clientes ativos marcados como arquiteto/designer ou construtora." },
-    {
-      titulo: "Sem contato há 12 meses",
-      valor: cadastros.clientesSemContato,
-      href: "/clientes?parado=1",
-      icone: History,
-      definicao: `Clientes ativos cadastrados há mais de ${MESES_SEM_CONTATO} meses, sem nenhum registro de ligação, WhatsApp, visita, e-mail ou anotação no período. Boa lista para reativar.`,
-    },
-    {
-      titulo: "Produtos sem custo",
-      valor: cadastros.produtosSemCusto,
-      href: "/produtos?custo=sem",
-      icone: PackageX,
-      definicao: "Produtos ativos com o custo ainda não informado (o sistema nunca inventa preço).",
-      alerta: cadastros.produtosSemCusto > 0,
-    },
-    {
-      titulo: "Custos desatualizados",
-      valor: cadastros.produtosComCustoAntigo,
-      href: "/produtos?custo=antigo",
-      icone: TriangleAlert,
-      definicao: `Produtos ativos cujo custo não é atualizado há mais de ${DIAS_CUSTO_DESATUALIZADO} dias.`,
-      alerta: cadastros.produtosComCustoAntigo > 0,
-    },
-  ];
-
-  const cartaoJsx = (c: Cartao) => {
-    const Icone = c.icone;
-    return (
-      <Link
-        key={c.titulo}
-        href={c.href}
-        title={`Como é calculado: ${c.definicao}`}
-        className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", c.alerta && "border-destructive/40 bg-destructive/5")}
-      >
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Icone className={cn("size-4", c.alerta && "text-destructive")} aria-hidden />
-          {c.titulo}
-        </p>
-        <p className={cn("mt-2 text-3xl font-semibold tabular-nums", c.alerta && "text-destructive")}>{c.valor}</p>
-        <p className="text-muted-foreground mt-1 text-xs">{c.definicao}</p>
-      </Link>
-    );
-  };
+  const periodoDaPontualidade = obras.periodoDaPontualidade;
 
   return (
     <>
-      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do que precisa de atenção hoje." />
+      <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do seu negócio. Toque em qualquer número para ver a lista que está por trás dele." />
+      <SeletorDePeriodo periodo={periodo} tipo={tipo} hoje={hoje} />
+      {aviso ? (
+        <p role="status" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          {aviso}
+        </p>
+      ) : null}
 
-      <section aria-label="Resumo de tarefas" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {cartoes.map((c) => {
-          const Icone = c.icone;
-          return (
-            <Link
-              key={c.titulo}
-              href={c.href}
-              title={`Como é calculado: ${c.definicao}`}
-              className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", c.alerta && "border-destructive/40 bg-destructive/5")}
-            >
-              <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                <Icone className={cn("size-4", c.alerta && "text-destructive")} aria-hidden />
-                {c.titulo}
-              </p>
-              <p className={cn("mt-2 text-3xl font-semibold tabular-nums", c.alerta && "text-destructive")}>{c.valor}</p>
-              <p className="text-muted-foreground mt-1 text-xs">{c.definicao}</p>
-            </Link>
-          );
-        })}
-      </section>
-
-      <section aria-labelledby="titulo-funil" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-funil" className="text-lg font-medium">
-            Funil comercial
-          </h2>
-          <Link href="/funil" className="text-primary text-sm hover:underline">
-            Abrir o funil
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          {comercial.funil.map((f) => (
-            <Link key={f.status} href={`/projetos?status=${f.status}`} title="Como é calculado: projetos nessa fase hoje e a soma dos valores estimados (campo opcional do projeto)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-              <p className="text-muted-foreground text-sm">{ROTULO_STATUS_PROJETO[f.status]}</p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums">{f.quantidade}</p>
-              <p className="text-muted-foreground mt-1 text-xs tabular-nums">{f.valorCentavos > 0 ? formatarMoeda(f.valorCentavos) : "Sem valor estimado"}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section aria-labelledby="titulo-propostas" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-propostas" className="text-lg font-medium">
-            Propostas
-          </h2>
-          <Link href="/propostas" className="text-primary text-sm hover:underline">
-            Ver todas
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Link href="/propostas?status=ENVIADA" title="Como é calculado: propostas na situação Enviada (revisão vigente). O valor soma a maior opção de cada uma, com a nota fiscal quando houver." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Enviadas, aguardando</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{propostas.enviadas}</p>
-            <p className="text-muted-foreground mt-1 text-xs tabular-nums">{propostas.enviadas > 0 ? formatarMoeda(propostas.enviadasValorCentavos) : "Nenhuma proposta enviada"}</p>
-          </Link>
-          <Link href="/propostas?status=ENVIADA" title="Como é calculado: propostas enviadas há mais dias que o prazo de 'sem retorno' definido em Configurações." className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", propostas.semResposta > 0 && "border-destructive/40 bg-destructive/5")}>
-            <p className="text-muted-foreground text-sm">Enviadas sem resposta</p>
-            <p className={cn("mt-2 text-3xl font-semibold tabular-nums", propostas.semResposta > 0 && "text-destructive")}>{propostas.semResposta}</p>
-            <p className="text-muted-foreground mt-1 text-xs">Além do prazo configurado. Hora de acompanhar.</p>
-          </Link>
-          <Link href="/propostas?status=APROVADA" title="Como é calculado: propostas aprovadas com data de aceite desde o dia 1º do mês atual; o valor é o da opção aprovada." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Aprovadas no mês</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{propostas.aprovadasNoMes}</p>
-            <p className="text-muted-foreground mt-1 text-xs tabular-nums">{propostas.aprovadasNoMes > 0 ? formatarMoeda(propostas.aprovadasNoMesValorCentavos) : "Nenhuma aprovada neste mês"}</p>
-          </Link>
-          <Link href="/propostas?status=RASCUNHO" title="Como é calculado: propostas ainda em rascunho (não enviadas)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Rascunhos</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{propostas.rascunhos}</p>
-            <p className="text-muted-foreground mt-1 text-xs">{propostas.recusadasNoMes} recusada(s) no mês.</p>
-          </Link>
-        </div>
-      </section>
-
-      <section aria-labelledby="titulo-obras" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-obras" className="text-lg font-medium">
-            Obras
-          </h2>
-          <Link href="/obras" className="text-primary text-sm hover:underline">
-            Ver obras
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Link href="/obras" title="Como é calculado: obras aprovadas ou em execução (ainda não entregues)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Obras em andamento</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{obras.emAndamento}</p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              {obras.verdes} no prazo{obras.semPrazo > 0 ? ` · ${obras.semPrazo} sem prazo definido` : ""}
-            </p>
-          </Link>
-          <Link
-            href="/obras?semaforo=VERMELHO"
-            title="Como é calculado: obras em andamento com alguma etapa depois da data prevista, ou com o prazo prometido (já com as pausas justificadas) vencido."
-            className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", obras.vermelhas > 0 && "border-destructive/40 bg-destructive/5")}
-          >
-            <p className="text-muted-foreground flex items-center gap-2 text-sm">
-              {obras.vermelhas > 0 ? <TriangleAlert className="text-destructive size-4" aria-hidden /> : null}
-              Obras atrasadas
-            </p>
-            <p className={cn("mt-2 text-3xl font-semibold tabular-nums", obras.vermelhas > 0 && "text-destructive")}>{obras.vermelhas}</p>
-            <p className="text-muted-foreground mt-1 text-xs">Semáforo vermelho.</p>
-          </Link>
-          <Link href="/obras?semaforo=AMARELO" title="Como é calculado: obras em andamento com etapa ou prazo vencendo nos próximos dias (limite em Configurações)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Vencem em breve</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{obras.amarelas}</p>
-            <p className="text-muted-foreground mt-1 text-xs">Semáforo amarelo.</p>
-          </Link>
-          <Link
-            href={`/obras${montarConsulta({ situacao: "concluidas", de: obras.periodoDaPontualidade.de, ate: obras.periodoDaPontualidade.ate })}`}
-            title={`Como é calculado: obras concluídas nos últimos ${DIAS_DA_PONTUALIDADE_NO_PAINEL} dias que terminaram até o prazo prometido (já com as pausas justificadas) ÷ obras concluídas no período que tinham prazo. Sem considerar as pausas: ${pontualidade.pontualidadeSemPausasPct === null ? "—" : `${pontualidade.pontualidadeSemPausasPct.toLocaleString("pt-BR")}%`}.`}
-            className="hover:bg-accent rounded-xl border p-4 transition-colors"
-          >
-            <p className="text-muted-foreground text-sm">Pontualidade</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{pontualidade.pontualidadePct === null ? "—" : `${pontualidade.pontualidadePct.toLocaleString("pt-BR")}%`}</p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              {pontualidade.concluidas === 0
-                ? `Aparece quando houver obra concluída com prazo nos últimos ${DIAS_DA_PONTUALIDADE_NO_PAINEL} dias.`
-                : `${pontualidade.pontuais} de ${pontualidade.concluidas} no prazo (${DIAS_DA_PONTUALIDADE_NO_PAINEL} dias).`}
-            </p>
-          </Link>
-          <Link href="/obras/assistencia" title="Como é calculado: chamados de assistência ainda não resolvidos nem cancelados." className="hover:bg-accent col-span-2 rounded-xl border p-4 transition-colors lg:col-span-1">
-            <p className="text-muted-foreground text-sm">Chamados em aberto</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{obras.chamadosEmAberto}</p>
-            <p className="text-muted-foreground mt-1 text-xs">{obras.chamadosEmAberto > 0 ? `${obras.chamadosEmAbertoEmGarantia} em garantia.` : "Assistência e garantia."}</p>
-          </Link>
-        </div>
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-xl border p-4">
-            <h3 className="mb-2 text-sm font-medium">Obras por etapa</h3>
-            {obras.porEtapa.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Nenhuma obra em andamento.</p>
-            ) : (
-              <ul className="grid gap-1 text-sm">
-                {obras.porEtapa.map((e) => (
-                  <li key={e.tipo} className="flex justify-between gap-2">
-                    <Link href={`/obras?etapa=${e.tipo}`} className="hover:underline">
-                      {ROTULO_TIPO_ETAPA[e.tipo]}
-                    </Link>
-                    <span className="tabular-nums">{e.quantidade}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="rounded-xl border p-4">
-            <h3 className="mb-2 text-sm font-medium">Próximas instalações e entregas</h3>
-            {obras.proximasInstalacoes.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Nada agendado. Veja o que falta agendar no calendário de instalação.</p>
-            ) : (
-              <ul className="grid gap-2">
-                {obras.proximasInstalacoes.map((i) => (
-                  <li key={i.id} className="text-sm">
-                    <Link href={`/agenda/${i.id}`} className="hover:underline">
-                      <span className="font-medium">{i.clienteNome ?? i.projetoTitulo ?? ROTULO_TIPO_EVENTO[i.tipo as TipoEvento]}</span>
-                      <span className="text-muted-foreground block text-xs">
-                        {ROTULO_TIPO_EVENTO[i.tipo as TipoEvento]} · {formatarDataHora(i.inicio)}
-                        {i.equipeNome ? ` · ${i.equipeNome}` : ""}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link href="/obras/calendario" className="text-primary mt-2 inline-block text-xs hover:underline">
-              Abrir o calendário de instalação
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="titulo-financeiro" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-financeiro" className="text-lg font-medium">
-            Financeiro
-          </h2>
-          <Link href="/financeiro" className="text-primary text-sm hover:underline">
-            Ver fluxo de caixa
-          </Link>
-        </div>
-        {!fin.temContas ? (
-          <Link href="/financeiro/contas" className="hover:bg-accent block rounded-xl border border-dashed p-4 text-sm transition-colors">
-            <span className="font-medium">Cadastre as contas onde o dinheiro entra e sai</span>
-            <span className="text-muted-foreground block">O saldo e o fluxo de caixa aparecem aqui assim que houver uma conta. O saldo inicial é opcional.</span>
-          </Link>
-        ) : null}
-        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Link href="/financeiro/contas" title="Como é calculado: soma dos saldos das contas ativas hoje. Conta sem saldo informado soma só o movimento registrado." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Saldo das contas</p>
-            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", fin.saldoAtualCentavos < 0 && "text-destructive")}>{formatarMoeda(fin.saldoAtualCentavos)}</p>
-            <p className="text-muted-foreground mt-1 text-xs">{fin.contasSemSaldo > 0 ? `${fin.contasSemSaldo} conta(s) com saldo não informado` : "Soma das contas ativas"}</p>
-          </Link>
-          <Link href="/financeiro/receber?aba=todas" title="Como é calculado: soma dos recebimentos de parcelas e cobranças no mês, pela data do pagamento, sem estornos. Meta em Configurações → Empresa." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Recebido no mês</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatarMoeda(fin.recebidoNoMesCentavos)}</p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              {percentualDaMeta !== null ? `${percentualDaMeta}% da meta de ${formatarMoeda(fin.metaMensalCentavos)}` : "Meta mensal não definida"} · mês anterior {formatarMoeda(fin.recebidoNoMesAnteriorCentavos)}
-            </p>
-          </Link>
-          <Link
-            href="/financeiro/receber?aba=atrasadas"
-            title="Como é calculado: o que falta receber das contas em aberto, por vencimento. Parcelas que aguardam uma etapa não entram."
-            className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", fin.receber.vencidoCentavos > 0 && "border-destructive/40 bg-destructive/5")}
-          >
-            <p className="text-muted-foreground text-sm">A receber</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatarMoeda(fin.receber.vencidoCentavos + fin.receber.hojeCentavos + fin.receber.proximosCentavos)}</p>
-            <p className="text-muted-foreground mt-1 grid text-xs">
-              <span className={cn(fin.receber.vencidoCentavos > 0 && "text-destructive")}>Vencido: {formatarMoeda(fin.receber.vencidoCentavos)}</span>
-              <span>Hoje: {formatarMoeda(fin.receber.hojeCentavos)}</span>
-              <span>
-                Próximos {fin.diasDeAlerta} dias: {formatarMoeda(fin.receber.proximosCentavos)}
-              </span>
-            </p>
-          </Link>
-          <Link
-            href="/financeiro/pagar?aba=atrasadas"
-            title="Como é calculado: o que falta pagar das contas em aberto, por vencimento."
-            className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", fin.pagar.vencidoCentavos > 0 && "border-destructive/40 bg-destructive/5")}
-          >
-            <p className="text-muted-foreground text-sm">A pagar</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatarMoeda(fin.pagar.vencidoCentavos + fin.pagar.hojeCentavos + fin.pagar.proximosCentavos)}</p>
-            <p className="text-muted-foreground mt-1 grid text-xs">
-              <span className={cn(fin.pagar.vencidoCentavos > 0 && "text-destructive")}>Vencido: {formatarMoeda(fin.pagar.vencidoCentavos)}</span>
-              <span>Hoje: {formatarMoeda(fin.pagar.hojeCentavos)}</span>
-              <span>
-                Próximos {fin.diasDeAlerta} dias: {formatarMoeda(fin.pagar.proximosCentavos)}
-              </span>
-            </p>
-          </Link>
-          <Link href="/financeiro" title="Como é calculado: saldo atual + entradas previstas − saídas previstas até cada data. O a receber vencido entra como esperado para hoje (ou na data que o cliente prometeu) e o a pagar vencido sai já no primeiro período." className="hover:bg-accent col-span-2 rounded-xl border p-4 transition-colors lg:col-span-1">
-            <p className="text-muted-foreground text-sm">Saldo projetado</p>
-            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", fin.projetado.em30Centavos < 0 && "text-destructive")}>{formatarMoeda(fin.projetado.em30Centavos)}</p>
-            <p className="text-muted-foreground mt-1 grid text-xs">
-              <span>em 30 dias</span>
-              <span>60 dias: {formatarMoeda(fin.projetado.em60Centavos)}</span>
-              <span>90 dias: {formatarMoeda(fin.projetado.em90Centavos)}</span>
-            </p>
-          </Link>
-        </div>
-      </section>
-
-      <section aria-labelledby="titulo-estoque" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-estoque" className="text-lg font-medium">
-            Estoque e compras
-          </h2>
-          <Link href="/relatorios/estoque" className="text-primary text-sm hover:underline">
-            Ver relatório de estoque
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Link href="/compras?aba=abertas" title="Como é calculado: pedidos feitos ao fornecedor e recebidos em parte, ainda não recebidos por inteiro. Atrasada = previsão de entrega já passada." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Compras em aberto</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{estoque.comprasEmAberto}</p>
-            <p className={cn("text-muted-foreground mt-1 text-xs", estoque.comprasAtrasadas > 0 && "text-destructive")}>
-              {estoque.comprasAtrasadas > 0 ? `${estoque.comprasAtrasadas} com entrega atrasada` : "Nenhuma com entrega atrasada"}
-              {estoque.comprasRascunho > 0 ? ` · ${estoque.comprasRascunho} rascunho(s)` : ""}
-            </p>
-          </Link>
-          <Link href="/estoque/retalhos" title="Como é calculado: sobras de perfil guardadas para outra obra (sobra maior ou igual ao retalho mínimo das Configurações)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Retalhos disponíveis</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{estoque.retalhosDisponiveis}</p>
-            <p className="text-muted-foreground mt-1 text-xs">Para usar em obras</p>
-          </Link>
-          <Link href="/estoque/retalhos" title="Como é calculado: kg de sucata registrados nos cortes e ajustes, menos o que já foi vendido." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Sucata para vender</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{(estoque.sucataMilesimosKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg</p>
-            <p className="text-muted-foreground mt-1 text-xs">Saldo registrado</p>
-          </Link>
-          <Link href="/produtos?estoque=abaixo" title="Como é calculado: só produtos que têm estoque mínimo definido e saldo abaixo dele. Produto sem mínimo não gera alerta." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Abaixo do mínimo</p>
-            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", estoque.abaixoDoMinimo > 0 && "text-destructive")}>{estoque.abaixoDoMinimo}</p>
-            <p className="text-muted-foreground mt-1 text-xs">Só produtos com mínimo definido</p>
-          </Link>
-          <Link href="/estoque/preco-do-kg" title="Como é calculado: perfis comprados por kg que ainda estão sem custo (falta preço do kg, peso por metro ou comprimento da barra)." className="hover:bg-accent rounded-xl border p-4 transition-colors">
-            <p className="text-muted-foreground text-sm">Perfis sem custo</p>
-            <p className={cn("mt-2 text-2xl font-semibold tabular-nums", estoque.perfisSemCusto > 0 && "text-amber-700 dark:text-amber-400")}>{estoque.perfisSemCusto}</p>
-            <p className="text-muted-foreground mt-1 text-xs">{estoque.perfisSemCusto > 0 ? "Informe o preço do kg" : "Todos com custo"}</p>
-          </Link>
-        </div>
-        {estoque.produtos === 0 ? (
-          <p className="text-muted-foreground mt-3 text-sm">
-            O estoque começa vazio, sem nada inventado: cadastre os <Link href="/produtos" className="underline">produtos</Link> e, se quiser, faça a <Link href="/estoque/inventario-inicial" className="underline">contagem inicial</Link>.
-          </p>
-        ) : null}
-      </section>
-
-      <section aria-labelledby="titulo-atencao" className="mt-8">
-        <h2 id="titulo-atencao" className="mb-3 text-lg font-medium">
-          Atenção hoje
+      <section aria-labelledby="titulo-numeros">
+        <h2 id="titulo-numeros" className="mb-3 text-lg font-medium">
+          O período em números <span className="text-muted-foreground text-sm font-normal">({rotuloDoPeriodo(periodo)})</span>
         </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <NumeroDoPainel
+            titulo="Vendido"
+            valor={formatarMoeda(vendido.totalCentavos)}
+            href={`/relatorios/vendas${consultaDoPeriodo}`}
+            definicao="Soma do valor aprovado de cada proposta que o cliente aprovou no período, pela data da aprovação. Cada parte de uma obra entra no mês em que foi aprovada."
+            detalhe={
+              <>
+                <span className="block">{metaDetalhe(vendido.totalCentavos) ?? `${vendido.propostas} proposta(s) aprovada(s)`}</span>
+                <span className="block">Sem nota: {formatarMoeda(vendido.semNotaCentavos)}</span>
+                <span className="block">Com nota: {formatarMoeda(vendido.comNotaCentavos)}</span>
+                {vendido.repasseDeImpostoCentavos > 0 ? <span className="block">Repasse de imposto, fora da margem: {formatarMoeda(vendido.repasseDeImpostoCentavos)}</span> : null}
+              </>
+            }
+            comparativos={comparar(vendido.totalCentavos, vendidoAnterior.totalCentavos, vendidoAnoPassado.totalCentavos)}
+          />
+          <NumeroDoPainel
+            titulo="Recebido"
+            valor={formatarMoeda(recebido.totalCentavos)}
+            href={`/financeiro/recebimentos${consultaDoPeriodo}`}
+            definicao="Soma dos pagamentos recebidos de clientes no período, pela data do pagamento, sem os estornos."
+            detalhe={
+              <>
+                <span className="block">{metaDetalhe(recebido.totalCentavos) ?? `${recebido.quantidade} pagamento(s)`}</span>
+                <span className="block">Sem nota: {formatarMoeda(recebido.semNotaCentavos)}</span>
+                <span className="block">Com nota: {formatarMoeda(recebido.comNotaCentavos)}</span>
+              </>
+            }
+            comparativos={comparar(recebido.totalCentavos, recebidoAnterior.totalCentavos, recebidoAnoPassado.totalCentavos)}
+          />
+          <NumeroDoPainel
+            titulo="Saldo daqui a 30 dias"
+            valor={fin.temContas ? formatarMoeda(fin.projetado.em30Centavos) : "—"}
+            href="/financeiro"
+            alerta={fin.temContas && fin.projetado.em30Centavos < 0}
+            definicao="Saldo das contas hoje, mais o que se espera receber, menos o que se tem a pagar nos próximos 30 dias. O que já venceu e ainda não foi recebido entra como esperado para hoje (ou na data que o cliente prometeu); o que já venceu a pagar sai já no primeiro período."
+            detalhe={fin.temContas ? (fin.contasSemSaldo > 0 ? <span className="text-amber-700 dark:text-amber-400">Parcial: {fin.contasSemSaldo} conta(s) com saldo não informado; o valor mostra só o movimento registrado</span> : `60 dias: ${formatarMoeda(fin.projetado.em60Centavos)} · 90 dias: ${formatarMoeda(fin.projetado.em90Centavos)}`) : "Cadastre as contas para ver o saldo"}
+          />
+          <NumeroDoPainel
+            titulo="Obras entregues no prazo"
+            valor={pct(pontualidade.pontualidadePct)}
+            href={`/obras${montarConsulta({ situacao: "concluidas", de: periodoDaPontualidade.de, ate: periodoDaPontualidade.ate })}`}
+            definicao={`Das obras concluídas no período que tinham prazo, quantas terminaram até o prazo prometido (já com as pausas justificadas). Sem considerar as pausas: ${pct(pontualidade.pontualidadeSemPausasPct)}.`}
+            detalhe={pontualidade.concluidas === 0 ? "Nenhuma obra concluída com prazo neste período" : `${pontualidade.pontuais} de ${pontualidade.concluidas} no prazo`}
+          />
+        </div>
+      </section>
+
+      <Secao id="titulo-atencao" titulo="Atenção hoje">
         <div className="grid gap-3 lg:grid-cols-2">
+          <NumeroDoPainel titulo="Tarefas vencidas" valor={resumo.vencidas} href="/tarefas?status=abertas" alerta={resumo.vencidas > 0} definicao="Tarefas que ainda não foram concluídas e cujo vencimento é anterior a hoje." detalhe={`${resumo.abertas} aberta(s) no total · ${resumo.minhasAbertas} suas`} />
+          <NumeroDoPainel titulo="Propostas sem retorno" valor={comercial.semRetorno} href="/projetos?semRetorno=1" alerta={comercial.semRetorno > 0} definicao="Projetos em Proposta enviada ou Negociação parados além do prazo de “sem retorno” definido em Configurações." detalhe="Hora de cobrar o cliente" />
           <div className={cn("rounded-xl border p-4", fin.receberEmAtencao.length > 0 && "border-destructive/40 bg-destructive/5")}>
             <h3 className="mb-2 text-sm font-medium" title="Como é calculado: parcelas em aberto que venceram ou vencem hoje, as mais antigas primeiro.">
               Parcelas atrasadas ou vencendo hoje
@@ -492,7 +229,7 @@ export default async function PaginaPainel() {
               </ul>
             )}
           </div>
-          <div className={cn("rounded-xl border p-4 lg:col-span-2", obras.atrasadas.length > 0 && "border-destructive/40 bg-destructive/5")}>
+          <div className={cn("rounded-xl border p-4", obras.atrasadas.length > 0 && "border-destructive/40 bg-destructive/5")}>
             <h3 className="mb-2 text-sm font-medium" title="Como é calculado: obras em andamento com etapa aberta depois da data prevista, as mais urgentes primeiro.">
               Obras com etapa atrasada
             </h3>
@@ -517,31 +254,61 @@ export default async function PaginaPainel() {
               </ul>
             )}
           </div>
-          <Link href="/projetos?semRetorno=1" title="Como é calculado: projetos em Proposta enviada ou Negociação parados além do prazo de 'sem retorno' definido em Configurações." className={cn("hover:bg-accent rounded-xl border p-4 transition-colors", comercial.semRetorno > 0 && "border-destructive/40 bg-destructive/5")}>
-            <p className="text-muted-foreground text-sm">Propostas sem retorno</p>
-            <p className={cn("mt-2 text-3xl font-semibold tabular-nums", comercial.semRetorno > 0 && "text-destructive")}>{comercial.semRetorno}</p>
-            <p className="text-muted-foreground mt-1 text-xs">Parados além do prazo configurado. Toque para ver a lista e cobrar o cliente.</p>
-          </Link>
         </div>
-      </section>
+      </Secao>
 
-      <section aria-labelledby="titulo-origem" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-origem" className="text-lg font-medium">
-            Origem dos clientes e motivos de perda (mês)
-          </h2>
-          <Link href="/relatorios/funil" className="text-primary text-sm hover:underline">
-            Ver relatório
-          </Link>
+      <Secao id="titulo-comercial" titulo="Vendas e propostas" href={`/relatorios/fechamento${consultaDoPeriodo}`} rotuloDoLink="Ver relatório">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <NumeroDoPainel
+            titulo="Projetos que o cliente fechou"
+            valor={fechamento.taxaPercentual === null ? "—" : pct(fechamento.taxaPercentual)}
+            href={`/relatorios/fechamento${consultaDoPeriodo}`}
+            definicao={`Projetos aprovados dividido por (aprovados + perdidos que já tinham proposta enviada), pela data da decisão, nos ${DIAS_DA_JANELA_DE_FECHAMENTO} dias até ${formatarDataCalendario(janela.ate)}. Projeto perdido antes de receber proposta não entra.`}
+            detalhe={fechamento.aprovados + fechamento.perdidos === 0 ? "Sem nenhuma decisão nessa janela" : `${fechamento.aprovados} aprovado(s) e ${fechamento.perdidos} perdido(s) em ${DIAS_DA_JANELA_DE_FECHAMENTO} dias`}
+          />
+          <NumeroDoPainel
+            titulo="Valor médio por obra"
+            valor={vendido.ticketMedioCentavos === null ? "—" : formatarMoeda(vendido.ticketMedioCentavos)}
+            href={`/relatorios/vendas${consultaDoPeriodo}`}
+            definicao="Vendido dividido pelo número de projetos que tiveram aprovação no período."
+            detalhe={vendido.projetos === 0 ? "Sem projeto aprovado no período" : `${vendido.projetos} projeto(s) aprovado(s)`}
+          />
+          <NumeroDoPainel
+            titulo="Da visita à proposta"
+            valor={tempo.mediaDeDias === null ? "—" : `${tempo.mediaDeDias.toLocaleString("pt-BR")} dia(s)`}
+            href={`/relatorios/fechamento${consultaDoPeriodo}`}
+            definicao="Média de dias entre a primeira visita realizada e o envio da primeira proposta, dos projetos cuja primeira proposta foi enviada no período."
+            detalhe={tempo.amostra === 0 ? "Sem dados neste período" : `${tempo.amostra} projeto(s)`}
+          />
+          <NumeroDoPainel
+            titulo="Propostas aguardando resposta"
+            valor={propostas.enviadas}
+            href="/propostas?status=ENVIADA"
+            definicao="Propostas na situação Enviada (revisão vigente). O valor soma a maior opção de cada uma, com a nota fiscal quando houver."
+            detalhe={propostas.enviadas > 0 ? formatarMoeda(propostas.enviadasValorCentavos) : "Nenhuma proposta enviada"}
+          />
         </div>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <h3 className="mt-6 mb-2 text-sm font-medium">Projetos em cada fase hoje</h3>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {comercial.funil.map((f) => (
+            <NumeroDoPainel
+              key={f.status}
+              titulo={ROTULO_STATUS_PROJETO[f.status]}
+              valor={f.quantidade}
+              href={`/projetos?status=${f.status}`}
+              definicao="Projetos nessa fase hoje e a soma dos valores estimados (campo opcional do projeto)."
+              detalhe={f.valorCentavos > 0 ? formatarMoeda(f.valorCentavos) : "Sem valor estimado"}
+            />
+          ))}
+        </div>
+        <div className="mt-6 grid gap-3 lg:grid-cols-2">
           <div className="rounded-xl border p-4">
-            <h3 className="mb-2 text-sm font-medium">Projetos criados no mês, por origem</h3>
-            {comercial.origensDoMes.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Nenhum projeto criado neste mês.</p>
+            <h3 className="mb-2 text-sm font-medium">De onde vieram os projetos novos ({rotuloDoPeriodo(periodo)})</h3>
+            {comercial.origensDoPeriodo.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhum projeto novo neste período.</p>
             ) : (
               <ul className="grid gap-1 text-sm">
-                {comercial.origensDoMes.map((o) => (
+                {comercial.origensDoPeriodo.map((o) => (
                   <li key={o.origem ?? "sem"} className="flex justify-between gap-2">
                     <span>{o.origem ? (ROTULO_ORIGEM[o.origem as keyof typeof ROTULO_ORIGEM] ?? o.origem) : "Não informada"}</span>
                     <span className="tabular-nums">{o.quantidade}</span>
@@ -549,14 +316,17 @@ export default async function PaginaPainel() {
                 ))}
               </ul>
             )}
+            <Link href={`/relatorios/funil${consultaDeAte}`} className="text-primary mt-2 inline-block text-xs hover:underline">
+              Ver o relatório completo
+            </Link>
           </div>
           <div className="rounded-xl border p-4">
-            <h3 className="mb-2 text-sm font-medium">Projetos perdidos no mês, por motivo</h3>
-            {comercial.perdasDoMes.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Nenhum projeto perdido neste mês.</p>
+            <h3 className="mb-2 text-sm font-medium">Por que se perdeu ({rotuloDoPeriodo(periodo)})</h3>
+            {comercial.perdasDoPeriodo.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhum projeto perdido neste período.</p>
             ) : (
               <ul className="grid gap-1 text-sm">
-                {comercial.perdasDoMes.map((p) => (
+                {comercial.perdasDoPeriodo.map((p) => (
                   <li key={p.nome} className="flex justify-between gap-2">
                     <span>{p.nome}</span>
                     <span className="tabular-nums">{p.quantidade}</span>
@@ -564,26 +334,159 @@ export default async function PaginaPainel() {
                 ))}
               </ul>
             )}
+            <Link href={`/relatorios/funil${consultaDeAte}`} className="text-primary mt-2 inline-block text-xs hover:underline">
+              Ver o relatório completo
+            </Link>
           </div>
         </div>
-      </section>
+      </Secao>
 
-      <section aria-labelledby="titulo-cadastros" className="mt-8">
-        <h2 id="titulo-cadastros" className="mb-3 text-lg font-medium">
-          Cadastros
-        </h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{cartoesDeCadastros.map(cartaoJsx)}</div>
-      </section>
-
-      <section aria-labelledby="titulo-proximas" className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 id="titulo-proximas" className="text-lg font-medium">
-            Próximas tarefas
-          </h2>
-          <Link href="/tarefas" className="text-primary text-sm hover:underline">
-            Ver todas
-          </Link>
+      <Secao id="titulo-obras" titulo="Obras e fábrica" href="/obras" rotuloDoLink="Ver obras">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <NumeroDoPainel titulo="Obras em andamento" valor={obras.emAndamento} href="/obras" definicao="Obras aprovadas ou em execução (ainda não entregues)." detalhe={`${obras.verdes} no prazo${obras.semPrazo > 0 ? ` · ${obras.semPrazo} sem prazo definido` : ""}`} />
+          <NumeroDoPainel titulo="Obras atrasadas" valor={obras.vermelhas} href="/obras?semaforo=VERMELHO" alerta={obras.vermelhas > 0} definicao="Obras em andamento com alguma etapa depois da data prevista, ou com o prazo prometido (já com as pausas justificadas) vencido." detalhe={`${obras.amarelas} vencem em breve`} />
+          <NumeroDoPainel
+            titulo="Ocupação da fábrica"
+            valor={pct(fabrica.ocupacaoPercentual)}
+            href="/relatorios/producao"
+            definicao="m² das obras cuja fabricação está em andamento ou começa nos próximos 30 dias, dividido pela capacidade de produção por mês de Configurações. É a situação de hoje."
+            detalhe={fabrica.capacidadeM2 === null ? "Informe a capacidade em Configurações" : `${fabrica.m2EmProducao.toLocaleString("pt-BR")} m² de ${fabrica.capacidadeM2.toLocaleString("pt-BR")} m² por mês`}
+          />
+          <NumeroDoPainel titulo="Assistências em aberto" valor={obras.chamadosEmAberto} href="/obras/assistencia" definicao="Chamados de assistência ainda não resolvidos nem cancelados." detalhe={obras.chamadosEmAberto > 0 ? `${obras.chamadosEmAbertoEmGarantia} em garantia` : "Assistência e garantia"} />
         </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Obras por etapa</h3>
+            {obras.porEtapa.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nenhuma obra em andamento.</p>
+            ) : (
+              <ul className="grid gap-1 text-sm">
+                {obras.porEtapa.map((e) => (
+                  <li key={e.tipo} className="flex justify-between gap-2">
+                    <Link href={`/obras?etapa=${e.tipo}`} className="hover:underline">
+                      {ROTULO_TIPO_ETAPA[e.tipo]}
+                    </Link>
+                    <span className="tabular-nums">{e.quantidade}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-xl border p-4">
+            <h3 className="mb-2 text-sm font-medium">Próximas instalações e entregas</h3>
+            {obras.proximasInstalacoes.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nada agendado. Veja o que falta agendar no calendário de instalação.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {obras.proximasInstalacoes.map((i) => (
+                  <li key={i.id} className="text-sm">
+                    <Link href={`/agenda/${i.id}`} className="hover:underline">
+                      <span className="font-medium">{i.clienteNome ?? i.projetoTitulo ?? ROTULO_TIPO_EVENTO[i.tipo as TipoEvento]}</span>
+                      <span className="text-muted-foreground block text-xs">
+                        {ROTULO_TIPO_EVENTO[i.tipo as TipoEvento]} · {formatarDataHora(i.inicio)}
+                        {i.equipeNome ? ` · ${i.equipeNome}` : ""}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link href="/obras/calendario" className="text-primary mt-2 inline-block text-xs hover:underline">
+              Abrir o calendário de instalação
+            </Link>
+          </div>
+        </div>
+      </Secao>
+
+      <Secao id="titulo-financeiro" titulo="Dinheiro" href="/financeiro" rotuloDoLink="Ver fluxo de caixa">
+        {!fin.temContas ? (
+          <Link href="/financeiro/contas" className="hover:bg-accent mb-3 block rounded-xl border border-dashed p-4 text-sm transition-colors">
+            <span className="font-medium">Cadastre as contas onde o dinheiro entra e sai</span>
+            <span className="text-muted-foreground block">O saldo e o fluxo de caixa aparecem aqui assim que houver uma conta. O saldo inicial é opcional.</span>
+          </Link>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <NumeroDoPainel titulo="Saldo das contas" valor={fin.temContas ? formatarMoeda(fin.saldoAtualCentavos) : "—"} href="/financeiro/contas" alerta={fin.saldoAtualCentavos < 0} definicao="Soma dos saldos das contas ativas hoje. Conta sem saldo informado soma só o movimento registrado." detalhe={fin.contasSemSaldo > 0 ? <span className="text-amber-700 dark:text-amber-400">Parcial: {fin.contasSemSaldo} conta(s) com saldo não informado; o valor mostra só o movimento registrado</span> : "Soma das contas ativas"} />
+          <NumeroDoPainel
+            titulo="A receber"
+            valor={formatarMoeda(fin.receber.vencidoCentavos + fin.receber.hojeCentavos + fin.receber.proximosCentavos)}
+            href="/financeiro/receber?aba=atrasadas"
+            alerta={fin.receber.vencidoCentavos > 0}
+            definicao="O que falta receber das contas em aberto que já venceram, vencem hoje ou vencem nos próximos dias (a janela de dias está em Configurações). Parcelas que aguardam uma etapa e as que vencem mais adiante não entram."
+            detalhe={
+              <>
+                <span className="block">Vencido: {formatarMoeda(fin.receber.vencidoCentavos)}</span>
+                <span className="block">Hoje: {formatarMoeda(fin.receber.hojeCentavos)}</span>
+                <span className="block">Próximos {fin.diasDeAlerta} dias: {formatarMoeda(fin.receber.proximosCentavos)}</span>
+              </>
+            }
+          />
+          <NumeroDoPainel
+            titulo="A pagar"
+            valor={formatarMoeda(fin.pagar.vencidoCentavos + fin.pagar.hojeCentavos + fin.pagar.proximosCentavos)}
+            href="/financeiro/pagar?aba=atrasadas"
+            alerta={fin.pagar.vencidoCentavos > 0}
+            definicao="O que falta pagar das contas em aberto que já venceram, vencem hoje ou vencem nos próximos dias (a janela de dias está em Configurações). O que vence mais adiante não entra."
+            detalhe={
+              <>
+                <span className="block">Vencido: {formatarMoeda(fin.pagar.vencidoCentavos)}</span>
+                <span className="block">Hoje: {formatarMoeda(fin.pagar.hojeCentavos)}</span>
+                <span className="block">Próximos {fin.diasDeAlerta} dias: {formatarMoeda(fin.pagar.proximosCentavos)}</span>
+              </>
+            }
+          />
+          <NumeroDoPainel
+            titulo="Recebido com nota fiscal (12 meses)"
+            valor={formatarMoeda(comNota.recebidoCentavos)}
+            href={`/financeiro/recebimentos${montarConsulta({ periodo: "12m", nota: "com" })}`}
+            definicao="Soma dos pagamentos marcados COM nota fiscal nos últimos 12 meses, pela data do pagamento. Recebimentos sem nota não entram. É só um acompanhamento do que você recebeu com nota: não calcula imposto nem faz apuração."
+            detalhe={
+              <>
+                <span className="block">
+                  {comNota.limiteCentavos === null ? "Limite não informado (Configurações → Empresa)" : `${pct(comNota.percentualDoLimite)} do limite de ${formatarMoeda(comNota.limiteCentavos)}`}
+                </span>
+                <span className="block">
+                  {formatarDataCalendario(comNota.periodo.de)} a {formatarDataCalendario(comNota.periodo.ate)}
+                </span>
+                {comNota.avulsasComNotaForaDaSoma > 0 ? <span className="block">{comNota.avulsasComNotaForaDaSoma} entrada(s) avulsa(s) marcada(s) com nota ficaram de fora (sem conta a receber).</span> : null}
+              </>
+            }
+          />
+        </div>
+        <p className="mt-3 text-sm">
+          <Link href="/relatorios/faturamento" className="text-primary hover:underline">
+            Ver o faturamento mês a mês, com nota e sem nota
+          </Link>
+        </p>
+      </Secao>
+
+      <Secao id="titulo-estoque" titulo="Estoque e compras" href="/relatorios/estoque" rotuloDoLink="Ver relatório de estoque">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <NumeroDoPainel titulo="Compras em aberto" valor={estoque.comprasEmAberto} href="/compras?aba=abertas" definicao="Pedidos feitos ao fornecedor e recebidos em parte, ainda não recebidos por inteiro. Atrasada = previsão de entrega já passada." detalhe={estoque.comprasAtrasadas > 0 ? `${estoque.comprasAtrasadas} com entrega atrasada` : "Nenhuma com entrega atrasada"} />
+          <NumeroDoPainel titulo="Retalhos disponíveis" valor={estoque.retalhosDisponiveis} href="/estoque/retalhos" definicao="Sobras de perfil guardadas para outra obra (sobra maior ou igual ao retalho mínimo das Configurações)." detalhe="Para usar em obras" />
+          <NumeroDoPainel titulo="Sucata para vender" valor={`${(estoque.sucataMilesimosKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`} href="/estoque/retalhos" definicao="Kg de sucata registrados nos cortes e ajustes, menos o que já foi vendido." detalhe="Saldo registrado" />
+          <NumeroDoPainel titulo="Abaixo do mínimo" valor={estoque.abaixoDoMinimo} href="/produtos?estoque=abaixo" alerta={estoque.abaixoDoMinimo > 0} definicao="Só produtos que têm estoque mínimo definido e saldo abaixo dele. Produto sem mínimo não gera alerta." detalhe="Só produtos com mínimo definido" />
+          <NumeroDoPainel titulo="Perfis sem custo" valor={estoque.perfisSemCusto} href="/estoque/preco-do-kg" definicao="Perfis comprados por kg que ainda estão sem custo (falta preço do kg, peso por metro ou comprimento da barra)." detalhe={estoque.perfisSemCusto > 0 ? "Informe o preço do kg" : "Todos com custo"} />
+        </div>
+        {estoque.produtos === 0 ? (
+          <p className="text-muted-foreground mt-3 text-sm">
+            O estoque começa vazio, sem nada inventado: cadastre os <Link href="/produtos" className="underline">produtos</Link> e, se quiser, faça a <Link href="/estoque/inventario-inicial" className="underline">contagem inicial</Link>.
+          </p>
+        ) : null}
+      </Secao>
+
+      <Secao id="titulo-cadastros" titulo="Cadastros">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <NumeroDoPainel titulo="Clientes ativos" valor={cadastros.clientesAtivos} href="/clientes" definicao="Clientes cadastrados e ativos (fora da lixeira)." detalhe={<span className="flex items-center gap-1"><Users className="size-3.5" aria-hidden /> {cadastros.clientesNovosNoMes} novo(s) no mês</span>} />
+          <NumeroDoPainel titulo="Parceiros" valor={cadastros.parceiros} href="/parceiros" definicao="Clientes ativos marcados como arquiteto/designer ou construtora." detalhe={<span className="flex items-center gap-1"><Handshake className="size-3.5" aria-hidden /> Quem indica serviço</span>} />
+          <NumeroDoPainel titulo="Sem contato há 12 meses" valor={cadastros.clientesSemContato} href="/clientes?parado=1" definicao={`Clientes ativos cadastrados há mais de ${MESES_SEM_CONTATO} meses, sem nenhum registro de ligação, WhatsApp, visita, e-mail ou anotação no período. Boa lista para reativar.`} detalhe={<span className="flex items-center gap-1"><History className="size-3.5" aria-hidden /> Boa lista para reativar</span>} />
+          <NumeroDoPainel titulo="Produtos sem custo" valor={cadastros.produtosSemCusto} href="/produtos?custo=sem" alerta={cadastros.produtosSemCusto > 0} definicao="Produtos ativos com o custo ainda não informado (o sistema nunca inventa preço)." detalhe={<span className="flex items-center gap-1"><PackageX className="size-3.5" aria-hidden /> A margem das obras fica incompleta</span>} />
+          <NumeroDoPainel titulo="Custos desatualizados" valor={cadastros.produtosComCustoAntigo} href="/produtos?custo=antigo" alerta={cadastros.produtosComCustoAntigo > 0} definicao={`Produtos ativos cujo custo não é atualizado há mais de ${DIAS_CUSTO_DESATUALIZADO} dias.`} detalhe={<span className="flex items-center gap-1"><TriangleAlert className="size-3.5" aria-hidden /> Confira com o fornecedor</span>} />
+          <NumeroDoPainel titulo="Novos clientes no mês" valor={cadastros.clientesNovosNoMes} href="/clientes?ordem=criadoEm&direcao=desc" definicao="Clientes ativos cadastrados desde o dia 1º do mês atual." detalhe={<span className="flex items-center gap-1"><UserPlus className="size-3.5" aria-hidden /> Desde o dia 1º</span>} />
+        </div>
+      </Secao>
+
+      <Secao id="titulo-proximas" titulo="Próximas tarefas" href="/tarefas" rotuloDoLink="Ver todas">
         {proximas.length === 0 ? (
           <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
             <ListChecks className="text-muted-foreground mb-2 size-6" aria-hidden />
@@ -604,7 +507,7 @@ export default async function PaginaPainel() {
             ))}
           </ul>
         )}
-      </section>
+      </Secao>
 
       <p className="mt-8 text-sm">
         <Link href="/primeiros-passos" className="text-primary hover:underline">

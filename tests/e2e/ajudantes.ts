@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 export async function entrarComo(page: Page, login: string, senha: string) {
   await page.goto("/login");
@@ -51,4 +51,27 @@ export async function capturar(page: Page, nome: string) {
   await page.waitForLoadState("networkidle");
   const projeto = test.info().project.name;
   await page.screenshot({ path: `test-results/capturas/${projeto}-${nome}.png`, fullPage: true });
+}
+
+/**
+ * O cartão de um número do painel (`NumeroDoPainel`): o <div> que contém o link com o título. O valor, o detalhe, os
+ * comparativos e o botão "Como é calculado" ficam dentro dele (só o título é o link, que cobre o cartão inteiro).
+ */
+export function cartaoDoPainel(page: Page, titulo: string | RegExp) {
+  return page.getByRole("link", { name: titulo }).first().locator("xpath=..");
+}
+
+/**
+ * Confere o "Como é calculado" de um cartão: o botão tem a dica (title), a definição começa escondida, abre ao clicar
+ * (aria-expanded) e o texto da definição aparece. Devolve o botão. Não fecha de volta.
+ */
+export async function conferirComoECalculado(cartao: Locator, trecho: string | RegExp) {
+  const botao = cartao.getByRole("button", { name: /Como é calculado/ });
+  await expect(botao).toHaveAttribute("title", /Como é calculado: /);
+  await expect(botao).toHaveAttribute("aria-expanded", "false");
+  await expect(cartao.getByText(trecho, { exact: false }).last()).toBeHidden();
+  await botao.click();
+  await expect(botao).toHaveAttribute("aria-expanded", "true");
+  await expect(cartao.getByText(trecho, { exact: false }).last()).toBeVisible();
+  return botao;
 }

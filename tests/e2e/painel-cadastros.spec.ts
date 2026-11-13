@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
+import { cartaoDoPainel, conferirComoECalculado, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
 import { prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
@@ -24,11 +24,12 @@ test("o painel mostra os números dos cadastros com a definição de cada um, e 
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Cadastros" })).toBeVisible();
-  const cartao = page.getByRole("link", { name: /Produtos sem custo/ });
-  await expect(cartao).toContainText("o sistema nunca inventa preço");
-  const valor = Number((await cartao.locator("p").nth(1).innerText()).trim());
+  const cartao = cartaoDoPainel(page, /Produtos sem custo/);
+  // A definição ("como é calculado") fica escondida até abrir o botão do cartão.
+  await conferirComoECalculado(cartao, "o sistema nunca inventa preço");
+  const valor = Number((await cartao.locator("p").first().innerText()).trim());
   expect(valor).toBeGreaterThanOrEqual(1);
-  await cartao.click();
+  await page.getByRole("link", { name: /Produtos sem custo/ }).click();
   await expect(page).toHaveURL(/\/produtos\?custo=sem/);
   await expect(page.getByRole("link", { name: "E2E Produto sem custo para o painel", exact: true })).toBeVisible();
 });

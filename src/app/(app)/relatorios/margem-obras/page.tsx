@@ -5,11 +5,17 @@ import Link from "next/link";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
+import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
+import { GraficoDeBarras } from "@/components/relatorios/grafico-de-barras";
+import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
-import { formatarMoeda } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
+import { montarConsulta } from "@/lib/listas/parametros";
+import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
+import { can } from "@/lib/permissoes";
 import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
 import { carregarMargemDasObras, lerFiltroDeMargem } from "@/modules/relatorios/margem-obras";
 
@@ -18,10 +24,18 @@ export const metadata: Metadata = { title: "Margem por obra" };
 const pct = (pb: number) => `${(pb / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
 export default async function PaginaMargemPorObra({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
-  const filtro = lerFiltroDeMargem(await searchParams);
+  const usuario = await exigirSessao();
+  // Custo e margem são dados internos: sem a permissão, a página nem consulta (decisão: quem não vê custo não vê margem).
+  if (!can(usuario, "ver", "custo")) {
+    return <EstadoVazio icone={Printer} titulo="Sem permissão para ver custo e margem" descricao="Este relatório mostra o custo e a margem de cada obra. Peça acesso a quem administra o sistema." />;
+  }
+  const brutos = await searchParams;
+  const hoje = dataLocalDoInstante(new Date());
+  const filtro = lerFiltroDeMargem(brutos, hoje);
   const r = await carregarMargemDasObras(filtro);
-  const consulta = `?situacao=${filtro.situacao}${filtro.busca ? `&busca=${encodeURIComponent(filtro.busca)}` : ""}`;
+  const periodoLido = filtro.periodo ? lerPeriodo(brutos, hoje) : null;
+  const consulta = montarConsulta({ situacao: filtro.situacao, ...(filtro.busca ? { busca: filtro.busca } : {}), ...(filtro.periodo ? parametrosDoPeriodo(filtro.periodo) : {}) });
+  const doGrafico = r.linhas.filter((l) => l.margemCentavos !== null).slice(0, 12);
 
   return (
     <>
@@ -43,6 +57,23 @@ export default async function PaginaMargemPorObra({ searchParams }: { searchPara
         </FiltrosDaLista>
       </div>
 
+      <div className="mb-4 print:hidden">
+        {periodoLido ? (
+          <>
+            <SeletorDePeriodo periodo={periodoLido.periodo} tipo={periodoLido.tipo} hoje={hoje} />
+            {periodoLido.aviso ? <p role="status" className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{periodoLido.aviso}</p> : null}
+            <p className="text-muted-foreground -mt-3 mb-2 text-xs">
+              Período pela data da conclusão (só quando a situação é “Concluídas”) ou pela data da aprovação (nos demais casos). <Link href={`/relatorios/margem-obras${montarConsulta({ situacao: filtro.situacao, ...(filtro.busca ? { busca: filtro.busca } : {}) })}`} className="text-primary hover:underline">Remover o período</Link>
+            </p>
+          </>
+        ) : (
+          <Link href={`/relatorios/margem-obras${montarConsulta({ situacao: filtro.situacao, ...(filtro.busca ? { busca: filtro.busca } : {}), mes: hoje.slice(0, 7) })}`} className="text-primary text-sm hover:underline">
+            Filtrar por período
+          </Link>
+        )}
+      </div>
+      <p className="mb-4 hidden text-sm print:block">{periodoLido ? `Período: ${rotuloDoPeriodo(periodoLido.periodo)}` : "Todas as datas"}</p>
+
       <section aria-label="Resumo" className="mb-6 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border p-4">
           <p className="text-muted-foreground text-sm">Margem das obras completas</p>
@@ -57,10 +88,25 @@ export default async function PaginaMargemPorObra({ searchParams }: { searchPara
           <p className="text-muted-foreground text-xs">Faltam preço, custo ou mão de obra por m²: ficam fora da soma, nunca como zero.</p>
         </div>
         <div className="rounded-xl border p-4 sm:col-span-1">
-          <p className="text-muted-foreground text-sm">Como é calculado</p>
-          <p className="text-xs">Receita da margem = valor fechado − acréscimo de nota (repasse de imposto). Custo = recebimentos das compras para a obra + saídas do estoque (ao custo da época) + contas e lançamentos da obra sem compra + mão de obra × m². A conta a pagar de uma compra não entra: a compra já conta.</p>
+          <p className="text-muted-foreground text-sm">Margem</p>
+          <ComoECalculado texto="Receita da margem = valor fechado menos o acréscimo de nota (repasse de imposto, fora da margem). Custo = recebimentos das compras para a obra + saídas do estoque (ao custo da época) + contas e lançamentos da obra sem compra + mão de obra × m². A conta a pagar de uma compra não entra: a compra já conta. Faltou algum custo: a margem fica “Incompleta”, nunca zero." />
         </div>
       </section>
+
+      {doGrafico.length > 0 ? (
+        <section aria-labelledby="g-margem" className="mb-6">
+          <h2 id="g-margem" className="mb-2 text-sm font-medium">
+            Margem das obras com custo completo{r.linhas.length > doGrafico.length ? " (as 12 primeiras da lista)" : ""}
+          </h2>
+          <GraficoDeBarras
+            descricao="Margem em reais de cada obra com o custo completo."
+            series={[{ chave: "margem", rotulo: "Margem (R$)" }]}
+            dados={doGrafico.map((l) => ({ nome: l.codigo, margem: (l.margemCentavos ?? 0) / 100 }))}
+            formato="reais"
+            rotulosNasBarras
+          />
+        </section>
+      ) : null}
 
       {r.linhas.length === 0 ? (
         <EstadoVazio icone={Printer} titulo="Nenhuma obra nesse filtro" descricao="Só obras aprovadas, em execução ou concluídas entram. Troque a situação ou a busca." acao={<Link href="/relatorios/margem-obras?situacao=todas" className={buttonVariants({ variant: "outline" })}>Ver todas</Link>} />

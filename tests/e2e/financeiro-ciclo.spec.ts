@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
+import { aguardarAvisosSumirem, capturar, cartaoDoPainel, conferirComoECalculado, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
 import { contaDaObra, criarCategoriaFinanceiraDeTeste, criarObraDeTeste, prepararUsuarioE2E, recebidoDaObra } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
@@ -130,13 +130,23 @@ test("a conta mostra o saldo do movimento e a visão geral lista a conta; o extr
 
 test("o painel mostra a seção Financeiro com a definição de cada número e sem rolagem lateral", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Financeiro", level: 2 })).toBeVisible();
-  await expect(page.getByText("Saldo das contas")).toBeVisible();
-  await expect(page.getByText("Recebido no mês")).toBeVisible();
-  await expect(page.getByText("Saldo projetado")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dinheiro", level: 2 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Saldo das contas" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Recebido", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Saldo daqui a 30 dias" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Parcelas atrasadas ou vencendo hoje" })).toBeVisible();
+  await conferirComoECalculado(cartaoDoPainel(page, "Saldo das contas"), "Soma dos saldos das contas ativas hoje");
   await semRolagemHorizontal(page);
   await capturar(page, "painel-financeiro");
+
+  // Janeiro de 2020 só tem os dados deste teste: "Recebido" soma o sinal (R$ 5.000,00) e a parcela do material (R$ 2.500,00)
+  // pela data do pagamento e leva à lista de recebimentos do mesmo mês.
+  await page.goto("/?mes=2020-01");
+  const recebido = cartaoDoPainel(page, "Recebido");
+  await expect(recebido).toContainText("7.500,00");
+  await page.getByRole("link", { name: "Recebido", exact: true }).click();
+  await expect(page).toHaveURL(/\/financeiro\/recebimentos\?mes=2020-01$/);
+  await expect(page.getByRole("heading", { name: "Recebimentos", level: 1 })).toBeVisible();
 });
 
 test("os relatórios financeiros abrem e exportam", async ({ page }) => {

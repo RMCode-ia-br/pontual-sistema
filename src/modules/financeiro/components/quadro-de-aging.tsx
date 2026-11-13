@@ -1,3 +1,4 @@
+import { GraficoDeBarras } from "@/components/relatorios/grafico-de-barras";
 import { FAIXAS_DE_VENCIMENTO, type ResultadoDeAging } from "@/lib/dominio/aging";
 import { formatarMoeda } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
@@ -7,6 +8,15 @@ export function QuadroDeAging({ titulo, aging, nomeDaColuna }: { titulo: string;
   return (
     <section aria-label={titulo} className="grid gap-3">
       <h2 className="font-medium">{titulo}</h2>
+      {aging.totalCentavos > 0 ? (
+        <GraficoDeBarras
+          descricao={`Valor em aberto em cada faixa de ${nomeDaColuna === "Cliente" ? "atraso" : "vencimento"}.`}
+          series={[{ chave: "valor", rotulo: "Em aberto (R$)" }]}
+          dados={FAIXAS_DE_VENCIMENTO.map((f) => ({ nome: f.rotulo, valor: aging.totaisPorFaixa[f.id] / 100 }))}
+          formato="reais"
+          rotulosNasBarras
+        />
+      ) : null}
       <dl className="grid gap-1 rounded-xl border p-4 text-sm">
         {FAIXAS_DE_VENCIMENTO.map((f) => (
           <div key={f.id} className="flex items-center justify-between gap-2">

@@ -76,7 +76,7 @@ export function NumeroDoPainel({
       ) : (
         <p className="text-muted-foreground text-sm font-medium">{titulo}</p>
       )}
-      <p className={cn("mt-2 font-semibold tabular-nums", grande ? "text-3xl sm:text-4xl" : "text-2xl", alerta && "text-destructive")}>{valor}</p>
+      <p className={cn("mt-2 font-semibold tabular-nums [overflow-wrap:anywhere]", grande ? "text-3xl sm:text-4xl" : "text-2xl", alerta && "text-destructive")}>{valor}</p>
       {detalhe ? <div className="text-muted-foreground mt-1 text-xs">{detalhe}</div> : null}
       {comparativos && comparativos.length > 0 ? (
         <ul className="mt-2 grid gap-0.5 text-xs">

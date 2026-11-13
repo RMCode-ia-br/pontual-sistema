@@ -810,3 +810,52 @@ export async function recebimentosDasComprasDeTeste(fornecedor: string): Promise
     return r.rows;
   });
 }
+
+// ---- Fase 7 (indicadores): vendas e recebimentos em período próprio dos testes ----
+
+export type VendaDeTeste = { projetoId: string; numero: string };
+
+/**
+ * Venda de teste: uma obra "E2E Obra <nome>" (sem etapas) com UMA proposta APROVADA, aceita em `aceitaEm` (instante ISO) e
+ * com o valor aprovado dado. O número da proposta é "E2E-xxxxxx" (nunca colide com a fila real). Tudo é apagado por `limpar()`
+ * (a obra e o cliente têm prefixo "E2E "). Os testes usam janeiro de 2020, onde só existem os dados do próprio teste.
+ */
+export async function criarVendaDeTeste(nome: string, opcoes: { valorCentavos: number; comNota: boolean; aceitaEm: string }): Promise<VendaDeTeste> {
+  const projetoId = await criarObraDeTeste(nome, { semEtapas: true });
+  const numero = `E2E-${randomUUID().slice(0, 6)}`;
+  await comConexao(async (c) => {
+    await c.query(
+      `INSERT INTO "Proposta" (id, "projetoId", numero, "numeroSequencial", ano, revisao, status, data, "clienteNome", "comNotaFiscal", "aceitaEm", "valorAprovadoCentavos", "atualizadoEm")
+       VALUES ($1, $2, $3, 1, 20, 0, 'APROVADA'::"StatusProposta", $4::date, $5, $6, $7::timestamptz, $8, now())`,
+      [randomUUID(), projetoId, numero, opcoes.aceitaEm.slice(0, 10), `E2E Cliente ${nome}`, opcoes.comNota, opcoes.aceitaEm, opcoes.valorCentavos],
+    );
+  });
+  return { projetoId, numero };
+}
+
+/**
+ * Recebimento de teste: um lançamento de ENTRADA ligado à parcela 1 da obra de teste (como o que a interface gera ao registrar
+ * um recebimento), em uma conta financeira "E2E Conta dos indicadores" (criada na primeira vez). `data` é "aaaa-mm-dd".
+ */
+export async function criarRecebimentoDeTeste(projetoId: string, opcoes: { data: string; valorCentavos: number; comNota: boolean }): Promise<void> {
+  await comConexao(async (c) => {
+    const nomeDaConta = "E2E Conta dos indicadores";
+    let contaId = (await c.query<{ id: string }>(`SELECT id FROM "ContaFinanceira" WHERE nome = $1`, [nomeDaConta])).rows[0]?.id;
+    if (!contaId) {
+      contaId = randomUUID();
+      await c.query(`INSERT INTO "ContaFinanceira" (id, nome, "atualizadoEm") VALUES ($1, $2, now())`, [contaId, nomeDaConta]);
+    }
+    const parcela = (await c.query<{ id: string; clienteId: string }>(`SELECT id, "clienteId" FROM "ContaReceber" WHERE "projetoId" = $1 AND ordem = 1`, [projetoId])).rows[0];
+    if (!parcela) throw new Error("A obra de teste não tem a parcela 1.");
+    await c.query(
+      `INSERT INTO "Lancamento" (id, data, tipo, "valorCentavos", "contaFinanceiraId", descricao, forma, "comNotaFiscal", "projetoId", "clienteId", "contaReceberId", "atualizadoEm")
+       VALUES ($1, $2::date, 'ENTRADA'::"TipoLancamento", $3, $4, $5, 'PIX'::"FormaPagamento", $6, $7, $8, $9, now())`,
+      [randomUUID(), opcoes.data, opcoes.valorCentavos, contaId, "Recebimento: Sinal E2E", opcoes.comNota, projetoId, parcela.clienteId, parcela.id],
+    );
+  });
+}
+
+/** Define o limite do faturamento com nota direto na configuração (o teste restaura o snapshot no fim). `null` = não informado. */
+export async function definirLimiteComNotaNoBanco(centavos: number | null): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "ConfiguracaoEmpresa" SET "limiteSimplesCentavos" = $1 WHERE id = 'singleton'`, [centavos]));
+}

@@ -265,12 +265,15 @@ test("painel mostra os números de propostas e a busca global acha pelo número"
   const numero = (await page.getByRole("heading", { name: /^Proposta [0-9]{4}-[0-9]{2}$/ }).textContent())!.replace("Proposta ", "");
 
   await page.goto("/");
-  const secao = page.getByRole("region", { name: "Propostas" });
-  await expect(secao.getByText("Aprovadas no mês")).toBeVisible();
-  await expect(secao.getByText("Enviadas sem resposta")).toBeVisible();
+  // "Aprovadas no mês" deixou de existir: o número equivalente é "Vendido" (propostas aprovadas no período, aqui o mês
+  // atual), que leva à lista de vendas do mesmo mês, onde a proposta aprovada pelo teste aparece.
+  const periodo = page.getByRole("region", { name: /O período em números/ });
+  await expect(periodo.getByRole("link", { name: "Vendido", exact: true })).toBeVisible();
+  const vendas = page.getByRole("region", { name: "Vendas e propostas" });
+  await expect(vendas.getByRole("link", { name: "Propostas aguardando resposta" })).toBeVisible();
   await semRolagemHorizontal(page);
-  await secao.getByRole("link", { name: /Aprovadas no mês/ }).click();
-  await expect(page).toHaveURL(/propostas\?status=APROVADA/);
+  await periodo.getByRole("link", { name: "Vendido", exact: true }).click();
+  await expect(page).toHaveURL(/\/relatorios\/vendas\?mes=\d{4}-\d{2}$/);
   await expect(page.getByText(numero).first()).toBeVisible();
 
   await page.keyboard.press("Control+k");

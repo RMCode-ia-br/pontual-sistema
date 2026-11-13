@@ -2,36 +2,39 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
-import { gerarCsv } from "@/lib/csv";
+import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
+import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
-import { carregarMargemDasObras, lerFiltroDeMargem } from "@/modules/relatorios/margem-obras";
+import { can } from "@/lib/permissoes";
+import { carregarMargemDasObras, lerFiltroDeMargem, type LinhaDeMargem } from "@/modules/relatorios/margem-obras";
 
 export const dynamic = "force-dynamic";
 
-const reais = (c: number | null) => (c === null ? "" : `${c < 0 ? "-" : ""}${Math.floor(Math.abs(c) / 100)},${String(Math.abs(c) % 100).padStart(2, "0")}`);
+/** Custo e margem são dados internos: todas as colunas de valor saem marcadas `interna`. */
+const COLUNAS: ColunaDeCsv<LinhaDeMargem>[] = [
+  { titulo: "Código", tipo: "texto", valor: (l) => l.codigo },
+  { titulo: "Obra", tipo: "texto", valor: (l) => l.titulo },
+  { titulo: "Cliente", tipo: "texto", valor: (l) => l.cliente },
+  { titulo: "Situação", tipo: "texto", valor: (l) => ROTULO_STATUS_PROJETO[l.status as StatusProjeto] },
+  { titulo: "Receita da margem (R$)", tipo: "dinheiro", valor: (l) => l.receitaDaMargemCentavos, interna: true },
+  { titulo: "Repasse de imposto, fora da margem (R$)", tipo: "dinheiro", valor: (l) => l.repasseDeImpostoCentavos, interna: true },
+  { titulo: "Custo conhecido (R$)", tipo: "dinheiro", valor: (l) => l.custoConhecidoCentavos, interna: true },
+  // Margem incompleta sai como texto "Incompleta" (nunca zero).
+  { titulo: "Margem (R$)", tipo: "dinheiro", valor: (l) => (l.incompleto ? "Incompleta" : l.margemCentavos), interna: true },
+  { titulo: "Margem (%)", tipo: "percentual", valor: (l) => (l.margemPb === null ? null : l.margemPb / 100), interna: true },
+  { titulo: "O que falta", tipo: "texto", valor: (l) => (l.faltando.length > 0 ? l.faltando.join("; ") : null), interna: true },
+];
 
-/** Margem por obra em CSV, com o MESMO filtro da tela. Margem incompleta sai vazia (nunca zero), com o que falta. */
+/** Margem por obra em CSV, com o MESMO filtro da tela (situação, busca e período). Exige a permissão de ver custo. */
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  if (!can(usuario, "ver", "custo")) return NextResponse.json({ erro: "Sem permissão para ver custo e margem." }, { status: 403 });
 
   const filtro = lerFiltroDeMargem(Object.fromEntries(requisicao.nextUrl.searchParams));
   const r = await carregarMargemDasObras(filtro);
-  const registros: unknown[][] = r.linhas.map((l) => [
-    l.codigo,
-    l.titulo,
-    l.cliente,
-    ROTULO_STATUS_PROJETO[l.status as StatusProjeto],
-    reais(l.receitaDaMargemCentavos),
-    reais(l.repasseDeImpostoCentavos),
-    reais(l.custoConhecidoCentavos),
-    l.incompleto ? "Incompleta" : reais(l.margemCentavos),
-    l.margemPb !== null ? (l.margemPb / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "",
-    l.faltando.join("; "),
-  ]);
-  if (r.truncado) registros.push(["AVISO: exportação limitada às 150 primeiras obras. Use a busca para obter o restante."]);
-  const csv = gerarCsv(["Código", "Obra", "Cliente", "Situação", "Receita da margem (R$)", "Repasse de imposto (R$)", "Custo conhecido (R$)", "Margem (R$)", "Margem (%)", "O que falta"], registros);
+  const csv = csvDoRelatorio(COLUNAS, r.linhas, { podeVerInterno: true, aviso: r.truncado ? "exportação limitada às 150 primeiras obras. Use a busca ou o período para obter o restante." : null });
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "margem-obras", acao: "EXPORTAR", depois: { linhas: r.linhas.length, filtro } });
-  return new NextResponse(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="margem-por-obra.csv"', "Cache-Control": "no-store" } });
+  return respostaDeCsv(csv, "margem-por-obra.csv");
 }

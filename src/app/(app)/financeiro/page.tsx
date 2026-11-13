@@ -1,4 +1,4 @@
-import { Landmark, TriangleAlert } from "lucide-react";
+import { Download, Landmark, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -11,6 +11,7 @@ import { fluxoRealizado, janelasDeDias, periodosMensais, projetarFluxo } from "@
 import { somarMeses } from "@/lib/dominio/parcelamento";
 import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
 import { GraficoDoFluxo } from "@/modules/financeiro/components/grafico-do-fluxo";
 import { AvisoDeSaldoNaoInformado, ValorEmReais } from "@/modules/financeiro/components/painel-de-contas";
 import { carregarDadosDoFluxo } from "@/modules/financeiro/queries-fluxo";
@@ -90,7 +91,11 @@ export default async function PaginaDoFluxo({ searchParams }: { searchParams: Pr
         descricao="Saldo das contas, o que há a receber e a pagar, e o fluxo realizado × projetado."
         acoes={
           <>
-            <Link href="/financeiro/dre" className={buttonVariants({ variant: "outline" })}>
+            <BotaoImprimir />
+            <a href={`/api/exportar/financeiro/fluxo?visao=${visao}`} className={cn(buttonVariants({ variant: "outline" }), "print:hidden")}>
+              <Download aria-hidden /> Exportar CSV
+            </a>
+            <Link href="/financeiro/dre" className={cn(buttonVariants({ variant: "outline" }), "print:hidden")}>
               DRE gerencial
             </Link>
             <Link href="/relatorios" className={buttonVariants({ variant: "outline" })}>

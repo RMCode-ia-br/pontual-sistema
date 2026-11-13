@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { capturar, entrarEEsperarPainel, semRolagemHorizontal } from "./ajudantes";
+import { capturar, cartaoDoPainel, conferirComoECalculado, entrarEEsperarPainel, semRolagemHorizontal } from "./ajudantes";
 import { buscarAuditoriaFeitaPeloE2E, contarProjetosDecididosForaDoE2E, criarMotivoDePerdaDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
@@ -42,18 +42,24 @@ test("preparação: projeto com origem Google, perdido com motivo", async ({ pag
   await expect(page.getByText("Por que foi perdido")).toBeVisible();
 });
 
-test("o painel mostra o funil, a atenção de hoje e origem/perdas do mês, com definições", async ({ page }) => {
+test("o painel mostra as vendas e propostas, a atenção de hoje e origem/perdas do mês, com definições", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Funil comercial" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vendas e propostas", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Atenção hoje" })).toBeVisible();
   await expect(page.getByText("Nenhuma visita marcada para hoje ou amanhã.")).toBeVisible();
   await expect(page.getByRole("link", { name: /Propostas sem retorno/ })).toHaveAttribute("href", "/projetos?semRetorno=1");
+  // Os cartões das fases ficam sob "Projetos em cada fase hoje".
+  await expect(page.getByRole("heading", { name: "Projetos em cada fase hoje", level: 3 })).toBeVisible();
   const novoContato = page.getByRole("link", { name: /Novo contato/ }).first();
-  await expect(novoContato).toHaveAttribute("title", /Como é calculado/);
   await expect(novoContato).toHaveAttribute("href", "/projetos?status=NOVO_LEAD");
+  await conferirComoECalculado(cartaoDoPainel(page, /Novo contato/), "Projetos nessa fase hoje");
   // O projeto perdido no mês aparece em origem (Google) e em perdas.
-  await expect(page.getByRole("heading", { name: "Projetos criados no mês, por origem" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Projetos perdidos no mês, por motivo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^De onde vieram os projetos novos \(/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Por que se perdeu \(/ })).toBeVisible();
+  const origem = page.locator("div.rounded-xl").filter({ has: page.getByRole("heading", { name: /^De onde vieram/ }) });
+  await expect(origem.getByRole("listitem").filter({ hasText: "Google" })).toContainText(/[1-9]/);
+  const perdas = page.locator("div.rounded-xl").filter({ has: page.getByRole("heading", { name: /^Por que se perdeu/ }) });
+  await expect(perdas.getByRole("listitem").filter({ hasText: MOTIVO_PERDA })).toContainText("1");
   await semRolagemHorizontal(page);
   await capturar(page, "painel");
 });

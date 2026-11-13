@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
+import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
 import { Input } from "@/components/ui/input";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { detalharPorCategoria, linhasDaDemonstracao, montarDre, ROTULO_GRUPO_DRE, TODOS_OS_GRUPOS_DRE } from "@/lib/dominio/dre";
@@ -41,9 +42,12 @@ export default async function PaginaDoDre({ searchParams }: { searchParams: Prom
         titulo="DRE gerencial"
         descricao="Resultado por mês, simplificado. Não é contábil: imposto não é calculado, é a despesa “Impostos (DAS)” lançada à mão."
         acoes={
-          <a href={`/api/exportar/financeiro/dre?${consulta}`} className={buttonVariants({ variant: "outline" })}>
-            <Download aria-hidden /> Exportar CSV
-          </a>
+          <>
+            <BotaoImprimir />
+            <a href={`/api/exportar/financeiro/dre?${consulta}`} className={buttonVariants({ variant: "outline" })}>
+              <Download aria-hidden /> Exportar CSV
+            </a>
+          </>
         }
       />
 

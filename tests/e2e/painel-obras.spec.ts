@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { capturar, entrarEEsperarPainel, semRolagemHorizontal } from "./ajudantes";
+import { capturar, cartaoDoPainel, conferirComoECalculado, entrarEEsperarPainel, semRolagemHorizontal } from "./ajudantes";
 import { atrasarEtapaDaObra, criarObraDeTeste, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
@@ -21,16 +21,20 @@ test.beforeEach(async ({ page }) => {
 
 test("o painel mostra as obras: números com definição, por etapa e a obra atrasada", async ({ page }) => {
   await page.goto("/");
-  const obras = page.locator("section").filter({ has: page.getByRole("heading", { name: "Obras", level: 2, exact: true }) });
+  const obras = page.locator("section").filter({ has: page.getByRole("heading", { name: "Obras e fábrica", level: 2, exact: true }) });
   await expect(obras.getByRole("link", { name: /Obras em andamento/ })).toBeVisible();
   await expect(obras.getByRole("link", { name: /Obras atrasadas/ })).toBeVisible();
-  await expect(obras.getByRole("link", { name: /Vencem em breve/ })).toBeVisible();
-  await expect(obras.getByRole("link", { name: /Pontualidade/ })).toBeVisible();
-  await expect(obras.getByRole("link", { name: /Chamados em aberto/ })).toBeVisible();
-  // Cada indicador explica como é calculado (tooltip) e leva à lista filtrada.
-  await expect(obras.getByRole("link", { name: /Obras atrasadas/ })).toHaveAttribute("title", /Como é calculado/);
+  await expect(obras.getByRole("link", { name: /Assistências em aberto/ })).toBeVisible();
+  // "Vencem em breve" deixou de ser um cartão: virou o detalhe de "Obras atrasadas".
+  await expect(obras.getByRole("link", { name: /Vencem em breve/ })).toHaveCount(0);
+  await expect(cartaoDoPainel(page, /Obras atrasadas/)).toContainText(/\d+ vencem em breve/);
+  // A pontualidade é um dos números do período (no topo do painel), não da seção de obras.
+  await expect(page.getByRole("link", { name: /Obras entregues no prazo/ })).toBeVisible();
+  // Cada indicador explica como é calculado (botão "Como é calculado") e leva à lista filtrada.
+  await conferirComoECalculado(cartaoDoPainel(page, /Obras atrasadas/), "Obras em andamento com alguma etapa depois da data prevista");
+  await conferirComoECalculado(cartaoDoPainel(page, /Obras entregues no prazo/), "Das obras concluídas no período que tinham prazo");
   await expect(obras.getByRole("link", { name: /Obras atrasadas/ })).toHaveAttribute("href", "/obras?semaforo=VERMELHO");
-  await expect(obras.getByRole("link", { name: /Pontualidade/ })).toHaveAttribute("href", /situacao=concluidas&de=\d{4}-\d{2}-\d{2}&ate=\d{4}-\d{2}-\d{2}/);
+  await expect(page.getByRole("link", { name: /Obras entregues no prazo/ })).toHaveAttribute("href", /situacao=concluidas&de=\d{4}-\d{2}-\d{2}&ate=\d{4}-\d{2}-\d{2}/);
 
   // A obra de teste está na etapa "Medição exata" e com ela atrasada.
   await expect(obras.getByRole("link", { name: "Medição exata" })).toHaveAttribute("href", "/obras?etapa=MEDICAO_EXATA");
