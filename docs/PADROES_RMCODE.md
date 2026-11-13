@@ -59,7 +59,14 @@ Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que 
 | Importação reversível | `src/modules/importacao` (`linhas`/`analisar`/`aplicar`) | assistente de 4 passos, lote com antes/depois, desfazer seguro | Prisma (`LoteImportacao*`) |
 | Lixeira | `src/modules/lixeira` | listar e restaurar conferindo unicidade | Prisma |
 
-**Reaproveitar:** copie `src/lib/{csv,dominio,listas,validadores,formatadores}`, `src/components/lista` e `src/components/{confirmar-acao,acoes-do-cadastro,campo-mascarado}.tsx`; recrie `campos.ts`/`linhas.ts` da importação com os campos do projeto novo. **Da Pontual (não reutilizável):** tipos de cadastro, regras de reajuste por fornecedor, categorias e unidades.
+**Reaproveitar:** copie `src/lib/{csv,dominio,listas,validadores,formatadores}`, `src/components/lista` e `src/components/{confirmar-acao,acoes-do-cadastro,campo-mascarado}.tsx`; recrie `campos.ts`/`linhas.ts` da importação com os campos do projeto novo. 
+| Período de análise (mês atual, comparação até o mesmo dia, limites para consulta) | `src/lib/periodo/*` | datas "aaaa-mm-dd" com extremos inclusivos no fuso do cliente; valor inválido volta ao padrão com aviso; `limitesEmInstantes` para colunas com hora e `limitesDeCalendario` para colunas de data |
+| Leitura única de números no padrão brasileiro | `src/lib/validadores/numero-br.ts` | aritmética inteira; recusa o ambíguo em vez de adivinhar; todos os leitores e as prévias do navegador delegam a ela |
+| CSV de relatório tipado | `src/lib/csv/colunas.ts`, `resposta.ts` | data dd/mm/aaaa, dinheiro "1234,56", coluna `interna` só com permissão, aviso de truncamento na 1ª linha, número negativo sem apóstrofo |
+| Painel e relatório: cartão de número, "como é calculado", seletor de período, gráfico de barras | `src/components/relatorios/*` | cartão = link para a lista + definição em botão (toque e teclado); gráfico recebe dados e um `formato` em texto (nunca função); paleta de 2 séries validada em claro e escuro |
+| Indicador com cláusula única (número = lista = relatório) | `src/modules/indicadores/*` | cada indicador exporta o `where` que a lista usa; teste de integração compara com SQL independente |
+
+**Da Pontual (não reutilizável):** tipos de cadastro, regras de reajuste por fornecedor, categorias e unidades.
 
 ## Blocos da Fase 2 (comercial) — reutilizáveis
 | Bloco | Onde | O que entrega | Depende de |

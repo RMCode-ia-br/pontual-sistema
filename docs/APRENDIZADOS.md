@@ -115,3 +115,13 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **`next start` serve a build antiga:** o E2E do painel falhou "sem a seção" até rodar `npm run build`; reconstruir sempre antes do Playwright quando mexer em página.
 - **Mesmo cuidado com tabela + cartões no DOM:** `getByText().first()` apanhou o elemento escondido no celular; filtrar por `a:visible`.
 - **Migração no banco compartilhado, de novo:** SQL mostrado, validado em transação com ROLLBACK, OK do dono, aplicar, só então o push do código. Funcionou duas vezes nesta fase (prorrogação e estoque/compras).
+
+## Fase 7A (painel, relatórios e leitura de números) — 2026-11-12
+
+- **Teste que depende de cadastro editável é dívida que vence sozinha.** A suíte da Fase 6 caiu porque o dono excluiu um fornecedor e renomeou outro; as specs seriais derrubaram junto os testes seguintes (os "22 que não rodaram" eram 1 + 10 testes × desktop e celular). Regra: cada teste cria os seus registros com prefixo e só toca neles; confirmar a causa no banco (leitura) antes de presumir.
+- **Número digitado: uma regra só.** Cada leitor com a sua regra gera o bug do "2.5 lido como 25" em campos diferentes. `lerNumeroBr` (aritmética inteira) recusa o que é ambíguo em vez de adivinhar; o ponto com exatamente 3 dígitos é milhar na convenção brasileira, então planilha numérica deve sair com vírgula.
+- **Ferramentas no Windows:** (1) o Git Bash consome barras invertidas em scripts passados por heredoc a `node -` (use `String.fromCharCode(92)` ou troque por linha); (2) arquivos do repositório estavam em CRLF na pasta de trabalho (índice em LF): ferramentas de substituição exata não casam com `
+` nem com espaço não separável dentro de regex; (3) `/tmp` do Git Bash não existe para o Node do Windows; (4) depois de converter a pasta de trabalho para LF, `git status` mostrou 400 arquivos "modificados" sem diferença de conteúdo: `git add --renormalize .` seguido de `git reset` reindexou sem tocar nos arquivos.
+- **Painel = relatório = lista por construção:** cada indicador exporta a MESMA cláusula `where` que a lista de destino usa, e o teste de integração compara com uma soma SQL independente (a mesma ideia do custo da obra da Fase 6).
+- **JSON do snapshot em SQL:** o acréscimo da nota e os m² da opção aprovada saem do `snapshot` com `jsonb_array_elements(snapshot->'opcoes')` filtrando `o->>'id' = "opcaoAprovadaId"`, sem carregar o JSON inteiro de cada proposta.
+- **Comparar um mês em andamento com o mês inteiro engana:** o painel compara até o mesmo dia (12/11 contra 12/10) e diz isso na tela.
