@@ -93,6 +93,22 @@ describe("csvDoRelatorio", () => {
     expect(linhas[1].startsWith("Obra;")).toBe(true);
   });
 
+  it("valor NEGATIVO sai como número (sem apóstrofo) em dinheiro, percentual e número; o texto continua neutralizado (A1 da revisão)", () => {
+    type L = { r: number | string; p: number; n: number; t: string };
+    const colunas: ColunaDeCsv<L>[] = [
+      { titulo: "Dinheiro", tipo: "dinheiro", valor: (l) => l.r },
+      { titulo: "Percentual", tipo: "percentual", valor: (l) => l.p },
+      { titulo: "Número", tipo: "numero", valor: (l) => l.n },
+      { titulo: "Texto", tipo: "texto", valor: (l) => l.t },
+    ];
+    const csv = csvDoRelatorio(colunas, [{ r: -1999, p: -12.5, n: -0.125, t: "-cuidado" }, { r: "Incompleta", p: 3, n: 1, t: "=1+1" }], { podeVerInterno: true });
+    const linhas = csv.split("\r\n");
+    expect(linhas[1]).toBe("-19,99;-12,5;-0,125;'-cuidado");
+    expect(csv).not.toContain("'-19,99");
+    // Texto numa coluna de dinheiro ("Incompleta") sai como texto, nunca como zero; fórmula em texto segue neutralizada.
+    expect(linhas[2]).toBe("Incompleta;3;1;'=1+1");
+  });
+
   it("o texto do aviso com $ e aspas não quebra o arquivo", () => {
     const csv = csvDoRelatorio(COLUNAS, [], { podeVerInterno: true, aviso: 'custo "R$ 1,00" $& teste' });
     expect(csv.split("\r\n")[0]).toContain('"AVISO: custo ""R$ 1,00"" $& teste"');

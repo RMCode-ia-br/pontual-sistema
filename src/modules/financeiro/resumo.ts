@@ -3,7 +3,6 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { janelasDeDias, projetarFluxo } from "@/lib/dominio/fluxo-caixa";
 import { somarDias } from "@/lib/dominio/calendario";
-import { somarMeses, ultimoDiaDoMes } from "@/lib/dominio/parcelamento";
 import { situacaoDoTitulo } from "@/lib/dominio/titulos";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 
@@ -23,8 +22,6 @@ export type ResumoFinanceiro = {
   pagar: ResumoDeTitulos;
   projetado: { em30Centavos: number; em60Centavos: number; em90Centavos: number };
   /** Recebido = soma dos recebimentos de contas a receber (lançamentos não estornados) pela data do recebimento. */
-  recebidoNoMesCentavos: number;
-  recebidoNoMesAnteriorCentavos: number;
   metaMensalCentavos: number;
   diasDeAlerta: number;
   receberEmAtencao: ContaEmAtencao[];
@@ -43,18 +40,11 @@ export async function resumoFinanceiro(agora: Date = new Date()): Promise<Resumo
   const hoje = dataLocalDoInstante(agora);
   const config = await lerParametrosFinanceiros();
   const primeiroDoMes = `${hoje.slice(0, 7)}-01`;
-  const mesAnterior = somarMeses(primeiroDoMes, -1);
-  const [anoA, mesA] = mesAnterior.split("-").map(Number);
-  const fimDoMesAnterior = `${mesAnterior.slice(0, 8)}${String(ultimoDiaDoMes(anoA, mesA)).padStart(2, "0")}`;
 
   const dados = await carregarDadosDoFluxo(hoje, { desde: primeiroDoMes, ate: somarDias(hoje, 90), diasEmBreve: config.diasAlertaVencimento });
   const proj = projetarFluxo({ hoje, saldoAtualCentavos: dados.saldoAtualCentavos, periodos: janelasDeDias(hoje, [30, 60, 90]), aReceber: dados.aReceber, aPagar: dados.aPagar });
 
-  const somaRecebido = (de: string, ate: string) =>
-    prisma.lancamento.aggregate({ where: { tipo: "ENTRADA", contaReceberId: { not: null }, estornadoEm: null, deletadoEm: null, data: { gte: comoData(de), lte: comoData(ate) } }, _sum: { valorCentavos: true } });
-  const [recebidoMes, recebidoAnterior, empresa, receber, pagar] = await Promise.all([
-    somaRecebido(primeiroDoMes, hoje),
-    somaRecebido(mesAnterior, fimDoMesAnterior),
+  const [empresa, receber, pagar] = await Promise.all([
     prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { metaFaturamentoMensalCentavos: true } }),
     prisma.contaReceber.findMany({
       where: { deletadoEm: null, status: { in: ["ABERTA", "PARCIAL"] }, vencimento: { lte: comoData(hoje) } },
@@ -86,8 +76,6 @@ export async function resumoFinanceiro(agora: Date = new Date()): Promise<Resumo
     receber: dados.resumoReceber,
     pagar: dados.resumoPagar,
     projetado: { em30Centavos: proj.linhas[0].saldoProjetadoCentavos, em60Centavos: proj.linhas[1].saldoProjetadoCentavos, em90Centavos: proj.linhas[2].saldoProjetadoCentavos },
-    recebidoNoMesCentavos: recebidoMes._sum.valorCentavos ?? 0,
-    recebidoNoMesAnteriorCentavos: recebidoAnterior._sum.valorCentavos ?? 0,
     metaMensalCentavos: empresa?.metaFaturamentoMensalCentavos ?? 0,
     diasDeAlerta: config.diasAlertaVencimento,
     receberEmAtencao: receber.map((t) => emAtencao(t, t.cliente.nome)),

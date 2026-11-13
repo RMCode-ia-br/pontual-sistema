@@ -169,6 +169,25 @@ describe("estorno do recebimento", () => {
     expect(await de(c.id)).toMatchObject({ status: "PAGA", valorPagoCentavos: 80000 });
   });
 
+  it("estornar um pagamento devolve a marca 'com nota' da conta ao pagamento válido que sobrou (decisão 117e)", async () => {
+    const c = await nova("Marca com nota", 100000);
+    // A conta nasce sem nota. O 1º pagamento é COM nota e o 2º (o último) é SEM nota: a conta guarda a marca do último.
+    const primeiro = await receber(c.id, 40000, { comNotaFiscal: true });
+    const segundo = await receber(c.id, 30000, { comNotaFiscal: false });
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: false });
+
+    // Estorna o último (sem nota): sobra só o pagamento COM nota, e a conta volta a refletir isso.
+    await tx((t) => estornarLancamento(t, segundo.lancamentoId, "Engano", ctx()));
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: true, valorPagoCentavos: 40000 });
+
+    // Estorna o que sobrou: sem nenhum pagamento válido e sem proposta de origem, a conta volta a "sem nota" (como nasce).
+    await tx((t) => estornarLancamento(t, primeiro.lancamentoId, "Engano", ctx()));
+    expect(await de(c.id)).toMatchObject({ valorPagoCentavos: 0, status: "ABERTA", comNotaFiscal: false });
+    // Os pagamentos mantêm a marca que tinham (o indicador de faturamento com nota lê o pagamento, nunca a conta).
+    const marcas = await prisma.lancamento.findMany({ where: { contaReceberId: c.id }, orderBy: { criadoEm: "asc" }, select: { comNotaFiscal: true, estornadoEm: true } });
+    expect(marcas.map((m) => [m.comNotaFiscal, m.estornadoEm !== null])).toEqual([[true, true], [false, true]]);
+  });
+
   it("estornar tudo volta a parcela para 'aberta' (sem pagamento)", async () => {
     const c = await nova("Estorno total", 20000);
     const r = await receber(c.id, 20000);

@@ -272,7 +272,8 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const fases = ["NOVO_LEAD", "VISITA_AGENDADA", "ELABORANDO_PROPOSTA", "PROPOSTA_ENVIADA", "NEGOCIACAO", "PERDIDO"];
   if (fases.includes(p.projeto.status)) {
     await mudarFaseDoProjeto(tx, { usuario, projeto: { id: p.projeto.id, codigo: p.projeto.codigo, titulo: p.projeto.titulo, clienteId: p.projeto.clienteId, status: p.projeto.status as never }, para: "APROVADO", ip, agora });
-    await tx.projeto.update({ where: { id: p.projeto.id }, data: { valorFechadoCentavos: valorFechado, dataFechamento: agora, atualizadoPorId: usuario.id } });
+    await tx.projeto.update({ where: { id: p.projeto.id }, // A data de fechamento é a do ACEITE informada (a mesma que o "Vendido" usa), não o instante do clique: aceite retroativo cai no mês certo.
+      data: { valorFechadoCentavos: valorFechado, dataFechamento: new Date(`${e.aceitaEm}T12:00:00.000Z`), atualizadoPorId: usuario.id } });
   } else {
     // Já aprovado/em execução (outra "parte"): só atualiza o valor fechado.
     await tx.projeto.update({ where: { id: p.projeto.id }, data: { valorFechadoCentavos: valorFechado, atualizadoPorId: usuario.id } });

@@ -12,7 +12,7 @@
  * - exportação truncada leva um AVISO na primeira linha (e a tela mostra o mesmo aviso).
  */
 import { formatarDataCalendario, formatarDataHora } from "../formatadores";
-import { celulaCsv, gerarCsv } from "./index";
+import { celulaCsv, gerarCsv, NumeroFormatado } from "./index";
 
 const BOM = "\uFEFF";
 
@@ -58,7 +58,8 @@ export function valorDeCsv(tipo: TipoDeColuna, valor: string | number | Date | n
     case "dataHora":
       return valor instanceof Date || typeof valor === "string" || typeof valor === "number" ? formatarDataHora(valor) : null;
     case "dinheiro":
-      return typeof valor === "number" ? centavosParaCsv(valor) : null;
+      // Texto em coluna de dinheiro ("Incompleta") sai como texto, nunca como zero.
+      return typeof valor === "number" ? centavosParaCsv(valor) : String(valor);
     case "inteiro":
       return typeof valor === "number" && Number.isFinite(valor) ? String(Math.trunc(valor)) : null;
     case "numero":
@@ -71,7 +72,14 @@ export function valorDeCsv(tipo: TipoDeColuna, valor: string | number | Date | n
 /** Monta o CSV do relatório: só as colunas permitidas, na ordem dada, com o aviso (se houver) na primeira linha. */
 export function csvDoRelatorio<L>(colunas: readonly ColunaDeCsv<L>[], linhas: readonly L[], { podeVerInterno, aviso }: OpcoesDoCsv): string {
   const visiveis = colunas.filter((c) => !c.interna || podeVerInterno);
-  const corpo = linhas.map((l) => visiveis.map((c) => valorDeCsv(c.tipo, c.valor(l), c.casas)));
+  const numerico = (tipo: TipoDeColuna) => tipo === "dinheiro" || tipo === "numero" || tipo === "inteiro" || tipo === "percentual";
+  // Número formatado vira NumeroFormatado (o "-" de um valor negativo é sinal, não fórmula); texto continua neutralizado.
+  const corpo = linhas.map((l) =>
+    visiveis.map((c) => {
+      const v = valorDeCsv(c.tipo, c.valor(l), c.casas);
+      return v !== null && numerico(c.tipo) && /^-?[0-9]+(,[0-9]+)?$/.test(v) ? new NumeroFormatado(v) : v;
+    }),
+  );
   const csv = gerarCsv(
     visiveis.map((c) => c.titulo),
     corpo,

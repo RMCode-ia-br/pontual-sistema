@@ -7,6 +7,7 @@ import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { TIPOS_DE_ETAPA, type TipoDeEtapa } from "@/lib/dominio/etapas";
 import type { ResumoDePontualidade } from "@/lib/dominio/pontualidade";
 import { dataLocalDoInstante } from "@/lib/formatadores";
+import type { Periodo } from "@/lib/periodo";
 import { listarObras } from "./queries-lista";
 
 /** Janela da pontualidade no painel: obras concluídas nos últimos 90 dias (a mesma do funil). */
@@ -33,17 +34,19 @@ export type ResumoDeObras = {
  * Números de obras do painel. Definições (mostradas na tela):
  * - em andamento: obras aprovadas ou em execução; semáforo = a pior cor entre as etapas abertas e o prazo prometido;
  * - por etapa: a etapa atual de cada obra (a primeira ainda aberta);
- * - pontualidade: obras concluídas nos últimos 90 dias até o prazo prometido (já com as pausas justificadas);
+ * - pontualidade: obras concluídas no período escolhido (padrão: últimos 90 dias) até o prazo prometido (já com as pausas justificadas);
  * - próximas instalações: compromissos de instalação, entrega e medição dos vidros ainda em aberto, a partir de hoje;
  * - chamados: assistências ainda não resolvidas nem canceladas.
  */
-export async function resumoDeObras(agora: Date = new Date()): Promise<ResumoDeObras> {
+export async function resumoDeObras(agora: Date = new Date(), periodo?: Periodo): Promise<ResumoDeObras> {
   const hoje = dataLocalDoInstante(agora);
-  const de = somarDias(hoje, -(DIAS_DA_PONTUALIDADE_NO_PAINEL - 1));
+  // A pontualidade segue o período escolhido no painel; sem período, os últimos 90 dias (a janela de antes).
+  const de = periodo?.de ?? somarDias(hoje, -(DIAS_DA_PONTUALIDADE_NO_PAINEL - 1));
+  const ate = periodo?.ate ?? hoje;
 
   const [andamento, concluidas, instalacoes, chamadosEmAberto, emGarantia] = await Promise.all([
     listarObras({ situacao: "andamento", busca: "" }, agora),
-    listarObras({ situacao: "concluidas", busca: "", de, ate: hoje }, agora),
+    listarObras({ situacao: "concluidas", busca: "", de, ate }, agora),
     prisma.eventoAgenda.findMany({
       where: {
         deletadoEm: null,
@@ -75,7 +78,7 @@ export async function resumoDeObras(agora: Date = new Date()): Promise<ResumoDeO
       .slice(0, 5)
       .map((l) => ({ id: l.id, titulo: l.titulo, clienteNome: l.clienteNome, etapaAtual: l.etapaAtual?.nome ?? null, etapasAtrasadas: l.atrasadas })),
     pontualidade: concluidas.pontualidade!,
-    periodoDaPontualidade: { de, ate: hoje },
+    periodoDaPontualidade: { de, ate },
     proximasInstalacoes: instalacoes.map((e) => ({
       id: e.id,
       tipo: e.tipo,

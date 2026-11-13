@@ -6,8 +6,17 @@ const BOM = "﻿";
 /** Caracteres que fazem o Excel/Planilhas interpretarem a célula como fórmula (CSV injection). */
 const INICIO_DE_FORMULA = /^[=+\-@\t\r]/;
 
+/**
+ * Número JÁ formatado para o Excel em português ("-19,99", "1234,5"): só dígitos, vírgula e sinal. Não passa pela neutralização de
+ * fórmula, senão o sinal de menos viraria apóstrofo e a célula, texto que não soma.
+ */
+export class NumeroFormatado {
+  constructor(readonly texto: string) {}
+}
+
 /** Prepara uma célula: neutraliza fórmulas em texto e aplica aspas quando necessário. */
 export function celulaCsv(valor: unknown): string {
+  if (valor instanceof NumeroFormatado) return valor.texto;
   if (valor === null || valor === undefined) return "";
   let texto: string;
   if (valor instanceof Date) texto = valor.toISOString();

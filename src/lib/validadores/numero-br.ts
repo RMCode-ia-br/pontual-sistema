@@ -55,6 +55,8 @@ export function lerNumeroBr(texto: string, { casas, moeda = false, negativo = fa
   if (porVirgula.length === 2) {
     const [parteInteira, parteFracao] = porVirgula;
     if (parteFracao === "") return { ok: false, erro: "Falta o número depois da vírgula." };
+    // Só dígitos depois da vírgula: "1,5.5", "5,5." e "1,2.3" são recusados aqui, nunca chegam à conversão.
+    if (!/^[0-9]+$/.test(parteFracao)) return { ok: false, erro: ERRO_PONTOS };
     if (parteInteira === "") inteiro = "0";
     else if (/^\d+$/.test(parteInteira)) inteiro = parteInteira;
     else if (MILHAR.test(parteInteira)) inteiro = parteInteira.replace(/\./g, "");

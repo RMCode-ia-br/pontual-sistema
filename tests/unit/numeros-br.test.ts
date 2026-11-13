@@ -135,6 +135,19 @@ tabela("lerPercentualEmPb (com sinal e %)", lerPercentualEmPb, [
   ["1R2", null],
 ]);
 
+// Revisão sênior da 7A (A2): vírgula junto com ponto na parte decimal lançava SyntaxError (derrubava o editor da proposta a cada tecla).
+describe("arranjos com vírgula e ponto depois da vírgula: recusa, nunca exceção", () => {
+  const ARRANJOS = ["1,5.5", "5,5.", "1,.5", "1,2.3", "1,5,5", "1,5.", ",5.5"];
+
+  it.each(ARRANJOS)("%j é recusado por todos os leitores, sem lançar", (texto) => {
+    expect(() => lerNumeroBr(texto, { casas: 3 })).not.toThrow();
+    expect(lerNumeroBr(texto, { casas: 3 }).ok).toBe(false);
+    for (const leitor of [parseMoedaParaCentavos, valorParaCentavos, lerQuantidade, textoParaInteiro, (t: string) => textoParaDecimal(t, 3), (t: string) => percentualParaPontosBase(t), lerPercentualEmPb]) {
+      expect(leitor(texto), texto).toBeNull();
+    }
+  });
+});
+
 describe("lerNumeroBr: mensagens claras e aritmética exata", () => {
   it("devolve o inteiro escalado, sem ponto flutuante", () => {
     expect(lerNumeroBr("1.234,56", { casas: 2, moeda: true })).toEqual({ ok: true, escalado: 123456, casas: 2 });

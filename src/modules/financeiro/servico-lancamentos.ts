@@ -175,7 +175,7 @@ export async function estornarLancamento(tx: Tx, lancamentoId: string, motivo: s
   const agora = ctx.agora ?? new Date();
   const estornados: Awaited<ReturnType<typeof tx.lancamento.update>>[] = [];
   for (const antes of lancamentos) {
-    if (antes.contaReceberId) await refazerTituloDeReceber(tx, antes.contaReceberId, antes.valorCentavos, ctx);
+    if (antes.contaReceberId) await refazerTituloDeReceber(tx, antes.contaReceberId, antes.valorCentavos, ctx, antes.id);
     if (antes.contaPagarId) await refazerTituloDePagar(tx, antes.contaPagarId, antes.valorCentavos);
     const depois = await tx.lancamento.update({
       where: { id: antes.id },
@@ -187,13 +187,26 @@ export async function estornarLancamento(tx: Tx, lancamentoId: string, motivo: s
   return { lancamentos: estornados };
 }
 
-async function refazerTituloDeReceber(tx: Tx, id: string, valorCentavos: number, ctx: ContextoFinanceiro) {
+/**
+ * Desfaz o efeito de um recebimento estornado na conta a receber: valor pago, status e a marca "com nota", que volta a ser a do
+ * pagamento válido mais recente que sobrou (ou, sem nenhum pagamento, a da proposta de origem). O indicador de faturamento com nota
+ * lê sempre o pagamento (decisão 117); a marca da conta só precisa continuar coerente com o que sobrou.
+ */
+async function refazerTituloDeReceber(tx: Tx, id: string, valorCentavos: number, ctx: ContextoFinanceiro, lancamentoEstornadoId: string) {
   const [t] = await tx.$queryRaw<{ status: StatusDoTitulo; valorCentavos: number; valorPagoCentavos: number; descricao: string; clienteId: string; projetoId: string | null }[]>`
     SELECT "status", "valorCentavos", "valorPagoCentavos", "descricao", "clienteId", "projetoId" FROM "ContaReceber" WHERE "id" = ${id} FOR UPDATE`;
   if (!t) throw new ErroNegocio("A conta a receber deste lançamento não foi encontrada.");
   const r = aplicarEstorno(t, valorCentavos);
   if (!r.ok) throw new ErroNegocio(r.erro);
-  await tx.contaReceber.update({ where: { id }, data: { valorPagoCentavos: r.valorPagoCentavos, status: r.status, atualizadoPorId: ctx.usuario.id } });
+  const restante = await tx.lancamento.findFirst({
+    where: { contaReceberId: id, tipo: "ENTRADA", estornadoEm: null, deletadoEm: null, id: { not: lancamentoEstornadoId } },
+    orderBy: [{ criadoEm: "desc" }, { id: "desc" }],
+    select: { comNotaFiscal: true },
+  });
+  const origem = restante ? null : await tx.contaReceber.findUnique({ where: { id }, select: { proposta: { select: { comNotaFiscal: true } } } });
+  // Sem pagamento restante: a marca da proposta de origem; sem proposta, "sem nota" (como a conta nasce).
+  const marca = restante ? restante.comNotaFiscal : (origem?.proposta?.comNotaFiscal ?? false);
+  await tx.contaReceber.update({ where: { id }, data: { valorPagoCentavos: r.valorPagoCentavos, status: r.status, comNotaFiscal: marca, atualizadoPorId: ctx.usuario.id } });
   await sincronizarTarefaDeCobranca(tx, id, t.status, r.status, ctx.agora ?? new Date());
   await registrarInteracao(tx, {
     tipo: "SISTEMA",
