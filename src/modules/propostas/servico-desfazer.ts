@@ -19,7 +19,7 @@ import { formatarData, formatarMoeda } from "@/lib/formatadores";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
 import { mudarFaseDoProjeto } from "@/modules/projetos/servico";
 
-import { travarFamiliaDaProposta } from "./servico-ciclo";
+import { aprovarProposta, travarFamiliaDaProposta } from "./servico-ciclo";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
@@ -315,4 +315,72 @@ export async function reabrirRevisao(tx: Tx, e: { usuario: Usuario; propostaId: 
   });
   await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "REABRIR_REVISAO", antes: { status: "SUBSTITUIDA" }, depois: { status: meu.para, revisoes: plano.mudancas }, ip });
   return { numero: p.numero, projetoId: p.projetoId, revisao: p.revisao, status: meu.para, substituidas };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Trocar a aprovação: desfazer a vigente e aprovar a revisão escolhida, numa transação só
+// ---------------------------------------------------------------------------------------------------------
+
+export type EntradaTroca = {
+  usuario: Usuario;
+  /** A proposta aprovada hoje. */
+  deId: string;
+  /** A revisão substituída que passa a ser a aprovada. */
+  paraId: string;
+  opcaoId: string;
+  forma: "WHATSAPP" | "EMAIL" | "ASSINATURA" | "VERBAL";
+  /** Data do aceite, "aaaa-mm-dd" (a tela já vem com a da aprovação anterior). */
+  aceitaEm: string;
+  observacao?: string | null;
+  motivo: string;
+  ip?: string | null;
+  agora?: Date;
+};
+
+export type ResultadoTroca = { numero: string; projetoId: string; valorAprovadoCentavos: number; parcelasGeradas: number; etapasGeradas: number; valorFechadoCentavos: number; desfeita: ResultadoDesfazer };
+
+/**
+ * Sem estado intermediário: tudo ou nada. Desfazer (com etapas e prazo refeitos, mas fase, acompanhamento, valor fechado
+ * e data de fechamento deixados para a aprovação) + aprovar a revisão escolhida, que gera parcelas, tarefas e etapas
+ * dela, com o prazo dela. Se qualquer passo recusar (bloqueio, revisão incompleta), nada muda.
+ */
+export async function trocarAprovacao(tx: Tx, e: EntradaTroca): Promise<ResultadoTroca> {
+  const { usuario, deId, paraId, ip } = e;
+  const agora = e.agora ?? new Date();
+  if (deId === paraId) throw new ErroNegocio("Escolha outra revisão para aprovar no lugar desta.");
+
+  await travarFamiliaDaProposta(tx, deId);
+  const buscar = (id: string) => tx.proposta.findFirst({ where: { id, deletadoEm: null, projeto: { deletadoEm: null } }, select: { id: true, numero: true, revisao: true, status: true, projetoId: true, projeto: { select: { clienteId: true } } } });
+  const de = await buscar(deId);
+  const para = await buscar(paraId);
+  if (!de || !para) throw new ErroNegocio("Proposta não encontrada.");
+  if (de.numero !== para.numero || de.projetoId !== para.projetoId) throw new ErroNegocio("As duas propostas precisam ser revisões do mesmo número.");
+  if (de.status !== "APROVADA") throw new ErroNegocio(`A ${rotuloDaRevisao(de.revisao)} não está aprovada (a aprovação já foi desfeita ou trocada?). Atualize a página.`);
+  if (para.status !== "SUBSTITUIDA") throw new ErroNegocio(`A ${rotuloDaRevisao(para.revisao)} não ficou de lado; só dá para trocar por uma revisão substituída.`);
+
+  const desfeita = await desfazerAprovacao(tx, { usuario, propostaId: deId, motivo: e.motivo, reabrirId: paraId, emTroca: true, ip, agora });
+  const r = await aprovarProposta(tx, { usuario, propostaId: paraId, opcaoId: e.opcaoId, forma: e.forma, aceitaEm: e.aceitaEm, observacao: e.observacao, ip, agora });
+
+  // A data de fechamento é a do primeiro aceite entre as propostas aprovadas (a aprovação, com o projeto já em "Aprovado", só soma o valor).
+  const aprovadas = await tx.proposta.findMany({ where: { projetoId: de.projetoId, status: "APROVADA", deletadoEm: null }, select: { aceitaEm: true } });
+  const primeiro = aprovadas.reduce<Date | null>((m, x) => (x.aceitaEm && (m === null || x.aceitaEm < m) ? x.aceitaEm : m), null);
+  await tx.projeto.update({ where: { id: de.projetoId }, data: { dataFechamento: primeiro, atualizadoPorId: usuario.id } });
+
+  await registrarInteracao(tx, {
+    tipo: "SISTEMA",
+    texto: `Aprovação trocada: a ${rotuloDaRevisao(de.revisao)} da proposta ${de.numero} deixou de valer e a ${rotuloDaRevisao(para.revisao)} foi aprovada (${formatarMoeda(r.valorAprovadoCentavos)}). Motivo: ${e.motivo.trim()}.`,
+    clienteId: de.projeto.clienteId,
+    projetoId: de.projetoId,
+    usuarioId: usuario.id,
+  });
+  await registrarAuditoria(tx, {
+    usuario,
+    entidade: "Proposta",
+    entidadeId: paraId,
+    acao: "TROCAR_APROVACAO",
+    antes: { aprovadaId: deId, revisao: de.revisao },
+    depois: { aprovadaId: paraId, revisao: para.revisao, valorAprovadoCentavos: r.valorAprovadoCentavos, parcelas: r.parcelasGeradas, etapas: r.etapasGeradas, motivo: e.motivo.trim() },
+    ip,
+  });
+  return { numero: de.numero, projetoId: de.projetoId, valorAprovadoCentavos: r.valorAprovadoCentavos, parcelasGeradas: r.parcelasGeradas, etapasGeradas: r.etapasGeradas, valorFechadoCentavos: r.valorFechadoCentavos, desfeita };
 }

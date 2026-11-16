@@ -10,6 +10,7 @@ import {
   revisaoMaisNovaEmAberto,
   situacaoDasRevisoes,
   textoDoAvisoDeRevisaoMaisNova,
+  textoDoPrazo,
   type FatosDoDesfazer,
   type RevisaoBasica,
 } from "@/lib/dominio/desfazer-aprovacao";
@@ -206,6 +207,19 @@ describe("avisoDeMesDoAceite (o Vendido é pelo mês do aceite)", () => {
     expect(avisoDeMesDoAceite({ aceitaEm: "2026-10-15", hoje: dia1, valorCentavos: 100 })).toContain("outubro/2026"); // virou novembro
   });
   it("data malformada não quebra", () => expect(avisoDeMesDoAceite({ aceitaEm: "", hoje: "2026-11-16", valorCentavos: 1 })).toBeNull());
+});
+
+describe("textoDoPrazo (prévia da troca)", () => {
+  const base = { dias: null, material: null, execucao: null, vidros: null, tipoDias: "UTEIS" as const };
+  it("total simples, por etapa, corridos, singular e sem prazo", () => {
+    expect(textoDoPrazo({ ...base, modo: "TOTAL", dias: 35 })).toBe("35 dias úteis");
+    expect(textoDoPrazo({ ...base, modo: "TOTAL", dias: 1 })).toBe("1 dia útil");
+    expect(textoDoPrazo({ ...base, modo: "TOTAL", dias: 10, tipoDias: "CORRIDOS" })).toBe("10 dias corridos");
+    expect(textoDoPrazo({ ...base, modo: "TOTAL", dias: 1, tipoDias: "CORRIDOS" })).toBe("1 dia corrido");
+    expect(textoDoPrazo({ ...base, modo: "POR_ETAPA", dias: 23, material: 10, execucao: 5, vidros: 8 })).toBe("23 dias úteis (material 10 + execução 5 + vidros e acabamento 8)");
+    expect(textoDoPrazo({ ...base, modo: "NENHUM" })).toBe("sem prazo definido");
+    expect(textoDoPrazo({ ...base, modo: "TOTAL", dias: 0 })).toBe("sem prazo definido");
+  });
 });
 
 describe("chave de tarefa desfeita e permissão", () => {

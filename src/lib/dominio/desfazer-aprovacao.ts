@@ -193,6 +193,15 @@ export function avisoDeMesDoAceite(entrada: { aceitaEm: string; hoje: string; va
   return `A aprovação é de ${mes}: desfazer tira ${formatarMoeda(entrada.valorCentavos)} do Vendido de ${mes}.`;
 }
 
+/** Prazo da obra em palavras, para a prévia da troca ("23 dias úteis (material 10 + execução 5 + vidros 8)"). */
+export function textoDoPrazo(p: { modo: "NENHUM" | "TOTAL" | "POR_ETAPA"; dias: number | null; material: number | null; execucao: number | null; vidros: number | null; tipoDias: "UTEIS" | "CORRIDOS" }): string {
+  if (p.modo === "NENHUM" || !p.dias || p.dias <= 0) return "sem prazo definido";
+  const tipo = p.tipoDias === "CORRIDOS" ? (p.dias === 1 ? "corrido" : "corridos") : p.dias === 1 ? "útil" : "úteis";
+  const base = `${p.dias} ${p.dias === 1 ? "dia" : "dias"} ${tipo}`;
+  if (p.modo === "POR_ETAPA") return `${base} (material ${p.material ?? 0} + execução ${p.execucao ?? 0} + vidros e acabamento ${p.vidros ?? 0})`;
+  return base;
+}
+
 /**
  * Aposenta a chave única de uma tarefa da aprovação desfeita (a chave é única no banco inteiro, então a aprovação
  * seguinte só consegue recriar a tarefa se a antiga sair do caminho). O id da tarefa garante que nunca repete.

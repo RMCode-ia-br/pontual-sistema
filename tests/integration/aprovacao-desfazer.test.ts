@@ -8,7 +8,10 @@ import { registrarRecebimento } from "@/modules/financeiro/servico-receber";
 import { restaurarDaLixeira } from "@/modules/lixeira/restaurar";
 import { proximoCodigoDoProjeto } from "@/modules/projetos/servico";
 import { aprovarProposta, copiarProposta, enviarProposta } from "@/modules/propostas/servico-ciclo";
-import { desfazerAprovacao, reabrirRevisao } from "@/modules/propostas/servico-desfazer";
+import { listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
+import type { Periodo } from "@/lib/periodo";
+import { previaDaTroca, previaDoDesfazer } from "@/modules/propostas/previa-desfazer";
+import { desfazerAprovacao, reabrirRevisao, trocarAprovacao } from "@/modules/propostas/servico-desfazer";
 import { reservarNumeroDeProposta } from "@/modules/propostas/servico";
 
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
@@ -86,7 +89,11 @@ afterAll(async () => {
 });
 
 /** Projeto + proposta rascunho com uma opção, dois itens manuais e cronograma 50% na confirmação / 50% na entrega. */
-async function montar(titulo: string, valores: number[] = [1200000, 80000]) {
+type PrazoDaProposta = { modoPrazo: "TOTAL" | "POR_ETAPA"; prazoTotalMinDias?: number | null; prazoTotalMaxDias?: number | null; prazoMaterialDias?: number | null; prazoExecucaoDias?: number | null; prazoVidrosDias?: number | null };
+const PRAZO_ORIGINAL: PrazoDaProposta = { modoPrazo: "TOTAL", prazoTotalMaxDias: 35 };
+const PRAZO_DA_REVISAO: PrazoDaProposta = { modoPrazo: "POR_ETAPA", prazoTotalMinDias: null, prazoTotalMaxDias: null, prazoMaterialDias: 10, prazoExecucaoDias: 5, prazoVidrosDias: 8 };
+
+async function montar(titulo: string, valores: number[] = [1200000, 80000], prazo: PrazoDaProposta = PRAZO_ORIGINAL) {
   return prisma.$transaction(async (tx) => {
     const projeto = await tx.projeto.create({ data: { codigo: await proximoCodigoDoProjeto(tx), titulo: `${PREFIXO} ${titulo}`, clienteId, status: "ELABORANDO_PROPOSTA" } });
     const { numero, sequencial, ano } = await reservarNumeroDeProposta(tx);
@@ -98,8 +105,7 @@ async function montar(titulo: string, valores: number[] = [1200000, 80000]) {
         ano,
         data: new Date(),
         clienteNome: `${PREFIXO} Cliente`,
-        modoPrazo: "TOTAL",
-        prazoTotalMaxDias: 35,
+        ...prazo,
         opcoes: { create: [{ nome: "Opção 1", ordem: 0 }] },
         parcelas: {
           create: [
@@ -494,5 +500,237 @@ describe("Lixeira: o que o desfazer exclui não aparece nem volta", () => {
     expect((await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId } })).deletadoEm).toBeNull();
     expect(await prisma.etapaProjeto.count({ where: { projetoId: m.projetoId, deletadoEm: null } })).toBe(0);
     expect(await prisma.contaReceber.count({ where: { projetoId: m.projetoId, deletadoEm: null } })).toBe(0);
+  });
+});
+
+// ------------------------------------------------------------------------------------------------------------------
+// Bloco 3: trocar a aprovação e prévias
+// ------------------------------------------------------------------------------------------------------------------
+
+const trocar = (deId: string, paraId: string, opcaoId: string, extra: { aceitaEm?: string; motivo?: string } = {}) =>
+  prisma.$transaction((tx) => trocarAprovacao(tx, { usuario, deId, paraId, opcaoId, forma: "WHATSAPP", aceitaEm: extra.aceitaEm ?? "2026-11-16", motivo: extra.motivo ?? "Aprovei a original por engano" }), { timeout: 30_000 });
+
+/** A revisão em rascunho do caso real: outro valor e outro prazo (por etapa). */
+async function ajustarRevisao(revId: string, valores: number[], prazo: PrazoDaProposta = PRAZO_DA_REVISAO) {
+  const itens = await prisma.itemProposta.findMany({ where: { propostaId: revId, deletadoEm: null }, orderBy: { ordem: "asc" } });
+  for (const [i, it] of itens.entries()) await prisma.itemProposta.update({ where: { id: it.id }, data: { valorManualCentavos: valores[i], precoTotalCentavos: valores[i] } });
+  await prisma.proposta.update({ where: { id: revId }, data: prazo });
+}
+
+describe("trocar a aprovação (desfazer a original e aprovar a revisão, numa transação só)", () => {
+  it("o caso real: a revisão passa a valer; parcelas, tarefas e valor fechado são os dela; a fase não faz ida e volta", async () => {
+    const c = await cenarioDoEngano("Troca simples");
+    await ajustarRevisao(c.revId, [1000000, 80000]);
+    const fasesAntes = await prisma.historicoFaseProjeto.count({ where: { projetoId: c.projetoId } });
+
+    const r = await trocar(c.propostaId, c.revId, c.revOpcaoId);
+    expect(r).toMatchObject({ valorAprovadoCentavos: 1080000, parcelasGeradas: 2, valorFechadoCentavos: 1080000 });
+    expect(r.etapasGeradas).toBeGreaterThan(0);
+
+    const original = await prisma.proposta.findUniqueOrThrow({ where: { id: c.propostaId } });
+    const revisao = await prisma.proposta.findUniqueOrThrow({ where: { id: c.revId } });
+    expect(original).toMatchObject({ status: "SUBSTITUIDA", aceitaEm: null, valorAprovadoCentavos: null });
+    expect(revisao).toMatchObject({ status: "APROVADA", valorAprovadoCentavos: 1080000, formaAceite: "WHATSAPP", opcaoAprovadaId: c.revOpcaoId });
+    expect(revisao.snapshot).not.toBeNull(); // aprovar um rascunho congela antes
+    expect(await aprovadasDoNumero(c.numero)).toBe(1);
+
+    const projeto = await prisma.projeto.findUniqueOrThrow({ where: { id: c.projetoId } });
+    expect(projeto).toMatchObject({ status: "APROVADO", valorFechadoCentavos: 1080000 });
+    expect(dia(projeto.dataFechamento)).toBe("2026-11-16");
+    expect(await prisma.historicoFaseProjeto.count({ where: { projetoId: c.projetoId } })).toBe(fasesAntes); // sem estado intermediário
+
+    const vivas = await prisma.contaReceber.findMany({ where: { projetoId: c.projetoId, deletadoEm: null }, orderBy: { ordem: "asc" } });
+    expect(vivas.map((x) => [x.propostaId, x.valorCentavos])).toEqual([[c.revId, 540000], [c.revId, 540000]]);
+    expect(await prisma.contaReceber.count({ where: { projetoId: c.projetoId, deletadoEm: { not: null }, status: "CANCELADA", propostaId: null } })).toBe(2); // as da original, como histórico
+
+    expect(await prisma.tarefa.count({ where: { chaveUnica: `medicao-exata:${c.revId}`, status: "ABERTA" } })).toBe(1);
+    expect(await prisma.tarefa.count({ where: { projetoId: c.projetoId, tipo: "AGENDAR_MEDICAO", status: "ABERTA" } })).toBe(1);
+    expect(await prisma.logAuditoria.count({ where: { entidade: "Proposta", entidadeId: c.revId, acao: "TROCAR_APROVACAO" } })).toBe(1);
+    expect(await prisma.interacao.count({ where: { projetoId: c.projetoId, texto: { contains: "Aprovação trocada" } } })).toBe(1);
+  });
+
+  it("etapas e prazo são REFEITOS com o prazo da revisão: o resultado é igual ao de aprovar a revisão direto", async () => {
+    const c = await cenarioDoEngano("Troca com outro prazo");
+    await ajustarRevisao(c.revId, [1000000, 80000], PRAZO_DA_REVISAO);
+    const antes = await estado(c.projetoId);
+    expect(antes.projeto.prazo.slice(0, 2)).toEqual(["TOTAL", 35]); // o prazo da original
+
+    await trocar(c.propostaId, c.revId, c.revOpcaoId);
+
+    // Gêmeo: um projeto que aprova direto uma proposta com o mesmo conteúdo e o mesmo prazo da revisão.
+    const g = await montar("Gêmeo da revisão", [1000000, 80000], PRAZO_DA_REVISAO);
+    await enviar(g.propostaId);
+    await aprovar(g.propostaId, g.opcaoId);
+
+    const trocado = await estado(c.projetoId);
+    const gemeo = await estado(g.projetoId);
+    expect(trocado.etapas.length).toBeGreaterThan(0);
+    expect(trocado.projeto.prazo.slice(0, 5)).toEqual(["POR_ETAPA", 23, 10, 5, 8]);
+    expect(trocado.etapas).not.toEqual(antes.etapas); // as datas mudaram junto com o prazo
+    const semPropostas = (e: Awaited<ReturnType<typeof estado>>) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== "propostas"));
+    expect(semPropostas(trocado)).toEqual(semPropostas(gemeo));
+    // As etapas antigas não somem de vista: ficaram como excluídas (nenhuma viva repetida).
+    expect(await prisma.etapaProjeto.count({ where: { projetoId: c.projetoId, deletadoEm: { not: null } } })).toBe(antes.etapas.length);
+  });
+
+  it("tudo ou nada: com recebimento na parcela da original, a troca é recusada e NADA muda", async () => {
+    const c = await cenarioDoEngano("Troca bloqueada");
+    const antes = await estado(c.projetoId);
+    const parcela1 = await prisma.contaReceber.findFirstOrThrow({ where: { propostaId: c.propostaId, ordem: 1 } });
+    await prisma.$transaction((tx) =>
+      registrarRecebimento(tx, { contaReceberId: parcela1.id, data: dataLocalDoInstante(new Date()), valorCentavos: 50000, contaFinanceiraId, categoriaId: categoriaReceitaId, forma: "PIX", comNotaFiscal: false, observacao: null }, ctxFinanceiro()),
+    );
+    const comRecebimento = await estado(c.projetoId);
+
+    await expect(trocar(c.propostaId, c.revId, c.revOpcaoId)).rejects.toThrow(/parcela 1 já tem recebimento/);
+    expect(await estado(c.projetoId)).toEqual(comRecebimento);
+    expect(comRecebimento.propostas).toEqual(antes.propostas);
+    expect(await prisma.tarefa.count({ where: { chaveUnica: `medicao-exata:${c.propostaId}`, status: "ABERTA" } })).toBe(1);
+  });
+
+  it("tudo ou nada: revisão em rascunho incompleta (item sem valor) recusa a troca e a original continua aprovada, intacta", async () => {
+    const c = await cenarioDoEngano("Troca incompleta");
+    await ajustarRevisao(c.revId, [0, 80000]);
+    const antes = await estado(c.projetoId);
+
+    await expect(trocar(c.propostaId, c.revId, c.revOpcaoId)).rejects.toThrow(/sem valor/);
+    expect(await estado(c.projetoId)).toEqual(antes);
+    expect(await prisma.contaReceber.count({ where: { propostaId: c.propostaId, deletadoEm: null } })).toBe(2);
+    expect(await prisma.etapaProjeto.count({ where: { projetoId: c.projetoId, deletadoEm: { not: null } } })).toBe(0); // nenhuma etapa saiu
+    expect(await prisma.logAuditoria.count({ where: { entidade: "Proposta", entidadeId: c.propostaId, acao: "DESFAZER_APROVACAO" } })).toBe(0);
+  });
+
+  it("recusa o que não faz sentido: própria proposta, números diferentes, proposta que não está aprovada", async () => {
+    const c = await cenarioDoEngano("Troca inválida");
+    const outra = await montar("Troca outro número");
+    await enviar(outra.propostaId);
+    await expect(trocar(c.propostaId, c.propostaId, c.opcaoId)).rejects.toThrow(/outra revisão/);
+    await expect(trocar(c.propostaId, outra.propostaId, outra.opcaoId)).rejects.toThrow(/mesmo número/);
+    await expect(trocar(c.revId, c.propostaId, c.opcaoId)).rejects.toThrow(/não está aprovada/);
+    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: c.propostaId } })).status).toBe("APROVADA");
+  });
+
+  it("duas pessoas trocando ao mesmo tempo: exatamente um sucesso, uma aprovada e só as parcelas da revisão", async () => {
+    const c = await cenarioDoEngano("Troca concorrente");
+    const r = await Promise.allSettled([trocar(c.propostaId, c.revId, c.revOpcaoId), trocar(c.propostaId, c.revId, c.revOpcaoId)]);
+    expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    for (const x of r) if (x.status === "rejected") expect(String((x.reason as Error).message)).not.toMatch(/deadlock/i);
+    expect(await aprovadasDoNumero(c.numero)).toBe(1);
+    expect(await prisma.contaReceber.count({ where: { projetoId: c.projetoId, deletadoEm: null } })).toBe(2);
+    expect(await prisma.logAuditoria.count({ where: { entidade: "Proposta", entidadeId: c.revId, acao: "TROCAR_APROVACAO" } })).toBe(1);
+  });
+});
+
+describe("prévias: o que a tela mostra bate com o que acontece", () => {
+  it("prévia do desfazer: bloqueios, efeitos, revisões que podem voltar e o padrão (a mais recente)", async () => {
+    const c = await cenarioDoEngano("Prévia desfazer");
+    const p = await previaDoDesfazer(prisma, c.propostaId);
+    expect(p).toMatchObject({ aprovada: true, bloqueios: [] });
+    expect(p.aceite).toMatchObject({ aceitaEm: "2026-11-16", forma: "WHATSAPP", valorCentavos: 1280000 });
+    expect(p.efeitos).toMatchObject({ parcelas: 2, tarefas: 1, valorFechadoDepoisCentavos: null, faseDepois: "PROPOSTA_ENVIADA", etapasMantidasPorOutraParte: false });
+    expect(p.efeitos.etapasRemovidas).toBeGreaterThan(0);
+    expect(p.revisoes).toEqual([expect.objectContaining({ id: c.revId, revisao: 1, voltaComo: "RASCUNHO" })]);
+    expect(p.padraoReabrirId).toBe(c.revId);
+
+    // O que a prévia diz é o que acontece.
+    const r = await desfazer(c.propostaId, { reabrirId: p.padraoReabrirId });
+    expect(r).toMatchObject({ parcelasCanceladas: p.efeitos.parcelas, etapasRemovidas: p.efeitos.etapasRemovidas, tarefasCanceladas: p.efeitos.tarefas, faseDoProjeto: p.efeitos.faseDepois });
+  });
+
+  it("prévia do desfazer lista os bloqueios", async () => {
+    const m = await montar("Prévia bloqueio");
+    await enviar(m.propostaId);
+    await aprovar(m.propostaId, m.opcaoId);
+    await prisma.compra.create({ data: { numero: proximoNumeroDeCompra++, fornecedorId, destino: "OBRA", projetoId: m.projetoId, status: "RASCUNHO" } });
+    const p = await previaDoDesfazer(prisma, m.propostaId);
+    expect(p.bloqueios.map((b) => b.codigo)).toEqual(["COMPRA"]);
+  });
+
+  it("prévia da troca: parcelas, valor fechado, etapas e prazo antes e depois; e o resultado real é o mesmo", async () => {
+    const c = await cenarioDoEngano("Prévia troca");
+    await ajustarRevisao(c.revId, [1000000, 80000], PRAZO_DA_REVISAO);
+
+    const p = await previaDaTroca(prisma, { deId: c.propostaId, paraId: c.revId });
+    expect(p).toMatchObject({ erro: null, bloqueios: [], problemasDaRevisao: [], deRotulo: "original", paraRotulo: "Rev. 1", aceite: { aceitaEm: "2026-11-16", forma: "WHATSAPP" } });
+    expect(p.opcoes).toEqual([expect.objectContaining({ id: c.revOpcaoId, totalCentavos: 1080000 })]);
+    expect(p.opcaoPadraoId).toBe(c.revOpcaoId);
+    expect(p.parcelas.antes.map((x) => x.valorCentavos)).toEqual([640000, 640000]);
+    expect(p.parcelas.depois.map((x) => x.valorCentavos)).toEqual([540000, 540000]);
+    expect(p.valorFechado).toEqual({ antesCentavos: 1280000, depoisCentavos: 1080000 });
+    expect(p.etapas.prazoAntes).toMatch(/^35 dias (úteis|corridos)$/);
+    expect(p.etapas.prazoDepois).toMatch(/^23 dias (úteis|corridos) \(material 10 \+ execução 5 \+ vidros e acabamento 8\)$/);
+    expect(p.etapas.removidas).toBeGreaterThan(0);
+    expect(p.tarefas.canceladas).toBe(1);
+
+    await trocar(c.propostaId, c.revId, c.revOpcaoId);
+    const depois = await estado(c.projetoId);
+    expect(depois.parcelas.map((x) => x[1])).toEqual(p.parcelas.depois.map((x) => x.valorCentavos));
+    expect(depois.projeto.valorFechadoCentavos).toBe(p.valorFechado.depoisCentavos);
+  });
+
+  it("prévia da troca avisa o que falta na revisão em rascunho e o que não faz sentido", async () => {
+    const c = await cenarioDoEngano("Prévia incompleta");
+    await ajustarRevisao(c.revId, [0, 80000]);
+    const p = await previaDaTroca(prisma, { deId: c.propostaId, paraId: c.revId });
+    expect(p.problemasDaRevisao.join(" ")).toMatch(/sem valor/);
+    expect((await previaDaTroca(prisma, { deId: c.revId, paraId: c.propostaId })).erro).toMatch(/não está aprovada/);
+  });
+});
+
+describe("indicadores depois de desfazer e de trocar (Vendido pela data do aceite)", () => {
+  const JUN: Periodo = { de: "2020-06-01", ate: "2020-06-30" };
+  const JUL: Periodo = { de: "2020-07-01", ate: "2020-07-31" };
+  const EM_SP = (coluna: string) => `((${coluna} AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date`;
+
+  /** Soma independente (SQL cru, outra conexão), como o teste do painel. */
+  const vendidoSql = (p: Periodo) =>
+    comConexao(async (c) => {
+      const r = await c.query<{ total: string }>(
+        `SELECT COALESCE(sum(pr."valorAprovadoCentavos"), 0)::text AS total FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId"
+          WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL AND ${EM_SP(`pr."aceitaEm"`)} BETWEEN $1::date AND $2::date`,
+        [p.de, p.ate],
+      );
+      return Number(r.rows[0].total);
+    });
+  const foto = async () => ({ jun: await vendidoNoPeriodo(JUN), jul: await vendidoNoPeriodo(JUL), junSql: await vendidoSql(JUN), julSql: await vendidoSql(JUL) });
+
+  it("aceite do último dia do mês: conta no mês; desfazer tira; trocar com aceite no mês seguinte move a venda; painel = lista = SQL", async () => {
+    const base = await foto();
+    const m = await montar("Vendido jun");
+    await enviar(m.propostaId);
+    const rev = await revisar(m.propostaId);
+    const revOpcao = (await prisma.opcaoProposta.findFirstOrThrow({ where: { propostaId: rev.id } })).id;
+    await ajustarRevisao(rev.id, [1000000, 80000], PRAZO_ORIGINAL);
+    await aprovar(m.propostaId, m.opcaoId, "2020-06-30");
+
+    let f = await foto();
+    expect(f.jun.totalCentavos - base.jun.totalCentavos).toBe(1280000);
+    expect(f.junSql - base.junSql).toBe(1280000);
+    expect(f.jun.totalCentavos).toBe(f.junSql);
+    expect((await listarVendas(JUN)).linhas.some((l) => l.id === m.propostaId)).toBe(true);
+
+    // Desfazer: foi engano de operação, deixa de contar (decisão 126).
+    const previa = await previaDoDesfazer(prisma, m.propostaId, new Date("2026-11-16T12:00:00Z"));
+    expect(previa.avisoDeMes).toContain("junho/2020");
+    await desfazer(m.propostaId, { reabrirId: rev.id });
+    f = await foto();
+    expect(f.jun.totalCentavos).toBe(base.jun.totalCentavos);
+    expect(f.junSql).toBe(base.junSql);
+    expect((await listarVendas(JUN)).linhas.some((l) => l.id === m.propostaId)).toBe(false);
+    expect((await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId } })).dataFechamento).toBeNull();
+
+    // Aprovar a revisão de novo, agora com aceite em julho (por troca a partir da original reaprovada).
+    await aprovar(m.propostaId, m.opcaoId, "2020-06-30");
+    await trocar(m.propostaId, rev.id, revOpcao, { aceitaEm: "2020-07-01" });
+    f = await foto();
+    expect(f.jun.totalCentavos).toBe(base.jun.totalCentavos);
+    expect(f.jul.totalCentavos - base.jul.totalCentavos).toBe(1080000);
+    expect(f.julSql - base.julSql).toBe(1080000);
+    expect(f.jul.totalCentavos).toBe(f.julSql);
+    const lista = await listarVendas(JUL);
+    expect(lista.linhas.some((l) => l.id === rev.id)).toBe(true);
+    expect(lista.linhas.some((l) => l.id === m.propostaId)).toBe(false);
+    expect(lista.linhas.filter((l) => l.projetoId === m.projetoId).reduce((s, l) => s + l.valorCentavos, 0)).toBe(1080000);
+    expect(dia((await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId } })).dataFechamento)).toBe("2020-07-01");
   });
 });
