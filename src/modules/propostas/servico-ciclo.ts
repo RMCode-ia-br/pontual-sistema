@@ -21,6 +21,15 @@ type Usuario = { id: string; nome: string };
 
 const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
+/**
+ * Trava TODAS as revisões do mesmo número, em ordem de id, antes de qualquer outro lock. Enviar, aprovar, desfazer e
+ * reabrir mexem no status das irmãs; sem uma ordem única, duas pessoas agindo em revisões diferentes ao mesmo tempo
+ * se esperariam em ciclo (deadlock). Depois desta chamada vem sempre o lock do projeto.
+ */
+export async function travarFamiliaDaProposta(tx: Tx, propostaId: string): Promise<void> {
+  await tx.$queryRaw`SELECT p."id" FROM "Proposta" p WHERE p."numero" = (SELECT "numero" FROM "Proposta" WHERE "id" = ${propostaId}) AND p."deletadoEm" IS NULL ORDER BY p."id" FOR UPDATE`;
+}
+
 /** Monta o conteúdo de impressão a partir do banco (rascunho: ao vivo; enviada: vira o snapshot). */
 export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configuracaoEmpresa" | "condicaoPagamento">, propostaId: string): Promise<ConteudoProposta> {
   const [p, empresa] = await Promise.all([
@@ -147,7 +156,7 @@ async function congelar(tx: Tx, propostaId: string, usuario: Usuario, agora: Dat
 export async function enviarProposta(tx: Tx, entrada: { usuario: Usuario; propostaId: string; ip?: string | null; agora?: Date }) {
   const { usuario, propostaId, ip } = entrada;
   const agora = entrada.agora ?? new Date();
-  await tx.$queryRaw`SELECT "id" FROM "Proposta" WHERE "id" = ${propostaId} FOR UPDATE`;
+  await travarFamiliaDaProposta(tx, propostaId);
   const antes = await tx.proposta.findFirst({
     where: { id: propostaId, deletadoEm: null, projeto: { deletadoEm: null } },
     select: { id: true, numero: true, revisao: true, revisaoDeId: true, status: true, projeto: { select: { id: true, codigo: true, titulo: true, clienteId: true, status: true, responsavelId: true } } },
@@ -215,7 +224,7 @@ export type EntradaAprovacao = {
 export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const { usuario, propostaId, ip } = e;
   const agora = e.agora ?? new Date();
-  await tx.$queryRaw`SELECT "id" FROM "Proposta" WHERE "id" = ${propostaId} FOR UPDATE`;
+  await travarFamiliaDaProposta(tx, propostaId);
   const p = await tx.proposta.findFirst({
     where: { id: propostaId, deletadoEm: null, projeto: { deletadoEm: null } },
     include: {
@@ -262,8 +271,10 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   });
   if (marcou.count === 0) throw new ErroNegocio("Esta proposta mudou enquanto você decidia. Atualize a página.");
 
-  // As outras revisões do mesmo número (rascunho ou enviadas) saem de vigor.
-  await tx.proposta.updateMany({ where: { numero: p.numero, id: { not: propostaId }, status: { in: ["RASCUNHO", "ENVIADA", "EXPIRADA"] }, deletadoEm: null }, data: { status: "SUBSTITUIDA", atualizadoPorId: usuario.id } });
+  // As outras revisões do mesmo número (rascunho ou enviadas) saem de vigor. Guarda o status de cada uma na auditoria:
+  // é o rastro para saber o que reabrir se a aprovação for desfeita (docs/revisoes/fase-7a1-aprovacao.md).
+  const substituidas = await tx.proposta.findMany({ where: { numero: p.numero, id: { not: propostaId }, status: { in: ["RASCUNHO", "ENVIADA", "EXPIRADA"] }, deletadoEm: null }, select: { id: true, revisao: true, status: true } });
+  await tx.proposta.updateMany({ where: { id: { in: substituidas.map((s) => s.id) }, deletadoEm: null }, data: { status: "SUBSTITUIDA", atualizadoPorId: usuario.id } });
 
   // Projeto: valor fechado = soma das propostas aprovadas ("partes" diferentes somam).
   const soma = await tx.proposta.aggregate({ where: { projetoId: p.projeto.id, status: "APROVADA", deletadoEm: null }, _sum: { valorAprovadoCentavos: true } });
@@ -355,7 +366,7 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
     projetoId: p.projeto.id,
     usuarioId: usuario.id,
   });
-  await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "APROVAR", antes: { status: p.status, projeto: antesProjeto }, depois: { status: "APROVADA", opcaoAprovadaId: e.opcaoId, valorAprovadoCentavos: valorAprovado, parcelas: parcelasGeradas, valorFechadoCentavos: valorFechado, etapas: etapas.criadas, etapasDispensadas: etapas.dispensadas, parcelasLiberadasPorEtapaDispensada: etapas.parcelasLiberadas }, ip });
+  await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "APROVAR", antes: { status: p.status, projeto: antesProjeto }, depois: { status: "APROVADA", opcaoAprovadaId: e.opcaoId, valorAprovadoCentavos: valorAprovado, parcelas: parcelasGeradas, valorFechadoCentavos: valorFechado, etapas: etapas.criadas, etapasDispensadas: etapas.dispensadas, parcelasLiberadasPorEtapaDispensada: etapas.parcelasLiberadas, substituidas: substituidas.map((s) => ({ id: s.id, revisao: s.revisao, de: s.status })) }, ip });
 
   const outras = await tx.proposta.count({ where: { projetoId: p.projeto.id, id: { not: propostaId }, status: { in: ["RASCUNHO", "ENVIADA"] }, deletadoEm: null } });
   return { numero: p.numero, projetoId: p.projeto.id, valorAprovadoCentavos: valorAprovado, parcelasGeradas, semParcelas: p.parcelas.length === 0, outrasEmAberto: outras, valorFechadoCentavos: valorFechado, etapasGeradas: etapas.criadas };

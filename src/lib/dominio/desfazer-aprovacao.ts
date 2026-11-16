@@ -67,7 +67,7 @@ export function bloqueiosDoDesfazer(f: FatosDoDesfazer): Bloqueio[] {
   if (f.pausasAtivas > 0) b.push({ codigo: "PAUSA", texto: `A obra tem ${plural(f.pausasAtivas, "pausa registrada", "pausas registradas")}. Exclua-${f.pausasAtivas === 1 ? "a" : "as"} na obra antes de desfazer.` });
   if (f.fotosDeObra > 0) b.push({ codigo: "FOTOS", texto: `A obra tem ${plural(f.fotosDeObra, "foto", "fotos")}. Exclua ${f.fotosDeObra === 1 ? "a foto" : "as fotos"} antes de desfazer.` });
 
-  for (const a of f.agendamentos) b.push({ codigo: "AGENDAMENTO", texto: `Há ${a.rotulo} agendada(o) para ${a.dataBr}. Cancele o agendamento antes de desfazer.` });
+  for (const a of f.agendamentos) b.push({ codigo: "AGENDAMENTO", texto: `Há um agendamento de ${a.rotulo} em ${a.dataBr}. Cancele o agendamento antes de desfazer.` });
 
   if (f.compras > 0) b.push({ codigo: "COMPRA", texto: `A obra tem ${plural(f.compras, "compra", "compras")}. Cancele ${f.compras === 1 ? "a compra" : "as compras"} antes de desfazer.` });
   if (f.saidasDeEstoque > 0) b.push({ codigo: "ESTOQUE", texto: `Saiu material do estoque para esta obra (${plural(f.saidasDeEstoque, "movimento", "movimentos")}). Estorne a saída antes de desfazer.` });
