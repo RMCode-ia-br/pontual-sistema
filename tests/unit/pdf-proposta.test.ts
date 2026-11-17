@@ -13,8 +13,13 @@ import { PropostaPdf } from "@/modules/propostas/pdf/proposta-pdf";
 import { conteudoDeExemplo } from "./fixtures-proposta";
 
 type Documento = Parameters<typeof renderToBuffer>[0];
-/** `pdftotext` (poppler) lê o texto do PDF; sem ele, só os testes que o usam são pulados (o resto roda). */
-const temPdftotext = spawnSync("pdftotext", ["-v"], { stdio: "ignore" }).error === undefined; // o poppler sai com 99 em -v; só ENOENT importa
+/**
+ * `pdftotext` (poppler) lê o texto do PDF. Procura no PATH e, no Windows, no que vem com o Git for Windows (a máquina de
+ * desenvolvimento não o põe no PATH do PowerShell). Sem ele, só os testes que o usam são pulados (o resto roda).
+ * O poppler sai com código 99 em `-v`: só "não achei o programa" (ENOENT) importa.
+ */
+const pdftotext = ["pdftotext", "C:/Program Files/Git/ucrt64/bin/pdftotext.exe"].find((c) => spawnSync(c, ["-v"], { stdio: "ignore" }).error === undefined);
+const temPdftotext = pdftotext !== undefined;
 
 const paginas = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Type \/Page[^s]/g) ?? []).length;
 
@@ -62,7 +67,7 @@ describe("PDF da proposta (react-pdf)", () => {
       try {
         const arquivo = join(dir, "proposta.pdf");
         writeFileSync(arquivo, pdf);
-        return execFileSync("pdftotext", ["-raw", "-enc", "UTF-8", arquivo, "-"], { encoding: "utf8" })
+        return execFileSync(pdftotext!, ["-raw", "-enc", "UTF-8", arquivo, "-"], { encoding: "utf8" })
           .split("\n")
           .map((l) => semC(l.trim()));
       } finally {
