@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { idsDeProjetos } from "@/modules/busca/ids-por-busca";
 import { etapaAtual, TIPOS_DE_ETAPA, type TipoDeEtapa } from "@/lib/dominio/etapas";
 import { resumirPontualidade, type AvaliacaoDeObra, type ResumoDePontualidade } from "@/lib/dominio/pontualidade";
 import type { StatusDeEtapa } from "@/lib/dominio/prazo-obra";
@@ -84,12 +85,13 @@ export async function listarObras(filtros: FiltrosDeObras, agora: Date = new Dat
   const ate = filtros.ate ? inputParaData(filtros.ate) : null;
   const busca = filtros.busca;
 
+  const idsDaBusca = busca ? await idsDeProjetos(busca) : null;
   const where: Prisma.ProjetoWhereInput = {
     deletadoEm: null,
     status: andamento ? { in: ["APROVADO", "EM_EXECUCAO"] } : "CONCLUIDO",
     ...(filtros.responsavelId ? { responsavelId: filtros.responsavelId } : {}),
     ...(!andamento && (de || ate) ? { dataConclusao: { ...(de ? { gte: de } : {}), ...(ate ? { lte: ate } : {}) } } : {}),
-    ...(busca ? { OR: [{ titulo: { contains: busca, mode: "insensitive" } }, { codigo: { contains: busca, mode: "insensitive" } }, { cliente: { nome: { contains: busca, mode: "insensitive" } } }] } : {}),
+    ...(idsDaBusca ? { id: { in: idsDaBusca } } : {}),
   };
 
   const [projetos, periodos, cfg] = await Promise.all([

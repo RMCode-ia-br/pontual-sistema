@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
+import { idsDeProjetos } from "@/modules/busca/ids-por-busca";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { lerPeriodo, limitesDeCalendario, limitesEmInstantes, type Periodo } from "@/lib/periodo";
 import { carregarCustosDasObras } from "@/modules/obras/queries-custo";
@@ -54,12 +55,13 @@ const LIMITE = 150;
  */
 export async function carregarMargemDasObras(f: FiltroDeMargem): Promise<RelatorioDeMargem> {
   const status = f.situacao === "andamento" ? ["APROVADO", "EM_EXECUCAO"] : f.situacao === "concluidas" ? ["CONCLUIDO"] : ["APROVADO", "EM_EXECUCAO", "CONCLUIDO"];
+  const idsDaBusca = f.busca ? await idsDeProjetos(f.busca) : null;
   const obras = await prisma.projeto.findMany({
     where: {
       deletadoEm: null,
       status: { in: status as ("APROVADO" | "EM_EXECUCAO" | "CONCLUIDO")[] },
       ...(f.periodo ? (f.situacao === "concluidas" ? { dataConclusao: { gte: limitesDeCalendario(f.periodo).de, lte: limitesDeCalendario(f.periodo).ate } } : { dataFechamento: { gte: limitesEmInstantes(f.periodo).inicio, lt: limitesEmInstantes(f.periodo).fimExclusivo } }) : {}),
-      ...(f.busca ? { OR: [{ codigo: { contains: f.busca, mode: "insensitive" } }, { titulo: { contains: f.busca, mode: "insensitive" } }, { cliente: { nome: { contains: f.busca, mode: "insensitive" } } }] } : {}),
+      ...(idsDaBusca ? { id: { in: idsDaBusca } } : {}),
     },
     orderBy: [{ dataFechamento: "desc" }, { codigo: "desc" }],
     take: LIMITE + 1,

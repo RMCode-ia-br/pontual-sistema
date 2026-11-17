@@ -9,6 +9,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
+import { buscarFornecedoresSemAcento } from "@/modules/busca/ids-por-busca";
 import { can } from "@/lib/permissoes";
 import { campoTelefone, campoTexto } from "@/lib/validadores/campos";
 
@@ -19,12 +20,7 @@ export async function buscarFornecedoresParaCampo(termo: string): Promise<Result
   await exigirSessao();
   const t = termo.trim().slice(0, 80);
   if (t.length < 2) return sucesso([]);
-  const lista = await prisma.fornecedor.findMany({
-    where: { ativo: true, deletadoEm: null, OR: [{ razaoSocial: { contains: t, mode: "insensitive" } }, { nomeFantasia: { contains: t, mode: "insensitive" } }] },
-    orderBy: { razaoSocial: "asc" },
-    take: 8,
-    select: { id: true, razaoSocial: true, nomeFantasia: true },
-  });
+  const lista = await buscarFornecedoresSemAcento(t, 8);
   return sucesso(lista.map((f) => ({ id: f.id, nome: f.nomeFantasia ? `${f.nomeFantasia} (${f.razaoSocial})` : f.razaoSocial })));
 }
 

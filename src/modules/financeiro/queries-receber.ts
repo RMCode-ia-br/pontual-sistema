@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { idsDeContasAReceber } from "@/modules/busca/ids-por-busca";
 import { montarCobranca } from "@/lib/dominio/cobranca";
 import { somarDias } from "@/lib/dominio/calendario";
 import { situacaoDoTitulo, type ResumoDoTitulo, type StatusDoTitulo } from "@/lib/dominio/titulos";
@@ -70,15 +71,12 @@ function condicaoDaAba(aba: AbaAReceber, hoje: string, limite: string): Prisma.C
   }
 }
 
-function filtroBase(parametros: ParametrosLista, filtros: FiltrosAReceber): Prisma.ContaReceberWhereInput {
+function filtroBase(idsDaBusca: string[] | null, filtros: FiltrosAReceber): Prisma.ContaReceberWhereInput {
   const e: Prisma.ContaReceberWhereInput[] = [{ deletadoEm: null }];
   if (filtros.nota) e.push({ comNotaFiscal: filtros.nota === "sim" });
   if (filtros.clienteId) e.push({ clienteId: filtros.clienteId });
   if (filtros.projetoId) e.push({ projetoId: filtros.projetoId });
-  if (parametros.busca) {
-    const contem = { contains: parametros.busca, mode: "insensitive" as const };
-    e.push({ OR: [{ descricao: contem }, { cliente: { nome: contem } }, { projeto: { titulo: contem } }, { projeto: { codigo: contem } }] });
-  }
+  if (idsDaBusca) e.push({ id: { in: idsDaBusca } });
   return { AND: e };
 }
 
@@ -170,7 +168,7 @@ export const LIMITE_EXPORTACAO_A_RECEBER = 5000;
 
 export async function listarContasAReceber(parametros: ParametrosLista, filtros: FiltrosAReceber, hoje: string, diasEmBreve: number): Promise<ListaAReceber> {
   const limite = limiteDeVencimentoEmBreve(hoje, diasEmBreve);
-  const base = filtroBase(parametros, filtros);
+  const base = filtroBase(parametros.busca ? await idsDeContasAReceber(parametros.busca) : null, filtros);
   const where: Prisma.ContaReceberWhereInput = { AND: [base, condicaoDaAba(filtros.aba, hoje, limite)] };
 
   const total = await prisma.contaReceber.count({ where });
@@ -189,7 +187,7 @@ export async function listarContasAReceber(parametros: ParametrosLista, filtros:
 }
 
 export async function listarContasAReceberParaExportar(parametros: ParametrosLista, filtros: FiltrosAReceber, hoje: string, diasEmBreve: number) {
-  const where: Prisma.ContaReceberWhereInput = { AND: [filtroBase(parametros, filtros), condicaoDaAba(filtros.aba, hoje, limiteDeVencimentoEmBreve(hoje, diasEmBreve))] };
+  const where: Prisma.ContaReceberWhereInput = { AND: [filtroBase(parametros.busca ? await idsDeContasAReceber(parametros.busca) : null, filtros), condicaoDaAba(filtros.aba, hoje, limiteDeVencimentoEmBreve(hoje, diasEmBreve))] };
   const linhas = await prisma.contaReceber.findMany({ where, orderBy: ordenacao(parametros), take: LIMITE_EXPORTACAO_A_RECEBER + 1, select: selecaoDaLista });
   return { linhas: linhas.slice(0, LIMITE_EXPORTACAO_A_RECEBER).map((r) => paraLista(r, hoje)), truncado: linhas.length > LIMITE_EXPORTACAO_A_RECEBER };
 }

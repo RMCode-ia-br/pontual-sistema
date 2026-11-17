@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { idsDeContasAPagar } from "@/modules/busca/ids-por-busca";
 import { somarDias } from "@/lib/dominio/calendario";
 import { situacaoDoTitulo, type ResumoDoTitulo, type StatusDoTitulo } from "@/lib/dominio/titulos";
 import { calcularPaginacao, lerParametrosLista, type ParametrosBrutos, type ParametrosLista } from "@/lib/listas/parametros";
@@ -63,26 +64,13 @@ function condicaoDaAba(aba: AbaAPagar, hoje: string, limite: string): Prisma.Con
   }
 }
 
-function filtroBase(parametros: ParametrosLista, filtros: FiltrosAPagar): Prisma.ContaPagarWhereInput {
+function filtroBase(idsDaBusca: string[] | null, filtros: FiltrosAPagar): Prisma.ContaPagarWhereInput {
   const e: Prisma.ContaPagarWhereInput[] = [{ deletadoEm: null }];
   if (filtros.fornecedorId) e.push({ fornecedorId: filtros.fornecedorId });
   if (filtros.categoriaId) e.push({ categoriaId: filtros.categoriaId });
   if (filtros.projetoId) e.push({ projetoId: filtros.projetoId });
   if (filtros.recorrenciaId) e.push({ recorrenciaId: filtros.recorrenciaId });
-  if (parametros.busca) {
-    const contem = { contains: parametros.busca, mode: "insensitive" as const };
-    e.push({
-      OR: [
-        { descricao: contem },
-        { favorecido: contem },
-        { fornecedor: { razaoSocial: contem } },
-        { fornecedor: { nomeFantasia: contem } },
-        { funcionario: { nome: contem } },
-        { categoria: { nome: contem } },
-        { projeto: { titulo: contem } },
-      ],
-    });
-  }
+  if (idsDaBusca) e.push({ id: { in: idsDaBusca } });
   return { AND: e };
 }
 
@@ -159,7 +147,7 @@ export const LIMITE_EXPORTACAO_A_PAGAR = 5000;
 
 export async function listarContasAPagar(parametros: ParametrosLista, filtros: FiltrosAPagar, hoje: string, diasEmBreve: number): Promise<ListaAPagar> {
   const limite = somarDias(hoje, diasEmBreve);
-  const base = filtroBase(parametros, filtros);
+  const base = filtroBase(parametros.busca ? await idsDeContasAPagar(parametros.busca) : null, filtros);
   const where: Prisma.ContaPagarWhereInput = { AND: [base, condicaoDaAba(filtros.aba, hoje, limite)] };
   const total = await prisma.contaPagar.count({ where });
   const paginacao = calcularPaginacao(total, parametros.pagina, parametros.tamanho);
@@ -177,7 +165,7 @@ export async function listarContasAPagar(parametros: ParametrosLista, filtros: F
 }
 
 export async function listarContasAPagarParaExportar(parametros: ParametrosLista, filtros: FiltrosAPagar, hoje: string, diasEmBreve: number) {
-  const where: Prisma.ContaPagarWhereInput = { AND: [filtroBase(parametros, filtros), condicaoDaAba(filtros.aba, hoje, somarDias(hoje, diasEmBreve))] };
+  const where: Prisma.ContaPagarWhereInput = { AND: [filtroBase(parametros.busca ? await idsDeContasAPagar(parametros.busca) : null, filtros), condicaoDaAba(filtros.aba, hoje, somarDias(hoje, diasEmBreve))] };
   const linhas = await prisma.contaPagar.findMany({ where, orderBy: ordenacao(parametros), take: LIMITE_EXPORTACAO_A_PAGAR + 1, select: selecaoDaLista });
   return { linhas: linhas.slice(0, LIMITE_EXPORTACAO_A_PAGAR).map((r) => paraLista(r, hoje)), truncado: linhas.length > LIMITE_EXPORTACAO_A_PAGAR };
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { idsDeChamados } from "@/modules/busca/ids-por-busca";
 import { STATUS_DE_CHAMADO, STATUS_EM_ABERTO, TIPOS_DE_PROBLEMA, type StatusDoChamado, type TipoDoProblema } from "@/lib/dominio/chamados";
 import { somarDias } from "@/lib/dominio/calendario";
 import type { Classificacao } from "@/lib/dominio/garantia";
@@ -50,7 +51,7 @@ export type ChamadoDaLista = {
   diasEmAberto: number;
 };
 
-function filtroDoBanco(f: FiltrosDeChamados): Prisma.ChamadoWhereInput {
+function filtroDoBanco(f: FiltrosDeChamados, idsDoTexto: string[] | null): Prisma.ChamadoWhereInput {
   const busca = f.busca;
   const numero = /^#?\d{1,9}$/.test(busca) ? Number(busca.replace("#", "")) : null;
   return {
@@ -63,9 +64,7 @@ function filtroDoBanco(f: FiltrosDeChamados): Prisma.ChamadoWhereInput {
       ? {
           OR: [
             ...(numero !== null ? [{ numero }] : []),
-            { descricao: { contains: busca, mode: "insensitive" as const } },
-            { cliente: { nome: { contains: busca, mode: "insensitive" as const } } },
-            { projeto: { titulo: { contains: busca, mode: "insensitive" as const } } },
+            { id: { in: idsDoTexto ?? [] } },
           ],
         }
       : {}),
@@ -74,7 +73,7 @@ function filtroDoBanco(f: FiltrosDeChamados): Prisma.ChamadoWhereInput {
 
 export async function listarChamados(filtros: FiltrosDeChamados, agora: Date = new Date()): Promise<{ linhas: ChamadoDaLista[]; truncado: boolean }> {
   const brutos = await prisma.chamado.findMany({
-    where: filtroDoBanco(filtros),
+    where: filtroDoBanco(filtros, filtros.busca ? await idsDeChamados(filtros.busca) : null),
     // Em aberto: o mais antigo primeiro (é o que mais espera). Encerrados: o mais recente primeiro.
     orderBy: filtros.situacao === "abertos" ? [{ abertoEm: "asc" }] : [{ abertoEm: "desc" }],
     take: LIMITE_DE_CHAMADOS,

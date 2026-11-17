@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { idsDePropostas } from "@/modules/busca/ids-por-busca";
 import { situacaoDasRevisoes } from "@/lib/dominio/desfazer-aprovacao";
 import { calcularPaginacao, lerParametrosLista, type ParametrosBrutos } from "@/lib/listas/parametros";
 import { STATUS_PROPOSTA } from "./schemas";
@@ -27,14 +28,13 @@ export function lerListaPropostas(brutos: ParametrosBrutos) {
 
 type FiltrosPropostas = ReturnType<typeof lerListaPropostas>["filtros"];
 
-function onde(busca: string, filtros: FiltrosPropostas): Prisma.PropostaWhereInput {
+/** `idsDaBusca`: ids que combinam com o texto digitado (sem acento nem maiúscula), ou `null` quando não há busca. */
+function onde(idsDaBusca: string[] | null, filtros: FiltrosPropostas): Prisma.PropostaWhereInput {
   const e: Prisma.PropostaWhereInput[] = [{ deletadoEm: null }, { projeto: { deletadoEm: null } }];
   if (filtros.status) e.push({ status: filtros.status });
   if (filtros.projeto) e.push({ projetoId: filtros.projeto });
   if (filtros.revisoes === "vigentes") e.push({ status: { not: "SUBSTITUIDA" } });
-  if (busca) {
-    e.push({ OR: [{ numero: { contains: busca, mode: "insensitive" } }, { clienteNome: { contains: busca, mode: "insensitive" } }, { projeto: { titulo: { contains: busca, mode: "insensitive" } } }, { projeto: { codigo: { contains: busca, mode: "insensitive" } } }] });
-  }
+  if (idsDaBusca) e.push({ id: { in: idsDaBusca } });
   return { AND: e };
 }
 
@@ -57,7 +57,7 @@ const selecaoLista = {
 
 export async function listarPropostas(brutos: ParametrosBrutos) {
   const { parametros, filtros } = lerListaPropostas(brutos);
-  const where = onde(parametros.busca, filtros);
+  const where = onde(parametros.busca ? await idsDePropostas(parametros.busca) : null, filtros);
   const total = await prisma.proposta.count({ where });
   const paginacao = calcularPaginacao(total, parametros.pagina, parametros.tamanho);
   const orderBy: Prisma.PropostaOrderByWithRelationInput[] =

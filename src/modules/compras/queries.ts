@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { idsDeCompras } from "@/modules/busca/ids-por-busca";
 import { entregaAtrasada, numeroDaCompra, totalDoPedido, type StatusDaCompra } from "@/lib/dominio/compras";
 
 const comoTexto = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
@@ -44,22 +45,15 @@ export type CompraDaLista = {
   itensSemPreco: number;
 };
 
-function filtroDeBusca(busca: string): Prisma.CompraWhereInput {
+/** Número da compra ("C-12", "12") ou texto do fornecedor/obra (sem acento nem maiúscula: ids vindos de `idsDeCompras`). */
+function filtroDeBusca(busca: string, idsDoTexto: string[]): Prisma.CompraWhereInput {
   const n = /^c?-?0*(\d{1,9})$/i.exec(busca.trim());
-  return {
-    OR: [
-      ...(n ? [{ numero: Number(n[1]) }] : []),
-      { fornecedor: { razaoSocial: { contains: busca, mode: "insensitive" as const } } },
-      { fornecedor: { nomeFantasia: { contains: busca, mode: "insensitive" as const } } },
-      { projeto: { codigo: { contains: busca, mode: "insensitive" as const } } },
-      { projeto: { titulo: { contains: busca, mode: "insensitive" as const } } },
-    ],
-  };
+  return { OR: [...(n ? [{ numero: Number(n[1]) }] : []), { id: { in: idsDoTexto } }] };
 }
 
 export async function listarCompras(f: { aba: AbaDeCompras; busca: string | undefined }, hoje: string, limite = 200): Promise<{ linhas: CompraDaLista[]; temMais: boolean; contagens: Record<AbaDeCompras, number> }> {
   const status = STATUS_DA_ABA[f.aba];
-  const base: Prisma.CompraWhereInput = { deletadoEm: null, ...(f.busca ? filtroDeBusca(f.busca) : {}) };
+  const base: Prisma.CompraWhereInput = { deletadoEm: null, ...(f.busca ? filtroDeBusca(f.busca, await idsDeCompras(f.busca)) : {}) };
   const [rows, contagensLista] = await Promise.all([
     prisma.compra.findMany({
       where: { ...base, ...(status ? { status: { in: status } } : {}) },
