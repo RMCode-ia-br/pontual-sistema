@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 
@@ -11,6 +11,7 @@ import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissoes";
 
+import { ETIQUETA_DA_MARCA } from "../queries";
 import { empresaSchema } from "../schemas/empresa";
 
 export async function salvarEmpresa(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
@@ -48,6 +49,7 @@ export async function salvarEmpresa(_anterior: ResultadoAcao | null, formData: F
     });
     // Nome e logo aparecem em todas as telas.
     revalidatePath("/", "layout");
+    updateTag(ETIQUETA_DA_MARCA);
     return sucesso(undefined, "Configurações salvas.");
   });
 }
@@ -86,6 +88,7 @@ export async function definirLogoEmpresa(anexoIdBruto: string): Promise<Resultad
       });
     });
     revalidatePath("/", "layout");
+    updateTag(ETIQUETA_DA_MARCA);
     return sucesso(undefined, "Logo atualizado.");
   });
 }
