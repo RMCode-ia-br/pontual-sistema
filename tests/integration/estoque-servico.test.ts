@@ -235,6 +235,40 @@ describe("contagem inicial", () => {
     await expect(tx((t) => contarEstoqueInicial(t, [], "2026-11-20", ctx()))).rejects.toThrow();
   });
 
+  it("contagem ZERO é um fato do estoque: produto contado, sem estoque (diferente de 'não contado'); sai da lista de sem movimento e não aceita nova contagem inicial", async () => {
+    const zero = await novoProduto("Contagem zero", null);
+    const naoContado = await novoProduto("Contagem não contado", null);
+    const r = await tx((t) => contarEstoqueInicial(t, [{ produtoId: zero.id, quantidadeMilesimos: 0, custoUnitarioCentavos: null }], "2026-11-20", ctx()));
+    expect(r.contados).toBe(1);
+    expect(await saldo(zero.id)).toBe(0);
+    const mov = await prisma.movimentoEstoque.findFirstOrThrow({ where: { produtoId: zero.id } });
+    expect(mov.tipo).toBe("INVENTARIO_INICIAL");
+    expect(Number(mov.quantidade.toString())).toBe(0);
+    // Contado (zero) NÃO é o mesmo que não contado: o primeiro ganha movimento e sai da lista; o outro continua sem movimento.
+    expect(await prisma.movimentoEstoque.count({ where: { produtoId: naoContado.id } })).toBe(0);
+    expect(await prisma.movimentoEstoque.count({ where: { produtoId: zero.id } })).toBe(1);
+    // Já foi contado: uma segunda contagem inicial é recusada (daqui em diante, ajuste com motivo).
+    await expect(tx((t) => contarEstoqueInicial(t, [{ produtoId: zero.id, quantidadeMilesimos: 3_000, custoUnitarioCentavos: null }], "2026-11-21", ctx()))).rejects.toThrow(/já tem movimentos/);
+    // A auditoria registra a contagem; o saldo em cache bate com a soma dos movimentos.
+    expect(await saldo(zero.id)).toBe(await somaDosMovimentos(zero.id));
+  });
+
+  it("depois de uma contagem zero, o ajuste com motivo funciona como em qualquer produto (acrescenta; e retira só até o saldo)", async () => {
+    const p = await novoProduto("Contagem zero e ajuste", null);
+    await tx((t) => contarEstoqueInicial(t, [{ produtoId: p.id, quantidadeMilesimos: 0, custoUnitarioCentavos: null }], "2026-11-20", ctx()));
+    await mover({ produtoId: p.id, tipo: "AJUSTE", sentido: 1, quantidadeMilesimos: 4_000, justificativa: "Achei no fundo do galpão" });
+    expect(await saldo(p.id)).toBe(4);
+    await expect(mover({ produtoId: p.id, tipo: "AJUSTE", sentido: -1, quantidadeMilesimos: 9_000 })).rejects.toThrow();
+  });
+
+  it("zero continua recusado em QUALQUER outro movimento (entrada, saída, ajuste) e na contagem negativa", async () => {
+    const p = await novoProduto("Movimento zero", null);
+    await expect(mover({ produtoId: p.id, tipo: "ENTRADA_COMPRA", quantidadeMilesimos: 0 })).rejects.toThrow(/maior que zero/);
+    await expect(mover({ produtoId: p.id, tipo: "AJUSTE", sentido: 1, quantidadeMilesimos: 0 })).rejects.toThrow(/maior que zero/);
+    await expect(tx((t) => contarEstoqueInicial(t, [{ produtoId: p.id, quantidadeMilesimos: -1, custoUnitarioCentavos: null }], "2026-11-20", ctx()))).rejects.toThrow();
+    expect(await prisma.movimentoEstoque.count({ where: { produtoId: p.id } })).toBe(0);
+  });
+
   it("depois da contagem o produto sai da lista de 'sem movimento'", async () => {
     const p = await novoProduto("Contagem lista");
     const antes = await produtosSemMovimento(`${PREFIXO} Contagem lista`);

@@ -105,7 +105,9 @@ export async function registrarMovimentoDeEstoque(
   e: EntradaDeMovimento,
   ctx: ContextoEstoque,
 ) {
-  if (!Number.isInteger(e.quantidadeMilesimos) || e.quantidadeMilesimos <= 0)
+  // Só a contagem inicial pode ter quantidade ZERO ("produto contado, sem estoque"); todo outro movimento precisa de quantidade.
+  const minimo = e.tipo === "INVENTARIO_INICIAL" ? 0 : 1;
+  if (!Number.isInteger(e.quantidadeMilesimos) || e.quantidadeMilesimos < minimo)
     throw new ErroNegocio("Informe uma quantidade maior que zero.", {
       quantidade: "Informe uma quantidade maior que zero.",
     });

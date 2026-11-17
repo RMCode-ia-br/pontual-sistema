@@ -42,7 +42,7 @@ const produtoBase = z.object({
   acabamentoId: campoIdOpcional,
   fornecedorPrincipalId: campoIdOpcional,
   /** Digitado em reais e guardado em centavos. Vazio = custo ainda não informado. */
-  custo: campoMoedaOpcional("Custo unitário", CUSTO_MAXIMO_CENTAVOS),
+  custo: campoMoedaOpcional("Custo unitário", CUSTO_MAXIMO_CENTAVOS, { recusarZero: true }),
   /** Perfil comprado por kg: o custo nasce do preço do kg do acabamento (Preço do kg do alumínio). */
   custoPorKg: campoCaixa,
   comprimentoBarraMm: campoInteiroOpcional("Comprimento da barra", 20000),

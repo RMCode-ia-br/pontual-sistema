@@ -235,7 +235,7 @@ export function validarProduto(v: Valores, ctx: ContextoDeImportacao): Resultado
   const linhaId = achar(c, ctx.linhas, v.linha, "Linha");
   const acabamentoId = achar(c, ctx.acabamentos, v.acabamento, "Acabamento");
 
-  const custoCentavos = c.campo(campoMoedaOpcional("Custo unitário", CUSTO_MAXIMO_CENTAVOS), v.custo, "Custo unitário");
+  const custoCentavos = c.campo(campoMoedaOpcional("Custo unitário", CUSTO_MAXIMO_CENTAVOS, { recusarZero: true }), v.custo, "Custo unitário");
   const comprimentoLido = c.campo(campoInteiroOpcional("Comprimento da barra", 20000), v.comprimentoBarraMm, "Comprimento da barra");
   const pesoKgPorMetro = c.campo(campoDecimalOpcional("Peso por metro", 1000, 3), v.pesoKgPorMetro, "Peso por metro");
   const estoqueMinimo = c.campo(campoDecimalOpcional("Estoque mínimo", 1_000_000, 3), v.estoqueMinimo, "Estoque mínimo");

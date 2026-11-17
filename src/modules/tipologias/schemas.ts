@@ -5,7 +5,7 @@ import { validarFormula } from "@/lib/dominio/formulas";
 import { valorParaCentavos } from "@/lib/dominio/numeros";
 import { percentualParaPontosBase } from "@/lib/dominio/preco";
 import { textoParaDecimal } from "@/lib/dominio/numeros";
-import { campoCaixa, campoIdObrigatorio, campoIdOpcional, campoTexto } from "@/lib/validadores/campos";
+import { campoCaixa, campoIdObrigatorio, campoIdOpcional, campoTexto, mensagemDeCustoZero } from "@/lib/validadores/campos";
 
 export const CATEGORIAS_TIPOLOGIA = ["JANELA", "PORTA", "BOX", "GUARDA_CORPO", "FECHAMENTO_SACADA", "PORTAO", "PERGOLADO", "ESPELHO", "OUTRO"] as const;
 export const ROTULO_CATEGORIA_TIPOLOGIA: Record<(typeof CATEGORIAS_TIPOLOGIA)[number], string> = {
@@ -172,6 +172,7 @@ export function lerComposicao(entrada: EntradaComposicao): { insumos: InsumoLido
     let custo: number | null = null;
     if (bruto.custoUnitario !== "") {
       custo = valorParaCentavos(bruto.custoUnitario);
+      if (custo === 0) return { erro: `Insumo ${n}: ${mensagemDeCustoZero("Custo")}` };
       if (custo === null || custo > 2_000_000_000) return { erro: `Insumo ${n}: informe o custo em reais, ex.: 12,50.` };
     }
     insumos.push({ produtoId, descricao, unidade: bruto.unidade, formulaQuantidade: bruto.formulaQuantidade, perdaPb, custoUnitarioCentavos: custo });

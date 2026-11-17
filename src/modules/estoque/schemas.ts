@@ -3,7 +3,7 @@ import { z } from "zod";
 import { lerQuantidade } from "@/lib/dominio/estoque";
 import { CUSTO_MAXIMO_CENTAVOS } from "@/lib/dominio/reajuste";
 import { parseMoedaParaCentavos } from "@/lib/formatadores";
-import { campoCaixa } from "@/lib/validadores/campos";
+import { campoCaixa, mensagemDeCustoZero } from "@/lib/validadores/campos";
 
 /** Campo ausente do FormData vira texto vazio. */
 const bruto = (max: number) =>
@@ -45,6 +45,10 @@ const custoOpcional = (rotulo: string) =>
   bruto(24).transform((v, ctx): number | null => {
     if (v === "") return null;
     const c = parseMoedaParaCentavos(v);
+    if (c === 0) {
+      ctx.addIssue({ code: "custom", message: mensagemDeCustoZero(rotulo) });
+      return z.NEVER;
+    }
     if (c === null || c <= 0 || c > CUSTO_MAXIMO_CENTAVOS) {
       ctx.addIssue({
         code: "custom",
@@ -142,16 +146,20 @@ export const contagemSchema = z.object({
     for (const l of lista.data) {
       if (l.quantidade.trim() === "") continue; // produto não contado
       const q = lerQuantidade(l.quantidade);
-      if (q === null || q <= 0 || q > 1_000_000_000) {
+      if (q === null || q < 0 || q > 1_000_000_000) {
         ctx.addIssue({
           code: "custom",
-          message: `Quantidade inválida (“${l.quantidade}”): use um número maior que zero, com até 3 casas.`,
+          message: `Quantidade inválida (“${l.quantidade}”): use um número a partir de zero, com até 3 casas. Zero conta como produto contado sem estoque; para não contar, deixe em branco.`,
         });
         return z.NEVER;
       }
       let custo: number | null = null;
       if (l.custo.trim() !== "") {
         custo = parseMoedaParaCentavos(l.custo);
+        if (custo === 0) {
+          ctx.addIssue({ code: "custom", message: mensagemDeCustoZero("Custo") });
+          return z.NEVER;
+        }
         if (custo === null || custo <= 0 || custo > CUSTO_MAXIMO_CENTAVOS) {
           ctx.addIssue({
             code: "custom",

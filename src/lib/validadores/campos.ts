@@ -133,13 +133,23 @@ export const campoDataOpcional = (rotulo: string) =>
     .optional();
 
 /** Valor em reais digitado ("1.234,56") → centavos inteiros, com teto (cabe no inteiro do banco). */
-export const campoMoedaOpcional = (rotulo: string, maxCentavos = 2_000_000_000) =>
+/**
+ * Custo unitário ZERO é recusado em todo o sistema (decisão do Marcelo): custo zero informado esconderia a margem incompleta.
+ * Sem custo, o campo fica em branco e a margem aparece como "Incompleta".
+ */
+export const mensagemDeCustoZero = (rotulo: string) => `${rotulo}: se não tem custo, deixe em branco: a margem aparece como Incompleta.`;
+
+export const campoMoedaOpcional = (rotulo: string, maxCentavos = 2_000_000_000, opcoes: { recusarZero?: boolean } = {}) =>
   bruto(20)
     .transform((v, ctx): number | undefined => {
       if (v === "") return undefined;
       const centavos = valorParaCentavos(v);
       if (centavos === null || centavos > maxCentavos) {
         ctx.addIssue({ code: "custom", message: `${rotulo}: informe um valor em reais (ex.: 1.234,56).` });
+        return z.NEVER;
+      }
+      if (centavos === 0 && opcoes.recusarZero) {
+        ctx.addIssue({ code: "custom", message: mensagemDeCustoZero(rotulo) });
         return z.NEVER;
       }
       return centavos;
