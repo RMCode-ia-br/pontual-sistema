@@ -170,10 +170,9 @@ export async function enviarProposta(tx: Tx, entrada: { usuario: Usuario; propos
 
   await congelar(tx, propostaId, usuario, agora);
 
-  // A revisão anterior sai de vigor quando a nova é enviada (docs/DECISOES.md, 67).
-  if (antes.revisaoDeId) {
-    await tx.proposta.updateMany({ where: { id: antes.revisaoDeId, status: "ENVIADA" }, data: { status: "SUBSTITUIDA", atualizadoPorId: usuario.id } });
-  }
+  // As revisões anteriores saem de vigor quando a nova é enviada (docs/DECISOES.md, 67). TODAS as irmãs enviadas, não só a
+  // que deu origem a esta: depois de reabrir uma revisão antiga, a "origem" pode já estar substituída e ficariam duas valendo.
+  await tx.proposta.updateMany({ where: { numero: antes.numero, id: { not: propostaId }, status: { in: ["ENVIADA", "EXPIRADA"] }, deletadoEm: null }, data: { status: "SUBSTITUIDA", atualizadoPorId: usuario.id } });
 
   if (projeto.status === "PROPOSTA_ENVIADA" || projeto.status === "NEGOCIACAO") {
     // Já está no funil nessa fase: só garante o acompanhamento desta proposta (idempotente).
@@ -237,9 +236,11 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   if (p.status !== "RASCUNHO" && p.status !== "ENVIADA" && p.status !== "EXPIRADA") {
     throw new ErroNegocio(p.status === "APROVADA" ? "Esta proposta já foi aprovada." : "Só propostas em rascunho ou enviadas podem ser aprovadas. Se foi substituída, aprove a revisão vigente.");
   }
-  if (p.projeto.status === "CANCELADO") throw new ErroNegocio("O projeto está cancelado.");
   // Serializa as aprovações do mesmo projeto (a soma do valor fechado precisa enxergar a anterior).
   await tx.$queryRaw`SELECT "id" FROM "Projeto" WHERE "id" = ${p.projeto.id} FOR UPDATE`;
+  // O status do projeto vale o de DEPOIS do lock: outra pessoa pode ter desfeito uma aprovação (e mudado a fase) enquanto esperávamos.
+  const statusDoProjeto = (await tx.projeto.findUniqueOrThrow({ where: { id: p.projeto.id }, select: { status: true } })).status;
+  if (statusDoProjeto === "CANCELADO") throw new ErroNegocio("O projeto está cancelado.");
   // Revisões do mesmo número são alternativas, nunca somam: se uma já foi aprovada, as outras não podem ser.
   const irma = await tx.proposta.count({ where: { numero: p.numero, id: { not: propostaId }, status: "APROVADA", deletadoEm: null } });
   if (irma > 0) throw new ErroNegocio(`Outra revisão da proposta ${p.numero} já foi aprovada.`);
@@ -279,10 +280,10 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   // Projeto: valor fechado = soma das propostas aprovadas ("partes" diferentes somam).
   const soma = await tx.proposta.aggregate({ where: { projetoId: p.projeto.id, status: "APROVADA", deletadoEm: null }, _sum: { valorAprovadoCentavos: true } });
   const valorFechado = soma._sum.valorAprovadoCentavos ?? valorAprovado;
-  const antesProjeto = { status: p.projeto.status };
+  const antesProjeto = { status: statusDoProjeto };
   const fases = ["NOVO_LEAD", "VISITA_AGENDADA", "ELABORANDO_PROPOSTA", "PROPOSTA_ENVIADA", "NEGOCIACAO", "PERDIDO"];
-  if (fases.includes(p.projeto.status)) {
-    await mudarFaseDoProjeto(tx, { usuario, projeto: { id: p.projeto.id, codigo: p.projeto.codigo, titulo: p.projeto.titulo, clienteId: p.projeto.clienteId, status: p.projeto.status as never }, para: "APROVADO", ip, agora });
+  if (fases.includes(statusDoProjeto)) {
+    await mudarFaseDoProjeto(tx, { usuario, projeto: { id: p.projeto.id, codigo: p.projeto.codigo, titulo: p.projeto.titulo, clienteId: p.projeto.clienteId, status: statusDoProjeto as never }, para: "APROVADO", ip, agora });
     await tx.projeto.update({ where: { id: p.projeto.id }, // A data de fechamento é a do ACEITE informada (a mesma que o "Vendido" usa), não o instante do clique: aceite retroativo cai no mês certo.
       data: { valorFechadoCentavos: valorFechado, dataFechamento: new Date(`${e.aceitaEm}T12:00:00.000Z`), atualizadoPorId: usuario.id } });
   } else {

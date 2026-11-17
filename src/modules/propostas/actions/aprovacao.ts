@@ -8,6 +8,7 @@ import { executar, falha, falhaDeValidacao, sucesso, type ResultadoAcao } from "
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
+import { tentarDeNovoEmDeadlock } from "@/lib/db/deadlock";
 import { can } from "@/lib/permissoes";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
 
@@ -36,7 +37,7 @@ export async function desfazerAprovacaoAcao(entrada: z.input<typeof desfazerSche
   const v = lido.data;
   return executar("propostas.desfazerAprovacao", async () => {
     const ip = extrairIp(await headers());
-    const r = await prisma.$transaction((tx) => desfazerAprovacao(tx, { usuario: sessao, propostaId: v.propostaId, motivo: v.motivo, reabrirId: v.reabrirId || null, ip }), { timeout: 30_000 });
+    const r = await tentarDeNovoEmDeadlock(() => prisma.$transaction((tx) => desfazerAprovacao(tx, { usuario: sessao, propostaId: v.propostaId, motivo: v.motivo, reabrirId: v.reabrirId || null, ip }), { timeout: 30_000 }));
     revalidar([v.propostaId, ...(r.reaberta ? [r.reaberta.id] : [])], r.projetoId);
     return sucesso(r, `Aprovação da proposta ${r.numero} desfeita.${r.reaberta ? ` A ${r.reaberta.revisao === 0 ? "original" : `Rev. ${r.reaberta.revisao}`} voltou como ${r.reaberta.status === "RASCUNHO" ? "rascunho" : "enviada"}.` : ""}`);
   });
@@ -61,7 +62,7 @@ export async function trocarAprovacaoAcao(entrada: z.input<typeof trocarSchema>)
   const v = lido.data;
   return executar("propostas.trocarAprovacao", async () => {
     const ip = extrairIp(await headers());
-    const r = await prisma.$transaction((tx) => trocarAprovacao(tx, { usuario: sessao, deId: v.deId, paraId: v.paraId, opcaoId: v.opcaoId, forma: v.forma, aceitaEm: v.aceitaEm, observacao: v.observacao, motivo: v.motivo, ip }), { timeout: 30_000 });
+    const r = await tentarDeNovoEmDeadlock(() => prisma.$transaction((tx) => trocarAprovacao(tx, { usuario: sessao, deId: v.deId, paraId: v.paraId, opcaoId: v.opcaoId, forma: v.forma, aceitaEm: v.aceitaEm, observacao: v.observacao, motivo: v.motivo, ip }), { timeout: 30_000 }));
     revalidar([v.deId, v.paraId], r.projetoId);
     return sucesso(r, `Aprovação trocada: a proposta ${r.numero} agora está aprovada pela revisão escolhida.`);
   });
@@ -75,7 +76,7 @@ export async function reabrirRevisaoAcao(propostaIdBruto: string): Promise<Resul
   if (!id.success) return falha("Proposta inválida.");
   return executar("propostas.reabrirRevisao", async () => {
     const ip = extrairIp(await headers());
-    const r = await prisma.$transaction((tx) => reabrirRevisao(tx, { usuario: sessao, propostaId: id.data, ip }), { timeout: 30_000 });
+    const r = await tentarDeNovoEmDeadlock(() => prisma.$transaction((tx) => reabrirRevisao(tx, { usuario: sessao, propostaId: id.data, ip }), { timeout: 30_000 }));
     revalidar([id.data], r.projetoId);
     return sucesso(r, `A ${r.revisao === 0 ? "original" : `Rev. ${r.revisao}`} foi reaberta como ${r.status === "RASCUNHO" ? "rascunho" : "enviada"}.`);
   });

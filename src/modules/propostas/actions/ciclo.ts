@@ -14,7 +14,7 @@ import { can } from "@/lib/permissoes";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
 
-import { aprovarProposta as aprovarNaTransacao, copiarProposta, enviarProposta as enviarNaTransacao } from "../servico-ciclo";
+import { aprovarProposta as aprovarNaTransacao, copiarProposta, enviarProposta as enviarNaTransacao, travarFamiliaDaProposta } from "../servico-ciclo";
 
 function revalidar(id: string, projetoId: string) {
   revalidatePath(`/propostas/${id}`);
@@ -126,6 +126,8 @@ export async function criarRevisao(propostaIdBruto: string): Promise<ResultadoAc
   return executar("propostas.revisao", async () => {
     const ip = extrairIp(await headers());
     const nova = await prisma.$transaction(async (tx) => {
+      // Mesma ordem de lock de enviar, aprovar, desfazer e reabrir: duas pessoas nunca deixam dois rascunhos do mesmo número.
+      await travarFamiliaDaProposta(tx, id.data);
       const o = await tx.proposta.findFirst({ where: { id: id.data, deletadoEm: null }, select: { numero: true, status: true } });
       if (!o) throw new ErroNegocio("Proposta não encontrada.");
       if (!podeCriarRevisao(o.status)) throw new ErroNegocio("Só uma proposta enviada pode ganhar nova revisão.");

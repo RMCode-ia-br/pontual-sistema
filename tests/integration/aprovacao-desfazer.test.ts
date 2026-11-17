@@ -43,6 +43,10 @@ async function limpar() {
     await c.query(`DELETE FROM "LogAuditoria" WHERE "entidade" = 'Lancamento' AND "entidadeId" IN (SELECT id FROM "Lancamento" WHERE "projetoId" IN (${projetos}))`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Lancamento" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "MovimentoEstoque" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "MovimentoSucata" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "PausaProjeto" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "Anexo" WHERE "entidadeTipo" = 'Projeto' AND "entidadeId" IN (${projetos})`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "MotivoBloqueio" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "Compra" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "ContaReceber" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "EventoAgenda" WHERE "projetoId" IN (${projetos})`, [`${PREFIXO}%`]);
@@ -321,6 +325,21 @@ describe("desfazer a aprovação", () => {
     expect((await prisma.proposta.findUniqueOrThrow({ where: { id: m.propostaId } })).status).toBe("APROVADA");
   });
 
+  it.each([
+    ["foto de obra", /tem 1 foto/, async (projetoId: string) => { await prisma.anexo.create({ data: { entidadeTipo: "Projeto", entidadeId: projetoId, categoria: "foto-obra", nome: "foto.jpg", caminho: `${PREFIXO}/${projetoId}/foto.jpg`, mime: "image/jpeg", tamanhoBytes: 10 } }); }],
+    ["agendamento de instalação", /agendamento de instalação em \d{2}\/\d{2}\/\d{4}/, async (projetoId: string) => { await prisma.eventoAgenda.create({ data: { tipo: "INSTALACAO", inicio: new Date("2026-12-01T12:00:00Z"), fim: new Date("2026-12-01T14:00:00Z"), projetoId, status: "AGENDADO" } }); }],
+    ["despesa lançada na obra", /1 despesa lançada/, async (projetoId: string) => { await prisma.lancamento.create({ data: { data: new Date("2026-11-16T00:00:00Z"), tipo: "SAIDA", valorCentavos: 1000, contaFinanceiraId, descricao: `${PREFIXO} despesa`, projetoId } }); }],
+    ["registro de sucata", /1 registro de sucata/, async (projetoId: string) => { await prisma.movimentoSucata.create({ data: { tipo: "GERACAO", data: new Date("2026-11-16T00:00:00Z"), pesoKg: "1.500", projetoId } }); }],
+    ["pausa registrada", /1 pausa registrada/, async (projetoId: string) => { const motivo = await prisma.motivoBloqueio.create({ data: { nome: `${PREFIXO} motivo ${projetoId}` } }); await prisma.pausaProjeto.create({ data: { projetoId, inicio: new Date("2026-11-16T00:00:00Z"), motivoBloqueioId: motivo.id, justificada: true } }); }],
+  ])("bloqueado por %s (a consulta real, não só a regra pura)", async (_nome, texto, criar) => {
+    const m = await montar(`Bloqueio ${_nome}`);
+    await enviar(m.propostaId);
+    await aprovar(m.propostaId, m.opcaoId);
+    await criar(m.projetoId);
+    await expect(desfazer(m.propostaId)).rejects.toThrow(texto);
+    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: m.propostaId } })).status).toBe("APROVADA");
+  });
+
   it("bloqueado com a obra em execução", async () => {
     const m = await montar("Bloqueio execução");
     await enviar(m.propostaId);
@@ -410,13 +429,47 @@ describe("revisões do mesmo número ao desfazer", () => {
     expect(await aprovadasDoNumero(c.numero)).toBe(1);
   });
 
-  it("desfazer e aprovar a revisão ao mesmo tempo: no máximo uma aprovada, sem deadlock", async () => {
+  it("desfazer e aprovar a revisão ao mesmo tempo: no máximo uma aprovada, sem deadlock e com o estado final coerente", async () => {
     const c = await cenarioDoEngano("Corrida com a irmã");
     const r = await Promise.allSettled([desfazer(c.propostaId, { reabrirId: c.revId }), aprovar(c.revId, c.revOpcaoId)]);
     // Qualquer ordem vale, mas nunca duas aprovadas e nunca erro de banco (deadlock).
-    expect(await aprovadasDoNumero(c.numero)).toBeLessThanOrEqual(1);
+    const aprovadas = await aprovadasDoNumero(c.numero);
+    expect(aprovadas).toBeLessThanOrEqual(1);
     for (const x of r) if (x.status === "rejected") expect(String((x.reason as Error).message)).not.toMatch(/deadlock/i);
     expect(r.some((x) => x.status === "fulfilled")).toBe(true);
+    // Estado final coerente com o desfecho: com uma aprovada, o projeto está aprovado, com as 2 parcelas e as etapas dela;
+    // sem nenhuma, volta ao funil, sem parcela, etapa nem valor fechado.
+    const e = await estado(c.projetoId);
+    if (aprovadas === 1) {
+      expect(e.projeto.status).toBe("APROVADO");
+      expect(e.parcelas).toHaveLength(2);
+      expect(e.etapas.length).toBeGreaterThan(0);
+      expect(e.projeto.valorFechadoCentavos).toBe(1280000);
+      const dona = await prisma.proposta.findFirstOrThrow({ where: { numero: c.numero, status: "APROVADA", deletadoEm: null } });
+      expect(await prisma.contaReceber.count({ where: { projetoId: c.projetoId, deletadoEm: null, propostaId: dona.id } })).toBe(2);
+    } else {
+      expect(e.projeto.status).toBe("PROPOSTA_ENVIADA");
+      expect(e.parcelas).toHaveLength(0);
+      expect(e.etapas).toHaveLength(0);
+      expect(e.projeto.valorFechadoCentavos).toBeNull();
+    }
+    expect(e.propostas.filter((p) => p[1] === "ENVIADA" || p[1] === "APROVADA").length).toBeLessThanOrEqual(1);
+  });
+
+  it("reabrir uma revisão antiga e depois enviar a mais nova: só uma fica valendo (a enviada anterior sai de vigor)", async () => {
+    const m = await montar("Reabrir e enviar");
+    await enviar(m.propostaId);
+    const rev1 = await revisar(m.propostaId);
+    await enviar(rev1.id); // a original vira SUBSTITUIDA
+    const rev2 = await revisar(rev1.id); // rascunho, a partir da Rev. 1
+    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: m.propostaId } })).status).toBe("SUBSTITUIDA");
+
+    await reabrir(m.propostaId); // a original volta a ENVIADA e a Rev. 1 sai de vigor
+    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: rev1.id } })).status).toBe("SUBSTITUIDA");
+
+    await enviar(rev2.id); // a Rev. 2 não nasceu da original: ainda assim a original enviada tem de sair de vigor
+    const status = await prisma.proposta.findMany({ where: { numero: m.numero, deletadoEm: null }, orderBy: { revisao: "asc" }, select: { revisao: true, status: true } });
+    expect(status.map((x) => [x.revisao, x.status])).toEqual([[0, "SUBSTITUIDA"], [1, "SUBSTITUIDA"], [2, "ENVIADA"]]);
   });
 });
 

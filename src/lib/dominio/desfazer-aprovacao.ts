@@ -136,7 +136,7 @@ export function planoDeReabertura(revs: RevisaoBasica[], escolhidaId: string): P
     return {
       mudancas: [
         { id: alvo.id, de: "SUBSTITUIDA", para: "ENVIADA" },
-        ...revs.filter((r) => r.id !== alvo.id && r.status === "ENVIADA").map((r) => ({ id: r.id, de: r.status, para: "SUBSTITUIDA" as const })),
+        ...revs.filter((r) => r.id !== alvo.id && (r.status === "ENVIADA" || r.status === "EXPIRADA")).map((r) => ({ id: r.id, de: r.status, para: "SUBSTITUIDA" as const })),
       ],
     };
   }

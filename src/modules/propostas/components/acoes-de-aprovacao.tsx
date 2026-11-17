@@ -3,7 +3,7 @@
 import { AlertTriangle, ArrowLeftRight, Loader2, RotateCcw, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ConfirmarAcao } from "@/components/confirmar-acao";
@@ -90,6 +90,8 @@ export function AcoesDeAprovacao(p: Props) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [carregando, carregar] = useTransition();
+  // Cada pedido de prévia ganha um número: a resposta de um pedido antigo (o usuário já mudou a revisão ou a opção) é descartada.
+  const pedido = useRef(0);
   const [dialogo, setDialogo] = useState<"desfazer" | "trocar" | "reabrir" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -111,6 +113,7 @@ export function AcoesDeAprovacao(p: Props) {
   const irmaAprovada = p.irmas.find((i) => i.status === "APROVADA");
 
   function fechar() {
+    pedido.current += 1; // uma prévia que ainda esteja chegando não deve aparecer depois de fechar
     setDialogo(null);
     setErro(null);
   }
@@ -134,8 +137,10 @@ export function AcoesDeAprovacao(p: Props) {
     setErro(null);
     setPreviaD(null);
     setMotivo("");
+    const meu = ++pedido.current;
     carregar(async () => {
       const r = await previaDesfazerAcao(p.propostaId);
+      if (meu !== pedido.current) return;
       if (!r.ok || !r.dados) return setErro(r.ok ? "Não foi possível carregar." : r.erro);
       setPreviaD(r.dados);
       setReabrirId(r.dados.padraoReabrirId ?? "");
@@ -143,9 +148,15 @@ export function AcoesDeAprovacao(p: Props) {
   }
 
   function carregarTroca(alvo: string, opcao: string | undefined, preencher: boolean) {
+    const meu = ++pedido.current;
     carregar(async () => {
       const r = await previaTrocaAcao({ deId: p.propostaId, paraId: alvo, opcaoId: opcao });
-      if (!r.ok || !r.dados) return setErro(r.ok ? "Não foi possível carregar." : r.erro);
+      if (meu !== pedido.current) return;
+      if (!r.ok || !r.dados) {
+        // Falhou: não deixa a prévia da revisão ou opção anterior na tela com botão de confirmar.
+        setPreviaT(null);
+        return setErro(r.ok ? "Não foi possível carregar." : r.erro);
+      }
       setErro(null);
       setPreviaT(r.dados);
       setOpcaoId(r.dados.opcaoPadraoId ?? "");
@@ -176,7 +187,7 @@ export function AcoesDeAprovacao(p: Props) {
 
       {aprovada ? (
         <>
-          <p className="text-muted-foreground text-sm">Aprovou por engano, ou o cliente fechou outra revisão? Dá para desfazer ou trocar sem mexer no banco: tudo fica registrado na linha do tempo.</p>
+          <p className="text-muted-foreground text-sm">Aprovou por engano, ou o cliente fechou outra revisão? Dá para desfazer ou trocar aqui mesmo: tudo fica registrado na linha do tempo.</p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={abrirDesfazer}>
               <Undo2 aria-hidden /> Desfazer aprovação
@@ -221,7 +232,7 @@ export function AcoesDeAprovacao(p: Props) {
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Desfazer a aprovação da proposta {p.numero}</DialogTitle>
-            <DialogDescription>A proposta volta a “enviada”. Nada é apagado de verdade: o que foi gerado fica como histórico.</DialogDescription>
+            <DialogDescription>A proposta deixa de estar aprovada e volta a “enviada” (ou fica de lado, se você reabrir uma revisão que já tinha sido enviada). Nada é apagado de verdade: o que foi gerado fica como histórico.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             {carregando && !previaD ? (
@@ -254,7 +265,7 @@ export function AcoesDeAprovacao(p: Props) {
                     <label key={r.id} className="flex items-start gap-2">
                       <input type="radio" name="reabrir" value={r.id} checked={reabrirId === r.id} onChange={() => setReabrirId(r.id)} className="mt-1" />
                       <span>
-                        A {r.rotulo} — volta como {r.voltaComo === "RASCUNHO" ? "rascunho (você edita e envia depois)" : "enviada"}
+                        A {r.rotulo} — volta como {r.voltaComo === "RASCUNHO" ? "rascunho (você edita e envia depois)" : "enviada, e esta proposta passa a substituída"}
                         {r.id === previaD.padraoReabrirId ? " · mais recente" : ""}
                       </span>
                     </label>
@@ -283,7 +294,7 @@ export function AcoesDeAprovacao(p: Props) {
             <Button
               type="button"
               variant="destructive"
-              disabled={pendente || !previaD || previaD.bloqueios.length > 0 || !motivoOk}
+              disabled={pendente || carregando || !previaD || previaD.bloqueios.length > 0 || !motivoOk}
               onClick={() => rodar(() => desfazerAprovacaoAcao({ propostaId: p.propostaId, motivo, reabrirId }))}
             >
               {pendente ? <Loader2 className="animate-spin" aria-hidden /> : null} Desfazer aprovação
@@ -304,7 +315,7 @@ export function AcoesDeAprovacao(p: Props) {
                 Aprovar no lugar desta
                 <Selecao
                   value={paraId}
-                  aria-label="Revisão que passa a ser a aprovada"
+                  aria-label="Aprovar no lugar desta"
                   onChange={(e) => {
                     setParaId(e.target.value);
                     carregarTroca(e.target.value, undefined, false);
@@ -404,7 +415,7 @@ export function AcoesDeAprovacao(p: Props) {
             </Button>
             <Button
               type="button"
-              disabled={pendente || !previaT || !!previaT.erro || previaT.bloqueios.length > 0 || previaT.problemasDaRevisao.length > 0 || !motivoOk || !opcaoId || !aceitaEm}
+              disabled={pendente || carregando || !previaT || !!previaT.erro || previaT.bloqueios.length > 0 || previaT.problemasDaRevisao.length > 0 || !motivoOk || !opcaoId || !aceitaEm}
               onClick={() => rodar(() => trocarAprovacaoAcao({ deId: p.propostaId, paraId, opcaoId, forma, aceitaEm, observacao, motivo }))}
             >
               {pendente ? <Loader2 className="animate-spin" aria-hidden /> : null} Trocar aprovação

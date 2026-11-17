@@ -128,8 +128,8 @@ describe("aviso ao aprovar com revisão mais nova", () => {
     expect(revisaoMaisNovaEmAberto({ id: "a", revisao: 0 }, revs)?.id).toBe("c");
     expect(revisaoMaisNovaEmAberto({ id: "c", revisao: 2 }, revs)).toBeNull();
   });
-  it("ignora revisão mais nova cancelada, recusada ou substituída", () => {
-    expect(revisaoMaisNovaEmAberto({ id: "a", revisao: 0 }, [rev("a", 0, "ENVIADA"), rev("b", 1, "CANCELADA"), rev("c", 2, "RECUSADA")])).toBeNull();
+  it("ignora revisão mais nova cancelada, recusada, expirada ou substituída", () => {
+    expect(revisaoMaisNovaEmAberto({ id: "a", revisao: 0 }, [rev("a", 0, "ENVIADA"), rev("b", 1, "CANCELADA"), rev("c", 2, "RECUSADA"), rev("d", 3, "EXPIRADA"), rev("e", 4, "SUBSTITUIDA")])).toBeNull();
   });
   it("o texto diz qual é mais recente e o que será descartado, em palavras simples", () => {
     expect(textoDoAvisoDeRevisaoMaisNova({ revisao: 0 }, rev("b", 1, "RASCUNHO"))).toBe("A Rev. 1 é mais recente (rascunho). Aprovar esta, a original, vai descartar a Rev. 1.");
@@ -138,6 +138,10 @@ describe("aviso ao aprovar com revisão mais nova", () => {
 });
 
 describe("planoDeReabertura", () => {
+  it("a irmã EXPIRADA também sai de vigor (nunca enviada e expirada valendo juntas)", () => {
+    const r = planoDeReabertura([rev("a", 0, "SUBSTITUIDA"), rev("b", 1, "EXPIRADA")], "a");
+    expect(r).toEqual({ mudancas: [{ id: "a", de: "SUBSTITUIDA", para: "ENVIADA" }, { id: "b", de: "EXPIRADA", para: "SUBSTITUIDA" }] });
+  });
   it("revisão com snapshot volta a ENVIADA e a enviada que valia sai de vigor", () => {
     const r = planoDeReabertura([rev("a", 0, "SUBSTITUIDA"), rev("b", 1, "ENVIADA")], "a");
     expect(r).toEqual({ mudancas: [{ id: "a", de: "SUBSTITUIDA", para: "ENVIADA" }, { id: "b", de: "ENVIADA", para: "SUBSTITUIDA" }] });
