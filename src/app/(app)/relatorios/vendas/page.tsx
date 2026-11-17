@@ -2,23 +2,46 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios/cabecalho-de-relatorio";
+import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios/navegacao-de-visoes";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { formatarData, formatarMoeda, dataLocalDoInstante } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
-import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
+import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
 import { cancelamentosNoPeriodo, LIMITE_DE_CANCELAMENTOS, listarCancelamentos } from "@/modules/indicadores/cancelamentos";
 import { LIMITE_DE_LINHAS_DE_VENDAS, listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 
+import { VisaoAnoContraAno, VisaoOrigem, VisaoParceiros, VisaoTicket } from "./visoes";
+
 export const metadata: Metadata = { title: "Vendas por período" };
+
+const VISOES = [
+  { valor: "periodo", titulo: "Por proposta" },
+  { valor: "origem", titulo: "Origem dos clientes" },
+  { valor: "parceiros", titulo: "Arquitetos e construtoras" },
+  { valor: "ticket", titulo: "Ticket médio" },
+  { valor: "ano", titulo: "Ano contra ano" },
+] as const satisfies readonly Visao[];
+
+const DESCRICAO: Record<string, string> = {
+  periodo: "O que foi aprovado pelo cliente no período, proposta por proposta. É a lista que explica o número “Vendido” do painel e o “Valor médio por obra”.",
+  origem: "De onde vieram os contatos e quanto cada origem vendeu no período.",
+  parceiros: "O que cada arquiteto ou construtora indicou e vendeu no período.",
+  ticket: "Quanto vale, em média, cada obra vendida, por tipo de serviço e por porte.",
+  ano: "Os últimos 12 meses contra os mesmos meses de um ano antes.",
+};
 
 export default async function PaginaDeVendas({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await exigirSessao();
+  const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
-  const { periodo, tipo, aviso } = lerPeriodo(await searchParams, hoje);
-  const [v, lista, cancelados, listaDeCancelados] = await Promise.all([vendidoNoPeriodo(periodo), listarVendas(periodo), cancelamentosNoPeriodo(periodo), listarCancelamentos(periodo)]);
-  const consulta = montarConsulta(parametrosDoPeriodo(periodo));
+  const { periodo, tipo, aviso } = lerPeriodo(brutos, hoje);
+  const visao = lerVisao(brutos.visao, VISOES);
+  const papel = (Array.isArray(brutos.papel) ? brutos.papel[0] : brutos.papel) === "construtora" ? "construtora" : "arquiteto";
+  const doPeriodo = parametrosDoPeriodo(periodo);
+  const extras: Record<string, string> = visao === "parceiros" ? { papel } : {};
+  const consulta = montarConsulta({ ...doPeriodo, ...extras, visao });
 
   return (
     <>
@@ -29,19 +52,50 @@ export default async function PaginaDeVendas({ searchParams }: { searchParams: P
       </p>
       <CabecalhoDeRelatorio
         titulo="Vendas por período"
-        descricao="O que foi aprovado pelo cliente no período, proposta por proposta. É a lista que explica o número “Vendido” do painel e o “Valor médio por obra”."
-        periodoRotulo={rotuloDoPeriodo(periodo)}
+        descricao={DESCRICAO[visao]}
+        periodoRotulo={visao === "ano" ? "últimos 12 meses" : rotuloDoPeriodo(periodo)}
         hrefCsv={`/api/exportar/relatorios/vendas${consulta}`}
       >
-        <SeletorDePeriodo periodo={periodo} tipo={tipo} hoje={hoje} />
+        {visao !== "ano" ? <SeletorDePeriodo periodo={periodo} tipo={tipo} hoje={hoje} /> : null}
       </CabecalhoDeRelatorio>
+      <NavegacaoDeVisoes visoes={VISOES} atual={visao} parametros={{ ...doPeriodo, ...extras }} rotulo="Visões do relatório de vendas" />
 
-      {aviso ? (
+      {aviso && visao !== "ano" ? (
         <p role="status" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           {aviso}
         </p>
       ) : null}
 
+      {visao === "periodo" ? <VisaoPorProposta periodo={periodo} /> : null}
+      {visao === "origem" ? <VisaoOrigem periodo={periodo} /> : null}
+      {visao === "parceiros" ? (
+        <>
+          <nav aria-label="Arquitetos ou construtoras" className="mb-4 flex gap-1.5 print:hidden">
+            {(["arquiteto", "construtora"] as const).map((p) => (
+              <Link
+                key={p}
+                href={montarConsulta({ ...doPeriodo, visao: "parceiros", papel: p })}
+                aria-current={papel === p ? "page" : undefined}
+                className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm ${papel === p ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}
+              >
+                {p === "arquiteto" ? "Arquitetos" : "Construtoras"}
+              </Link>
+            ))}
+          </nav>
+          <VisaoParceiros periodo={periodo} papel={papel} />
+        </>
+      ) : null}
+      {visao === "ticket" ? <VisaoTicket periodo={periodo} /> : null}
+      {visao === "ano" ? <VisaoAnoContraAno referencia={hoje} /> : null}
+    </>
+  );
+}
+
+/** A lista por proposta (a que explica o "Vendido" do painel) e o "cancelado depois de aprovado". */
+async function VisaoPorProposta({ periodo }: { periodo: Periodo }) {
+  const [v, lista, cancelados, listaDeCancelados] = await Promise.all([vendidoNoPeriodo(periodo), listarVendas(periodo), cancelamentosNoPeriodo(periodo), listarCancelamentos(periodo)]);
+  return (
+    <>
       <section aria-label="Resumo das vendas" className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <NumeroDoPainel titulo="Vendido" valor={formatarMoeda(v.totalCentavos)} definicao="Soma do valor aprovado de cada proposta que o cliente aprovou no período, pela data da aprovação. Uma obra com duas partes aprovadas em meses diferentes tem cada parte no seu mês." detalhe={`${v.propostas} proposta(s) em ${v.projetos} projeto(s)`} grande />
         <NumeroDoPainel titulo="Vendido sem nota" valor={formatarMoeda(v.semNotaCentavos)} definicao="Parte do vendido em propostas sem nota fiscal." />
