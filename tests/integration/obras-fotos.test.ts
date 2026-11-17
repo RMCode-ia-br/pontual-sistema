@@ -156,6 +156,18 @@ describe("o que entra na galeria de obras", () => {
     expect(opcoes.anos).toContain(2026);
   });
 
+  it("a galeria é paginada no banco: o total conta as obras já filtradas e a página fora do intervalo cai na última", async () => {
+    const tudo = await listarGaleria({});
+    expect(tudo.paginacao.total).toBeGreaterThanOrEqual(1);
+    expect(tudo.obras.length).toBeLessThanOrEqual(tudo.tamanho);
+    const filtrada = await listarGaleria({ ano: 2025 });
+    expect(nossas(filtrada.obras)).toEqual([]);
+    expect(filtrada.paginacao.total).toBeLessThanOrEqual(tudo.paginacao.total - 1); // a obra A (fotos de 2026) saiu da contagem
+    const alem = await listarGaleria({ pagina: 9999 });
+    expect(alem.paginacao.pagina).toBe(alem.paginacao.paginas);
+    expect(alem.obras.length).toBeLessThanOrEqual(alem.tamanho);
+  });
+
   it("as fotos de uma obra (aba Fotos) trazem só as fotos de obra, inclusive as fora do portfólio", async () => {
     const fotos = await listarFotosDaObra(obraA);
     expect(fotos).toHaveLength(3); // antes, depois e a desmarcada (a excluída, a sem categoria e o PDF ficam de fora)

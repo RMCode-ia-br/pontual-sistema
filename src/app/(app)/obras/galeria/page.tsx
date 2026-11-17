@@ -9,14 +9,15 @@ import { Button } from "@/components/ui/button";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { ROTULO_TIPO_SERVICO, TIPOS_SERVICO } from "@/modules/projetos/schemas";
 import { KitDePostagem } from "@/modules/obras/components/kit-de-postagem";
-import { LIMITE_DE_FOTOS_NA_GALERIA, lerFiltrosDaGaleria, listarGaleria } from "@/modules/obras/queries-fotos";
+import { PaginacaoLista } from "@/components/lista/paginacao-lista";
+import { lerFiltrosDaGaleria, listarGaleria } from "@/modules/obras/queries-fotos";
 
 export const metadata: Metadata = { title: "Galeria de obras" };
 
 export default async function PaginaGaleria({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await exigirSessao();
   const filtros = lerFiltrosDaGaleria(await searchParams);
-  const { obras, opcoes, truncado } = await listarGaleria(filtros);
+  const { obras, opcoes, paginacao, tamanho } = await listarGaleria(filtros);
   const filtrado = !!(filtros.tipo || filtros.cidade || filtros.ano || filtros.publicada);
 
   return (
@@ -50,13 +51,8 @@ export default async function PaginaGaleria({ searchParams }: { searchParams: Pr
         ) : null}
       </form>
 
-      {truncado ? (
-        <p role="note" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          Mostrando só as {LIMITE_DE_FOTOS_NA_GALERIA} fotos mais recentes. Use os filtros para chegar às demais.
-        </p>
-      ) : null}
 
-      {obras.length === 0 ? (
+      {paginacao.total === 0 ? (
         <EstadoVazio
           icone={Images}
           titulo={filtrado ? "Nenhuma obra com esses filtros" : "Nenhuma foto no portfólio ainda"}
@@ -65,13 +61,14 @@ export default async function PaginaGaleria({ searchParams }: { searchParams: Pr
       ) : (
         <div className="grid gap-4">
           <p className="text-muted-foreground text-sm" role="status">
-            {obras.length} {obras.length === 1 ? "obra" : "obras"} com fotos para o portfólio.
+            {paginacao.total} {paginacao.total === 1 ? "obra" : "obras"} com fotos para o portfólio.
           </p>
           {obras.map((o) => (
             <KitDePostagem key={o.id} obra={o} />
           ))}
         </div>
       )}
+      <PaginacaoLista base="/obras/galeria" atuais={{ tipo: filtros.tipo, cidade: filtros.cidade, ano: filtros.ano, publicada: filtros.publicada, tamanho: filtros.tamanho }} paginacao={paginacao} tamanho={tamanho} />
     </>
   );
 }

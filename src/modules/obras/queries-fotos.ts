@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { anoEmSaoPaulo } from "@/lib/dominio/codigo-projeto";
 import {
@@ -11,6 +11,7 @@ import {
   selecionarParaPostagem,
   type MomentoDaFoto,
 } from "@/lib/dominio/portfolio";
+import { calcularPaginacao, TAMANHOS_DE_PAGINA, type Paginacao } from "@/lib/listas/parametros";
 import { criarUrlsDeDownload } from "@/lib/storage";
 import { ROTULO_TIPO_SERVICO, TIPOS_SERVICO } from "@/modules/projetos/schemas";
 
@@ -102,7 +103,10 @@ export async function legendaDaObra(projetoId: string): Promise<{ texto: string;
 // Galeria de obras (portfólio)
 // ---------------------------------------------------------------------------------------------------------
 
-export type FiltrosDaGaleria = { tipo?: (typeof TIPOS_SERVICO)[number]; cidade?: string; ano?: number; publicada?: "sim" | "nao" };
+export type FiltrosDaGaleria = { tipo?: (typeof TIPOS_SERVICO)[number]; cidade?: string; ano?: number; publicada?: "sim" | "nao"; pagina?: number; tamanho?: number };
+
+/** Obras por página da galeria quando a URL não diz (cada obra traz as fotos e os links assinados dela). */
+export const TAMANHO_PADRAO_DA_GALERIA = 25;
 
 const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -112,11 +116,15 @@ export function lerFiltrosDaGaleria(brutos: Record<string, string | string[] | u
   const ano = Number.parseInt(um(brutos.ano) ?? "", 10);
   const publicada = um(brutos.publicada);
   const cidade = (um(brutos.cidade) ?? "").trim().slice(0, 80);
+  const pagina = Number.parseInt(um(brutos.pagina) ?? "", 10);
+  const tamanho = Number.parseInt(um(brutos.tamanho) ?? "", 10);
   return {
     tipo: (TIPOS_SERVICO as readonly string[]).includes(tipo ?? "") ? (tipo as FiltrosDaGaleria["tipo"]) : undefined,
     cidade: cidade || undefined,
     ano: Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : undefined,
     publicada: publicada === "sim" || publicada === "nao" ? publicada : undefined,
+    pagina: Number.isInteger(pagina) && pagina >= 1 && pagina <= 100_000 ? pagina : undefined,
+    tamanho: (TAMANHOS_DE_PAGINA as readonly number[]).includes(tamanho) ? tamanho : undefined,
   };
 }
 
@@ -136,47 +144,65 @@ export type ObraDaGaleria = {
   sugeridas: string[];
 };
 
-/** A galeria é uma vitrine interna: limita o que carrega de uma vez. */
-export const LIMITE_DE_FOTOS_NA_GALERIA = 600;
 const STATUS_DE_OBRA = ["APROVADO", "EM_EXECUCAO", "CONCLUIDO"] as const;
 
+/** Condição SQL (alias `p` = Projeto, `a` = Anexo, `e` = endereço da obra) das fotos e obras que a galeria pode mostrar. */
+const FOTO_DE_PORTFOLIO = Prisma.sql`a."entidadeTipo" = 'Projeto' AND a."entidadeId" = p.id AND a."categoria" = ${CATEGORIA_FOTO_DE_OBRA} AND a."deletadoEm" IS NULL
+  AND a."usarNoPortfolio" AND a."momento" IS NOT NULL AND a."mime" LIKE 'image/%'`;
+const OBRA_ELEGIVEL = Prisma.sql`p."deletadoEm" IS NULL AND p."autorizaPortfolio" AND p.status::text = ANY(${[...STATUS_DE_OBRA]})`;
+const ANO_DA_FOTO = Prisma.sql`extract(year FROM (a."criadoEm" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::int`;
+
 /**
- * Fotos marcadas para o portfólio, de obras cujo cliente autoriza o uso (R18). Só entram as fotos de obra
- * (categoria própria, com momento), nunca outras imagens do projeto (documentos, plantas, comprovantes).
+ * Galeria paginada: os filtros (tipo, cidade, ano da foto, publicada) valem NO BANCO, antes de contar e de paginar, e só as obras
+ * da página buscam as fotos e geram os links assinados do Storage. Fotos de obra (categoria própria, com momento) marcadas para o
+ * portfólio, de obras cujo cliente autoriza o uso (R18); nunca outras imagens do projeto.
  */
-export async function listarGaleria(filtros: FiltrosDaGaleria): Promise<{ obras: ObraDaGaleria[]; opcoes: { cidades: string[]; anos: number[] }; truncado: boolean }> {
-  const brutas = await prisma.anexo.findMany({
-    where: { entidadeTipo: "Projeto", categoria: CATEGORIA_FOTO_DE_OBRA, deletadoEm: null, usarNoPortfolio: true, momento: { not: null }, mime: { startsWith: "image/" } },
-    orderBy: { criadoEm: "desc" },
-    take: LIMITE_DE_FOTOS_NA_GALERIA,
-    select: SELECAO,
-  });
-  const ids = [...new Set(brutas.map((b) => b.entidadeId))];
-  const [projetos, modelo] = await Promise.all([
-    prisma.projeto.findMany({
-      where: { id: { in: ids }, deletadoEm: null, autorizaPortfolio: true, status: { in: [...STATUS_DE_OBRA] } },
-      select: { id: true, codigo: true, titulo: true, publicadoInstagramEm: true, cliente: { select: { nome: true } }, ...SELECAO_PARA_LEGENDA },
+export async function listarGaleria(filtros: FiltrosDaGaleria): Promise<{ obras: ObraDaGaleria[]; opcoes: { cidades: string[]; anos: number[] }; paginacao: Paginacao; tamanho: number }> {
+  const tamanho = filtros.tamanho ?? TAMANHO_PADRAO_DA_GALERIA;
+  const condicoes = [
+    OBRA_ELEGIVEL,
+    ...(filtros.tipo ? [Prisma.sql`${filtros.tipo}::"TipoServico" = ANY(p."tiposServico")`] : []),
+    ...(filtros.cidade ? [Prisma.sql`lower(btrim(e."cidade")) = lower(${filtros.cidade})`] : []),
+    ...(filtros.publicada === "sim" ? [Prisma.sql`p."publicadoInstagramEm" IS NOT NULL`] : filtros.publicada === "nao" ? [Prisma.sql`p."publicadoInstagramEm" IS NULL`] : []),
+    ...(filtros.ano ? [Prisma.sql`${ANO_DA_FOTO} = ${filtros.ano}`] : []),
+  ];
+  const onde = Prisma.join(condicoes, " AND ");
+  const juncoes = Prisma.sql`FROM "Projeto" p JOIN "Anexo" a ON ${FOTO_DE_PORTFOLIO} LEFT JOIN "EnderecoCliente" e ON e.id = p."enderecoObraId"`;
+
+  const [contagem, opcoesCidades, opcoesAnos] = await Promise.all([
+    prisma.$queryRaw<{ total: number }[]>`SELECT count(DISTINCT p.id)::int AS total ${juncoes} WHERE ${onde}`,
+    // Opções dos filtros: do conjunto inteiro de obras elegíveis (antes de filtrar), para o gestor sempre ver o que existe.
+    prisma.$queryRaw<{ cidade: string }[]>`SELECT DISTINCT btrim(e."cidade") AS cidade ${juncoes} WHERE ${OBRA_ELEGIVEL} AND btrim(coalesce(e."cidade", '')) <> '' ORDER BY 1`,
+    prisma.$queryRaw<{ ano: number }[]>`SELECT DISTINCT ${ANO_DA_FOTO} AS ano ${juncoes} WHERE ${OBRA_ELEGIVEL} ORDER BY 1 DESC`,
+  ]);
+  const paginacao = calcularPaginacao(contagem[0]?.total ?? 0, filtros.pagina ?? 1, tamanho);
+  const opcoes = { cidades: opcoesCidades.map((c) => c.cidade).sort((a, b) => a.localeCompare(b, "pt-BR")), anos: opcoesAnos.map((a) => a.ano) };
+
+  // A obra com a foto mais recente primeiro (desempate pelo id: a ordem não muda entre páginas).
+  const daPagina = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT p.id ${juncoes} WHERE ${onde} GROUP BY p.id ORDER BY max(a."criadoEm") DESC, p.id LIMIT ${paginacao.take} OFFSET ${paginacao.skip}`;
+  const ids = daPagina.map((l) => l.id);
+  if (ids.length === 0) return { obras: [], opcoes, paginacao, tamanho };
+
+  const [projetos, brutas, modelo] = await Promise.all([
+    prisma.projeto.findMany({ where: { id: { in: ids } }, select: { id: true, codigo: true, titulo: true, publicadoInstagramEm: true, cliente: { select: { nome: true } }, ...SELECAO_PARA_LEGENDA } }),
+    prisma.anexo.findMany({
+      where: { entidadeTipo: "Projeto", entidadeId: { in: ids }, categoria: CATEGORIA_FOTO_DE_OBRA, deletadoEm: null, usarNoPortfolio: true, momento: { not: null }, mime: { startsWith: "image/" } },
+      orderBy: { criadoEm: "desc" },
+      take: LIMITE_DE_FOTOS_POR_OBRA * ids.length,
+      select: SELECAO,
     }),
     obterModeloDeLegenda(),
   ]);
   const porProjeto = new Map(projetos.map((p) => [p.id, p]));
-  const doProjeto = (id: string) => brutas.filter((b) => b.entidadeId === id);
+  const fotosDe = (id: string) => brutas.filter((b) => b.entidadeId === id && (!filtros.ano || anoEmSaoPaulo(b.criadoEm) === filtros.ano));
 
-  // Opções dos filtros: do conjunto inteiro (antes de filtrar), para o gestor sempre ver o que existe.
-  const cidades = [...new Set(projetos.flatMap((p) => (p.enderecoObra?.cidade?.trim() ? [p.enderecoObra.cidade.trim()] : [])))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  const anos = [...new Set(brutas.filter((b) => porProjeto.has(b.entidadeId)).map((b) => anoEmSaoPaulo(b.criadoEm)))].sort((a, b) => b - a);
-
-  const escolhidas: { projeto: (typeof projetos)[number]; fotos: Bruta[] }[] = [];
-  for (const p of projetos) {
-    if (filtros.tipo && !p.tiposServico.includes(filtros.tipo)) continue;
-    if (filtros.cidade && (p.enderecoObra?.cidade ?? "").trim().toLowerCase() !== filtros.cidade.toLowerCase()) continue;
-    if (filtros.publicada === "sim" && !p.publicadoInstagramEm) continue;
-    if (filtros.publicada === "nao" && p.publicadoInstagramEm) continue;
-    const fotos = doProjeto(p.id).filter((f) => !filtros.ano || anoEmSaoPaulo(f.criadoEm) === filtros.ano);
-    if (fotos.length > 0) escolhidas.push({ projeto: p, fotos });
-  }
-
-  const mapa = await comLinks(escolhidas.flatMap((e) => e.fotos));
+  const escolhidas = ids.flatMap((id) => {
+    const p = porProjeto.get(id);
+    const fotos = fotosDe(id);
+    return p && fotos.length > 0 ? [{ projeto: p, fotos }] : [];
+  });
+  const mapa = await comLinks(escolhidas.flatMap((e) => e.fotos)); // links assinados só das fotos desta página
   const obras: ObraDaGaleria[] = escolhidas.map(({ projeto: p, fotos }) => {
     const lista = fotos.map((f) => mapa.get(f.id)!);
     return {
@@ -193,7 +219,5 @@ export async function listarGaleria(filtros: FiltrosDaGaleria): Promise<{ obras:
       sugeridas: selecionarParaPostagem(lista),
     };
   });
-  // A obra com a foto mais recente primeiro.
-  obras.sort((a, b) => (a.fotos[0].criadoEm < b.fotos[0].criadoEm ? 1 : -1));
-  return { obras, opcoes: { cidades, anos }, truncado: brutas.length >= LIMITE_DE_FOTOS_NA_GALERIA };
+  return { obras, opcoes, paginacao, tamanho };
 }
