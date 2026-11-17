@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
-import { gerarCsv } from "@/lib/csv";
+import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
+import { celulaCsv } from "@/lib/csv";
+import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
 import { ROTULO_TIPO_PROBLEMA, type TipoDoProblema } from "@/lib/dominio/chamados";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
@@ -10,7 +12,12 @@ import { carregarRelatorioDeObras, lerPeriodoDoRelatorioDeObras } from "@/module
 
 export const dynamic = "force-dynamic";
 
-const data = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
+const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+
+/** Uma seção do arquivo: colunas tipadas, sem o BOM (só o começo do arquivo leva). */
+function secao<L>(colunas: ColunaDeCsv<L>[], linhas: L[]): string {
+  return csvDoRelatorio(colunas, linhas, { podeVerInterno: false }).replace(/^﻿/, "");
+}
 
 /** CSV do relatório de obras e assistência, com o MESMO período da tela (seções separadas por uma linha em branco). */
 export async function GET(requisicao: NextRequest) {
@@ -23,41 +30,82 @@ export async function GET(requisicao: NextRequest) {
   const a = r.assistencias;
 
   const secoes = [
-    gerarCsv(
-      ["Período", "Obras avaliadas", "Sem prazo", "No prazo", "Pontualidade %", "Desvio médio (dias)", "No prazo sem pausas", "Pontualidade sem pausas %", "Desvio médio sem pausas (dias)"],
-      [[`${data(periodo.de)} a ${data(periodo.ate)}`, p.concluidas, p.semPrazo, p.pontuais, p.pontualidadePct ?? "", p.desvioMedioDias ?? "", p.pontuaisSemPausas, p.pontualidadeSemPausasPct ?? "", p.desvioMedioSemPausasDias ?? ""]],
+    secao(
+      [
+        { titulo: "Obras avaliadas", tipo: "inteiro", valor: (x: typeof p) => x.concluidas },
+        { titulo: "Sem prazo", tipo: "inteiro", valor: (x) => x.semPrazo },
+        { titulo: "No prazo", tipo: "inteiro", valor: (x) => x.pontuais },
+        { titulo: "Pontualidade %", tipo: "percentual", valor: (x) => x.pontualidadePct },
+        { titulo: "Desvio médio (dias)", tipo: "numero", casas: 1, valor: (x) => x.desvioMedioDias },
+        { titulo: "No prazo sem pausas", tipo: "inteiro", valor: (x) => x.pontuaisSemPausas },
+        { titulo: "Pontualidade sem pausas %", tipo: "percentual", valor: (x) => x.pontualidadeSemPausasPct },
+        { titulo: "Desvio médio sem pausas (dias)", tipo: "numero", casas: 1, valor: (x) => x.desvioMedioSemPausasDias },
+      ],
+      [p],
     ),
-    gerarCsv(
-      ["Código", "Obra", "Cliente", "Concluída em", "Prazo prometido", "Desvio (dias; positivo = atraso)"],
-      r.obrasConcluidas.map((o) => [o.codigo, o.titulo, o.clienteNome, data(o.concluidaEm), data(o.prazoPrometido), o.desvioDias ?? ""]),
+    secao(
+      [
+        { titulo: "Código", tipo: "texto", valor: (o: (typeof r.obrasConcluidas)[number]) => o.codigo },
+        { titulo: "Obra", tipo: "texto", valor: (o) => o.titulo },
+        { titulo: "Cliente", tipo: "texto", valor: (o) => o.clienteNome },
+        { titulo: "Concluída em", tipo: "data", valor: (o) => o.concluidaEm },
+        { titulo: "Prazo prometido", tipo: "data", valor: (o) => o.prazoPrometido },
+        { titulo: "Desvio (dias; positivo = atraso)", tipo: "inteiro", valor: (o) => o.desvioDias },
+      ],
+      r.obrasConcluidas,
     ),
-    gerarCsv(
-      ["Etapa", "Concluídas no período", "Com prazo", "Com atraso", "Atraso médio (dias)", "Atrasadas hoje"],
-      r.atrasosPorEtapa.map((l) => [ROTULO_TIPO_ETAPA[l.tipo], l.concluidasNoPeriodo, l.comPrazo, l.comAtraso, l.atrasoMedioDias ?? "", l.abertasAtrasadas]),
+    secao(
+      [
+        { titulo: "Etapa", tipo: "texto", valor: (l: (typeof r.atrasosPorEtapa)[number]) => ROTULO_TIPO_ETAPA[l.tipo] },
+        { titulo: "Concluídas no período", tipo: "inteiro", valor: (l) => l.concluidasNoPeriodo },
+        { titulo: "Com prazo", tipo: "inteiro", valor: (l) => l.comPrazo },
+        { titulo: "Com atraso", tipo: "inteiro", valor: (l) => l.comAtraso },
+        { titulo: "Atraso médio (dias)", tipo: "numero", casas: 1, valor: (l) => l.atrasoMedioDias },
+        { titulo: "Atrasadas hoje", tipo: "inteiro", valor: (l) => l.abertasAtrasadas },
+      ],
+      r.atrasosPorEtapa,
     ),
-    gerarCsv(
-      ["Motivo da pausa", "Pausas", "Justificadas", "Dias"],
-      r.pausasPorMotivo.map((m) => [m.motivo, m.quantidade, m.justificadas, m.dias]),
+    secao(
+      [
+        { titulo: "Motivo da pausa", tipo: "texto", valor: (m: (typeof r.pausasPorMotivo)[number]) => m.motivo },
+        { titulo: "Pausas", tipo: "inteiro", valor: (m) => m.quantidade },
+        { titulo: "Justificadas", tipo: "inteiro", valor: (m) => m.justificadas },
+        { titulo: "Dias", tipo: "inteiro", valor: (m) => m.dias },
+      ],
+      r.pausasPorMotivo,
     ),
-    gerarCsv(
-      ["Motivo do bloqueio (agora)", "Etapas bloqueadas"],
-      r.bloqueadasAgora.map((b) => [b.motivo, b.quantidade]),
+    secao(
+      [
+        { titulo: "Motivo do bloqueio (agora)", tipo: "texto", valor: (b: (typeof r.bloqueadasAgora)[number]) => b.motivo },
+        { titulo: "Etapas bloqueadas", tipo: "inteiro", valor: (b) => b.quantidade },
+      ],
+      r.bloqueadasAgora,
     ),
-    gerarCsv(
-      ["Chamados no período", "Em garantia", "Fora da garantia", "Resolvidos", "Dias médios para resolver", "Visitas cobradas", "Valor informado (centavos)", "Cobranças geradas", "Em aberto hoje"],
-      [[a.total, a.emGarantia, a.foraDaGarantia, a.resolvidos, a.diasMedioParaResolver ?? "", a.visitasCobradas, a.valorCobradoCentavos, a.cobrancasGeradas, r.chamadosEmAbertoHoje]],
+    secao(
+      [
+        { titulo: "Chamados no período", tipo: "inteiro", valor: (x: { a: typeof a; abertos: number }) => x.a.total },
+        { titulo: "Em garantia", tipo: "inteiro", valor: (x) => x.a.emGarantia },
+        { titulo: "Fora da garantia", tipo: "inteiro", valor: (x) => x.a.foraDaGarantia },
+        { titulo: "Resolvidos", tipo: "inteiro", valor: (x) => x.a.resolvidos },
+        { titulo: "Dias médios para resolver", tipo: "numero", casas: 1, valor: (x) => x.a.diasMedioParaResolver },
+        { titulo: "Visitas cobradas", tipo: "inteiro", valor: (x) => x.a.visitasCobradas },
+        { titulo: "Valor informado (R$)", tipo: "dinheiro", valor: (x) => x.a.valorCobradoCentavos },
+        { titulo: "Cobranças geradas", tipo: "inteiro", valor: (x) => x.a.cobrancasGeradas },
+        { titulo: "Em aberto hoje", tipo: "inteiro", valor: (x) => x.abertos },
+      ],
+      [{ a, abertos: r.chamadosEmAbertoHoje }],
     ),
-    gerarCsv(
-      ["Tipo do problema", "Chamados"],
-      a.porTipo.map((t) => [ROTULO_TIPO_PROBLEMA[t.tipo as TipoDoProblema] ?? t.tipo, t.quantidade]),
+    secao(
+      [
+        { titulo: "Tipo do problema", tipo: "texto", valor: (t: (typeof a.porTipo)[number]) => ROTULO_TIPO_PROBLEMA[t.tipo as TipoDoProblema] ?? t.tipo },
+        { titulo: "Chamados", tipo: "inteiro", valor: (t) => t.quantidade },
+      ],
+      a.porTipo,
     ),
   ];
-  if (r.truncado) secoes.push(gerarCsv(["AVISO: relatório limitado aos registros mais recentes do período. Reduza o período."], []));
+  const aviso = `Período ${br(periodo.de)} a ${br(periodo.ate)}.${r.truncado ? " Relatório limitado aos registros mais recentes do período. Reduza o período." : ""}`;
 
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "obras", acao: "EXPORTAR", depois: { ...periodo } });
-
-  // Cada seção vem com a marca de codificação (BOM) do Excel; só a primeira deve ficar.
-  return new NextResponse(secoes.map((c, i) => (i === 0 ? c : c.replace(/^﻿/, ""))).join("\r\n"), {
-    headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="obras-e-assistencia.csv"', "Cache-Control": "no-store" },
-  });
+  // O aviso (com o período) abre o arquivo, depois do BOM; as seções vêm separadas por uma linha em branco.
+  return respostaDeCsv(`﻿${celulaCsv(`AVISO: ${aviso}`)}\r\n${secoes.join("\r\n")}`, "obras-e-assistencia.csv");
 }

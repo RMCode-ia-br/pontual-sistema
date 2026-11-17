@@ -100,7 +100,7 @@ test("o DRE de janeiro de 2020 bate com os lançamentos: receitas 7.500, aluguel
   expect(csv.status()).toBe(200);
   const texto = await csv.text();
   expect(texto).toContain("Resultado");
-  expect(texto).toContain("6.500,00");
+  expect(texto).toContain("6500,00"); // CSV tipado: vírgula decimal, sem milhar (o Excel soma)
 });
 
 test("a conta mostra o saldo do movimento e a visão geral lista a conta; o extrato bate", async ({ page }) => {

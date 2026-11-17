@@ -2,16 +2,30 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
-import { gerarCsv } from "@/lib/csv";
+import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
+import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
 import { ROTULO_FORMA, type FormaPagamento } from "@/lib/dominio/parcelas";
-import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
+import { dataLocalDoInstante } from "@/lib/formatadores";
 import { lerPeriodoDoExtrato } from "@/modules/financeiro/periodo";
-import { extratoDaConta, obterContaFinanceira } from "@/modules/financeiro/queries";
+import { extratoDaConta, LIMITE_DE_LINHAS_DO_EXTRATO, obterContaFinanceira, type ExtratoDaConta } from "@/modules/financeiro/queries";
 
 export const dynamic = "force-dynamic";
 
-const data = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+type Linha = ExtratoDaConta["linhas"][number];
+
+const COLUNAS: ColunaDeCsv<Linha>[] = [
+  { titulo: "Data", tipo: "data", valor: (l) => l.lancamento.data },
+  { titulo: "Descrição", tipo: "texto", valor: (l) => l.lancamento.descricao },
+  { titulo: "Categoria", tipo: "texto", valor: (l) => l.lancamento.categoria ?? (l.lancamento.transferenciaId ? "Transferência" : "Sem categoria") },
+  { titulo: "Forma", tipo: "texto", valor: (l) => (l.lancamento.forma ? (ROTULO_FORMA[l.lancamento.forma as FormaPagamento] ?? l.lancamento.forma) : null) },
+  { titulo: "Entrada (R$)", tipo: "dinheiro", valor: (l) => (l.lancamento.tipo === "ENTRADA" ? l.lancamento.valorCentavos : null) },
+  { titulo: "Saída (R$)", tipo: "dinheiro", valor: (l) => (l.lancamento.tipo === "SAIDA" ? l.lancamento.valorCentavos : null) },
+  { titulo: "Saldo (R$)", tipo: "dinheiro", valor: (l) => l.saldoAposCentavos },
+  { titulo: "Com nota", tipo: "texto", valor: (l) => (l.lancamento.comNotaFiscal ? "Sim" : null) },
+  { titulo: "Conciliado", tipo: "texto", valor: (l) => (l.lancamento.conciliado ? "Sim" : null) },
+  { titulo: "Observação", tipo: "texto", valor: (l) => (l.lancamento.estornado ? `Estornado: ${l.lancamento.motivoEstorno ?? ""}` : l.incluidoNoSaldoInicial ? "Já incluído no saldo inicial" : null) },
+];
 
 /** Extrato da conta em CSV, no mesmo período da tela. */
 export async function GET(requisicao: NextRequest, contexto: { params: Promise<{ id: string }> }) {
@@ -25,26 +39,10 @@ export async function GET(requisicao: NextRequest, contexto: { params: Promise<{
 
   const { de, ate } = lerPeriodoDoExtrato(Object.fromEntries(requisicao.nextUrl.searchParams), hoje);
   const extrato = await extratoDaConta(conta, de, ate);
-
-  const registros: unknown[][] = extrato.linhas.map(({ lancamento: l, saldoAposCentavos, incluidoNoSaldoInicial }) => [
-    data(l.data),
-    l.descricao,
-    l.categoria ?? (l.transferenciaId ? "Transferência" : "Sem categoria"),
-    l.forma ? (ROTULO_FORMA[l.forma as FormaPagamento] ?? l.forma) : "",
-    l.tipo === "ENTRADA" ? formatarMoeda(l.valorCentavos) : "",
-    l.tipo === "SAIDA" ? formatarMoeda(l.valorCentavos) : "",
-    formatarMoeda(saldoAposCentavos),
-    l.comNotaFiscal ? "Sim" : "",
-    l.conciliado ? "Sim" : "",
-    l.estornado ? `Estornado: ${l.motivoEstorno ?? ""}` : incluidoNoSaldoInicial ? "Já incluído no saldo inicial" : "",
-  ]);
-  if (extrato.truncado) registros.push([`AVISO: exportação limitada às ${extrato.linhas.length} primeiras linhas do período. Escolha um período menor.`]);
-  if (!conta.saldoInicialInformado) registros.push(["AVISO: saldo inicial não informado; o saldo mostra só o movimento registrado."]);
-
-  const csv = gerarCsv(["Data", "Descrição", "Categoria", "Forma", "Entrada", "Saída", "Saldo", "Com nota", "Conciliado", "Observação"], registros);
+  const avisos = [
+    extrato.truncado ? `exportação limitada às primeiras ${LIMITE_DE_LINHAS_DO_EXTRATO} linhas do período. Escolha um período menor.` : null,
+    !conta.saldoInicialInformado ? "saldo inicial não informado; o saldo mostra só o movimento registrado." : null,
+  ].filter(Boolean);
   await registrarAuditoria(prisma, { usuario, entidade: "ContaFinanceira", entidadeId: conta.id, acao: "EXPORTAR", depois: { linhas: extrato.linhas.length, de, ate } });
-
-  return new NextResponse(csv, {
-    headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="extrato-${de}-${ate}.csv"`, "Cache-Control": "no-store" },
-  });
+  return respostaDeCsv(csvDoRelatorio(COLUNAS, extrato.linhas, { podeVerInterno: false, aviso: avisos.length > 0 ? avisos.join(" ") : null }), `extrato-${de}-${ate}.csv`);
 }
