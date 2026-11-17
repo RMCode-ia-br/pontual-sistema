@@ -8,6 +8,7 @@ import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { chaveDoMes, lerPeriodo, limitesEmInstantes, primeiroDiaDoMes, somarDias, somarMeses, type Periodo } from "@/lib/periodo";
 import { MOTIVOS_NO_PAINEL, resumoComercial } from "@/modules/comercial/resumo";
+import { cancelamentosNoPeriodo, listarCancelamentos } from "@/modules/indicadores/cancelamentos";
 import { janelaDeFechamento, fechamentoNaJanela, listarDecisoes, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
 import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
 import { faturamentoMensal } from "@/modules/indicadores/faturamento-mensal";
@@ -60,6 +61,7 @@ async function limpar() {
     await c.query(`DELETE FROM "EtapaProjeto" WHERE "projetoId" IN (${projetos})`);
     await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetos}))`);
     await c.query(`DELETE FROM "Proposta" WHERE "projetoId" IN (${projetos})`);
+    await c.query(`DELETE FROM "HistoricoFaseProjeto" WHERE "projetoId" IN (${projetos})`);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "MotivoPerda" WHERE nome LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE '${PREFIXO}%'`);
@@ -245,6 +247,25 @@ beforeAll(async () => {
   await perdido("Fech perdido sem proposta enviada", "2020-01-05T12:00:00Z", false); // não conta
   await perdido("Fech perdido fora (depois)", "2020-02-01T03:00:00Z", true); // 01/02 às 00:00 em SP: fora
 
+  // ----- Cancelado depois de aprovado (janeiro/2020) -----
+  // Nenhuma tela leva uma obra aprovada a "Cancelado" ainda: o teste grava o histórico direto.
+  const cancelada = async (titulo: string, aceitaEm: string, valor: number, canceladoEm: string, entraNoVendido: boolean) => {
+    const p = await projeto(titulo, { status: "CANCELADO" });
+    await venda(p.id, { aceitaEm, valor }, entraNoVendido);
+    await prisma.historicoFaseProjeto.create({ data: { projetoId: p.id, de: "APROVADO", para: "CANCELADO", criadoEm: instante(canceladoEm) } });
+    return p;
+  };
+  await cancelada("Canc mes diferente", "2019-12-10T15:00:00Z", 500_000, "2020-01-15T15:00:00Z", false); // aprovada em dezembro, cancelada em janeiro: DENTRO
+  await cancelada("Canc mesmo mes", "2020-01-08T15:00:00Z", 300_000, "2020-01-25T15:00:00Z", true); // aprovada e cancelada em janeiro: DENTRO (e continua no Vendido de janeiro)
+  await cancelada("Canc borda 23h59 do dia 31", "2019-11-05T15:00:00Z", 111_100, "2020-02-01T02:59:00Z", false); // 31/01 23:59 SP: DENTRO
+  await cancelada("Canc borda 00h01 do dia 1", "2019-11-06T15:00:00Z", 222_200, "2020-01-01T03:01:00Z", false); // 01/01 00:01 SP: DENTRO
+  await cancelada("Canc fora fevereiro", "2019-11-07T15:00:00Z", 333_300, "2020-02-01T03:01:00Z", false); // 01/02 00:01 SP: fora
+  await cancelada("Canc fora dezembro", "2019-11-08T15:00:00Z", 444_400, "2020-01-01T02:59:00Z", false); // 31/12 23:59 SP: fora
+  // Aprovação DESFEITA (7A.1): a proposta deixou de ser aprovada, então não é "cancelado depois de aprovado" nem é venda.
+  const desfeita = await projeto("Canc aprovacao desfeita", { status: "CANCELADO" });
+  await proposta(desfeita.id, { status: "ENVIADA", enviadaEm: "2019-12-12T12:00:00Z" });
+  await prisma.historicoFaseProjeto.create({ data: { projetoId: desfeita.id, de: "PROPOSTA_ENVIADA", para: "CANCELADO", criadoEm: instante("2020-01-20T15:00:00Z") } });
+
   // ----- Motivos de perda (janeiro/2020; motivos próprios, com prefixo) -----
   // Já há 2 perdidos SEM motivo em janeiro (os dois "Fech perdido" acima que entram no período).
   const motivo = async (letra: string) => (await prisma.motivoPerda.create({ data: { nome: `${PREFIXO} Motivo ${letra}`, ordem: 9999 } })).id;
@@ -338,20 +359,21 @@ describe("preparo: janeiro e março de 2020 não têm dado real", () => {
 });
 
 describe("Vendido: painel × relatório de vendas × SQL independente", () => {
-  it("com nota R$ 12.600,00, sem nota R$ 14.000,00, total R$ 26.600,00, repasse R$ 600,00, 4 propostas em 3 projetos, ticket R$ 8.866,67", async () => {
+  it("com nota R$ 12.600,00, sem nota R$ 17.000,00, total R$ 29.600,00, repasse R$ 600,00, 5 propostas em 4 projetos, ticket R$ 7.400,00", async () => {
     const painel = await vendidoNoPeriodo(JAN);
     const sql = await vendasSql(JAN.de, JAN.ate);
 
-    // À mão: sem nota 1.000.000 + 400.000; com nota 1.050.000 + 210.000; repasse 50.000 + 10.000.
-    expect(painel.semNotaCentavos).toBe(1_400_000);
+    // À mão: sem nota 1.000.000 + 400.000 + 300.000 (a obra aprovada e depois cancelada em janeiro continua no Vendido);
+    // com nota 1.050.000 + 210.000; repasse 50.000 + 10.000.
+    expect(painel.semNotaCentavos).toBe(1_700_000);
     expect(painel.comNotaCentavos).toBe(1_260_000);
-    expect(painel.totalCentavos).toBe(2_660_000);
+    expect(painel.totalCentavos).toBe(2_960_000);
     expect(painel.repasseDeImpostoCentavos).toBe(60_000);
-    expect(painel.propostas).toBe(4);
-    expect(painel.projetos).toBe(3); // a 2ª aprovação do mesmo projeto não conta de novo
-    expect(painel.ticketMedioCentavos).toBe(886_667); // 2.660.000 ÷ 3 = 886.666,67
+    expect(painel.propostas).toBe(5);
+    expect(painel.projetos).toBe(4); // a 2ª aprovação do mesmo projeto não conta de novo
+    expect(painel.ticketMedioCentavos).toBe(740_000); // 2.960.000 ÷ 4
 
-    expect(sql).toEqual({ com: 1_260_000, sem: 1_400_000, repasse: 60_000, propostas: 4, projetos: 3 });
+    expect(sql).toEqual({ com: 1_260_000, sem: 1_700_000, repasse: 60_000, propostas: 5, projetos: 4 });
     expect({ com: painel.comNotaCentavos, sem: painel.semNotaCentavos, repasse: painel.repasseDeImpostoCentavos, propostas: painel.propostas, projetos: painel.projetos }).toEqual(sql);
   });
 
@@ -490,6 +512,67 @@ describe("Tempo da visita até a proposta: painel × SQL independente", () => {
 
   it("período sem propostas enviadas: sem dados (null) e amostra 0", async () => {
     expect(await tempoVisitaAteProposta(MAR)).toMatchObject({ mediaDeDias: null, amostra: 0, foraDaMedia: 0, linhas: [] });
+  });
+});
+
+describe("Cancelado depois de aprovado: linha própria, sem mexer no Vendido dos meses passados", () => {
+  const DEZ: Periodo = { de: "2019-12-01", ate: "2019-12-31" };
+
+  it("conta e soma só as obras canceladas DENTRO do período (mês diferente do da aprovação, mesmo mês e as duas bordas do mês em SP)", async () => {
+    const r = await cancelamentosNoPeriodo(JAN);
+    // mês diferente 500.000 + mesmo mês 300.000 + borda 23h59 111.100 + borda 00h01 222.200
+    expect(r).toEqual({ projetos: 4, valorAprovadoCentavos: 1_133_300 });
+    const lista = await listarCancelamentos(JAN);
+    expect(lista.truncado).toBe(false);
+    expect(lista.linhas.map((l) => [l.titulo, l.valorAprovadoCentavos]).sort()).toEqual(
+      [
+        [`${PREFIXO} Canc borda 00h01 do dia 1`, 222_200],
+        [`${PREFIXO} Canc borda 23h59 do dia 31`, 111_100],
+        [`${PREFIXO} Canc mes diferente`, 500_000],
+        [`${PREFIXO} Canc mesmo mes`, 300_000],
+      ].sort(),
+    );
+    // A lista e o resumo vêm da MESMA cláusula: a soma da lista é a soma do resumo.
+    expect(lista.linhas.reduce((s, l) => s + l.valorAprovadoCentavos, 0)).toBe(r.valorAprovadoCentavos);
+  });
+
+  it("bate com um SQL independente (histórico de fases em horário de São Paulo)", async () => {
+    const [sql] = await q<{ projetos: number; total: string }>(
+      `SELECT count(DISTINCT j.id)::int AS projetos, COALESCE(sum(pr."valorAprovadoCentavos"), 0)::text AS total
+         FROM "Projeto" j JOIN "Proposta" pr ON pr."projetoId" = j.id AND pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL
+        WHERE j."deletadoEm" IS NULL AND j.status = 'CANCELADO'
+          AND EXISTS (SELECT 1 FROM "HistoricoFaseProjeto" h WHERE h."projetoId" = j.id AND h.para = 'CANCELADO' AND ${EM_SP('h."criadoEm"')} BETWEEN $1::date AND $2::date)`,
+      [JAN.de, JAN.ate],
+    );
+    const r = await cancelamentosNoPeriodo(JAN);
+    expect(sql.projetos).toBe(r.projetos);
+    expect(n(sql.total)).toBe(r.valorAprovadoCentavos);
+  });
+
+  it("a venda continua no Vendido do mês em que foi aprovada, e o cancelamento não altera os meses passados", async () => {
+    // Aprovada em dezembro de 2019 e cancelada em janeiro: continua em dezembro.
+    const dezembro = await listarVendas(DEZ);
+    expect(dezembro.linhas.some((l) => l.projetoTitulo === `${PREFIXO} Canc mes diferente` && l.valorCentavos === 500_000)).toBe(true);
+    // E NÃO entra no Vendido de janeiro (o cancelamento não move a venda de mês).
+    const janeiro = await listarVendas(JAN);
+    expect(janeiro.linhas.some((l) => l.projetoTitulo === `${PREFIXO} Canc mes diferente`)).toBe(false);
+    // Aprovada e cancelada no mesmo mês: aparece nas duas linhas.
+    expect(janeiro.linhas.some((l) => l.projetoTitulo === `${PREFIXO} Canc mesmo mes` && l.valorCentavos === 300_000)).toBe(true);
+    // O Vendido de janeiro bate com a soma das vendas esperadas (inclui a obra cancelada no mesmo mês).
+    const v = await vendidoNoPeriodo(JAN);
+    expect(v.totalCentavos).toBe(vendasEsperadas.reduce((s, x) => s + x.valor, 0));
+  });
+
+  it("aprovação DESFEITA não é cancelamento: a proposta deixa de ser aprovada, não é venda e não entra na linha", async () => {
+    const lista = await listarCancelamentos(JAN);
+    expect(lista.linhas.some((l) => l.titulo === `${PREFIXO} Canc aprovacao desfeita`)).toBe(false);
+    const vendas = await listarVendas(JAN);
+    expect(vendas.linhas.some((l) => l.projetoTitulo === `${PREFIXO} Canc aprovacao desfeita`)).toBe(false);
+  });
+
+  it("período sem cancelamentos: nenhum, zero e lista vazia", async () => {
+    expect(await cancelamentosNoPeriodo(MAR)).toEqual({ projetos: 0, valorAprovadoCentavos: 0 });
+    expect((await listarCancelamentos(MAR)).linhas).toEqual([]);
   });
 });
 

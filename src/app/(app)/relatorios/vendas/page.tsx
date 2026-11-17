@@ -8,6 +8,7 @@ import { exigirSessao } from "@/lib/auth/sessao";
 import { formatarData, formatarMoeda, dataLocalDoInstante } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
+import { cancelamentosNoPeriodo, LIMITE_DE_CANCELAMENTOS, listarCancelamentos } from "@/modules/indicadores/cancelamentos";
 import { LIMITE_DE_LINHAS_DE_VENDAS, listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 
 export const metadata: Metadata = { title: "Vendas por período" };
@@ -16,7 +17,7 @@ export default async function PaginaDeVendas({ searchParams }: { searchParams: P
   await exigirSessao();
   const hoje = dataLocalDoInstante(new Date());
   const { periodo, tipo, aviso } = lerPeriodo(await searchParams, hoje);
-  const [v, lista] = await Promise.all([vendidoNoPeriodo(periodo), listarVendas(periodo)]);
+  const [v, lista, cancelados, listaDeCancelados] = await Promise.all([vendidoNoPeriodo(periodo), listarVendas(periodo), cancelamentosNoPeriodo(periodo), listarCancelamentos(periodo)]);
   const consulta = montarConsulta(parametrosDoPeriodo(periodo));
 
   return (
@@ -46,6 +47,12 @@ export default async function PaginaDeVendas({ searchParams }: { searchParams: P
         <NumeroDoPainel titulo="Vendido sem nota" valor={formatarMoeda(v.semNotaCentavos)} definicao="Parte do vendido em propostas sem nota fiscal." />
         <NumeroDoPainel titulo="Vendido com nota" valor={formatarMoeda(v.comNotaCentavos)} definicao="Parte do vendido em propostas com nota fiscal. Já inclui o acréscimo da nota, que aparece separado ao lado." detalhe={`Repasse de imposto, fora da margem: ${formatarMoeda(v.repasseDeImpostoCentavos)}`} />
         <NumeroDoPainel titulo="Valor médio por obra" valor={v.ticketMedioCentavos === null ? "—" : formatarMoeda(v.ticketMedioCentavos)} definicao="Vendido dividido pelo número de projetos que tiveram aprovação no período." detalhe={v.projetos === 0 ? "Sem projeto aprovado no período" : `${v.projetos} projeto(s)`} />
+        <NumeroDoPainel
+          titulo="Cancelado depois de aprovado"
+          valor={cancelados.projetos === 0 ? "Nenhum" : formatarMoeda(cancelados.valorAprovadoCentavos)}
+          definicao="Obras que o cliente tinha aprovado e que foram canceladas dentro do período. A venda continua no “Vendido” do mês em que foi aprovada (os meses passados não mudam); aqui aparece só o cancelamento, no mês em que aconteceu. Aprovação desfeita por engano não entra: ela tira a venda do Vendido."
+          detalhe={cancelados.projetos === 0 ? "Nenhuma obra cancelada no período" : `${cancelados.projetos} obra(s) · valor que tinha sido vendido`}
+        />
       </section>
 
       {lista.truncado ? (
@@ -93,6 +100,46 @@ export default async function PaginaDeVendas({ searchParams }: { searchParams: P
           </tbody>
         </TabelaDeRelatorio>
       )}
+
+      {listaDeCancelados.linhas.length > 0 ? (
+        <section aria-labelledby="titulo-cancelados" className="mt-8">
+          <h2 id="titulo-cancelados" className="mb-1 text-lg font-medium">
+            Cancelado depois de aprovado
+          </h2>
+          <p className="text-muted-foreground mb-3 text-sm">Estas obras continuam no “Vendido” do mês em que foram aprovadas; o cancelamento aparece aqui, no mês em que aconteceu.</p>
+          {listaDeCancelados.truncado ? (
+            <p role="alert" className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              A lista mostra só {LIMITE_DE_CANCELAMENTOS} obras. Escolha um período menor para ver as outras.
+            </p>
+          ) : null}
+          <TabelaDeRelatorio legenda="Obras canceladas depois de aprovadas no período">
+            <thead className="bg-muted/50 text-left text-xs">
+              <tr>
+                <th scope="col" className="px-3 py-2">Obra</th>
+                <th scope="col" className="px-3 py-2">Cliente</th>
+                <th scope="col" className="px-3 py-2">Aprovada em</th>
+                <th scope="col" className="px-3 py-2">Cancelada em</th>
+                <th scope="col" className="px-3 py-2 text-right">Valor que tinha sido vendido</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {listaDeCancelados.linhas.map((l) => (
+                <tr key={l.projetoId}>
+                  <td className="px-3 py-2">
+                    <Link href={`/projetos/${l.projetoId}`} className="hover:underline">
+                      {l.codigo} · {l.titulo}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2">{l.cliente}</td>
+                  <td className="px-3 py-2 tabular-nums">{l.aprovadoEm ? formatarData(l.aprovadoEm) : "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatarData(l.canceladoEm)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(l.valorAprovadoCentavos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </TabelaDeRelatorio>
+        </section>
+      ) : null}
     </>
   );
 }
