@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Prisma } from "@/generated/prisma/client";
 import type { UsuarioSessao } from "@/lib/auth/sessao";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
+import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
 import { montarCobrancaDaConta, listarContasAReceber, lerListaAReceber, obterContaAReceber } from "@/modules/financeiro/queries-receber";
 import { listarContasFinanceiras } from "@/modules/financeiro/queries";
 import { estornarLancamento } from "@/modules/financeiro/servico-lancamentos";
@@ -188,6 +189,42 @@ describe("estorno do recebimento", () => {
     expect(marcas.map((m) => [m.comNotaFiscal, m.estornadoEm !== null])).toEqual([[true, true], [false, true]]);
   });
 
+  it("corrigir a marca = estornar e registrar de novo: o indicador 'recebido com nota' e a marca da conta acompanham (Bloco 5i)", async () => {
+    // O dia do pagamento (2026-11-19) e a data "de hoje" do teste (2026-11-20): tudo comparado por DIFERENÇA, sem depender do resto do banco.
+    const DIA = { de: "2026-11-19", ate: "2026-11-19" };
+    const c = await nova("Corrigir marca", 50000);
+    const inicio = await recebidoNoPeriodo(DIA);
+    const faturamentoInicio = await faturamentoComNota(HOJE);
+    const diferenca = async () => {
+      const agora = await recebidoNoPeriodo(DIA);
+      return { com: agora.comNotaCentavos - inicio.comNotaCentavos, sem: agora.semNotaCentavos - inicio.semNotaCentavos };
+    };
+
+    // Registrado por engano SEM nota.
+    const errado = await receber(c.id, 50000, { comNotaFiscal: false });
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: false, status: "PAGA", valorCentavos: 50000 });
+    expect(await diferenca()).toEqual({ com: 0, sem: 50000 });
+
+    // Estorna: o dinheiro sai de toda soma e a conta volta a "aberta, sem nota".
+    await tx((t) => estornarLancamento(t, errado.lancamentoId, "Faltou marcar a nota", ctx()));
+    expect(await diferenca()).toEqual({ com: 0, sem: 0 });
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: false, status: "ABERTA", valorPagoCentavos: 0, valorCentavos: 50000 });
+
+    // Registra de novo, agora COM nota: o recebido com nota sobe, o sem nota não muda, e a conta guarda a marca nova.
+    await receber(c.id, 50000, { comNotaFiscal: true });
+    expect(await diferenca()).toEqual({ com: 50000, sem: 0 });
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: true, status: "PAGA", valorPagoCentavos: 50000, valorCentavos: 50000 });
+
+    // O faturamento com nota dos últimos 12 meses sobe os mesmos R$ 500,00, uma vez só (o pagamento estornado não conta).
+    const faturamento = await faturamentoComNota(HOJE);
+    expect(faturamento.recebidoCentavos - faturamentoInicio.recebidoCentavos).toBe(50000);
+    expect(faturamento.pagamentos - faturamentoInicio.pagamentos).toBe(1);
+
+    // Cada pagamento guarda a marca que teve; o estornado fica de fora de toda soma.
+    const marcas = await prisma.lancamento.findMany({ where: { contaReceberId: c.id }, orderBy: { criadoEm: "asc" }, select: { comNotaFiscal: true, estornadoEm: true } });
+    expect(marcas.map((m) => [m.comNotaFiscal, m.estornadoEm !== null])).toEqual([[false, true], [true, false]]);
+  });
+
   it("estornar tudo volta a parcela para 'aberta' (sem pagamento)", async () => {
     const c = await nova("Estorno total", 20000);
     const r = await receber(c.id, 20000);
@@ -211,6 +248,24 @@ describe("ajustes, cancelamento e liberação", () => {
     expect(await de(c.id)).toMatchObject({ valorCentavos: 40000, status: "PARCIAL" });
     expect((await tarefaDe(c.id)).status).toBe("ABERTA");
     expect(await prisma.logAuditoria.count({ where: { entidade: "ContaReceber", entidadeId: c.id, acao: "AJUSTAR" } })).toBe(2);
+  });
+
+  it("ajustar o valor da parcela (desconto ou acréscimo) NÃO mexe na marca 'com nota' nem no que já foi recebido (Bloco 5i)", async () => {
+    const DIA = { de: "2026-11-19", ate: "2026-11-19" };
+    const c = await nova("Ajuste e marca", 100000);
+    await receber(c.id, 40000, { comNotaFiscal: true });
+    const recebidoAntes = await recebidoNoPeriodo(DIA);
+    const ajustar = (valorCentavos: number | null, vencimento: string | null = null) => tx((t) => ajustarContaAReceber(t, { contaReceberId: c.id, valorCentavos, vencimento, motivo: "Combinado com o cliente" }, ctx()));
+
+    await ajustar(90000); // desconto
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: true, valorCentavos: 90000, valorPagoCentavos: 40000, status: "PARCIAL" });
+    await ajustar(120000, "2026-11-30"); // acréscimo e novo vencimento
+    expect(await de(c.id)).toMatchObject({ comNotaFiscal: true, valorCentavos: 120000, valorPagoCentavos: 40000, status: "PARCIAL" });
+
+    // O pagamento continua com a sua marca e o mesmo valor; o indicador de recebido não se mexeu.
+    const lancamento = await prisma.lancamento.findFirstOrThrow({ where: { contaReceberId: c.id } });
+    expect(lancamento).toMatchObject({ comNotaFiscal: true, valorCentavos: 40000, estornadoEm: null });
+    expect(await recebidoNoPeriodo(DIA)).toEqual(recebidoAntes);
   });
 
   it("novo vencimento acompanha a tarefa de cobrança; parcela aguardando etapa não aceita vencimento; sem mudança é recusado", async () => {
