@@ -79,7 +79,7 @@ const GRAVIDADE: Record<Semaforo, number> = { VERDE: 0, AMARELO: 1, VERMELHO: 2 
 const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 const encerrada = (s: StatusDeEtapa) => s === "CONCLUIDA" || s === "DISPENSADA";
 
-export async function listarObras(filtros: FiltrosDeObras, agora: Date = new Date()): Promise<{ linhas: ObraDaLista[]; truncado: boolean; resumo: ResumoDaLista; pontualidade: ResumoDePontualidade | null }> {
+export async function listarObras(filtros: FiltrosDeObras, agora: Date = new Date()): Promise<{ linhas: ObraDaLista[]; truncado: boolean; totalNoBanco: number | null; resumo: ResumoDaLista; pontualidade: ResumoDePontualidade | null }> {
   const andamento = filtros.situacao === "andamento";
   const de = filtros.de ? inputParaData(filtros.de) : null;
   const ate = filtros.ate ? inputParaData(filtros.ate) : null;
@@ -184,7 +184,10 @@ export async function listarObras(filtros: FiltrosDeObras, agora: Date = new Dat
     semPrazo: linhas.filter((l) => !l.prazo.definido).length,
   };
   const pontualidade = andamento ? null : resumirPontualidade(linhas.map((l): AvaliacaoDeObra => l.prazo.pontualidade ?? { avaliavel: false }));
-  return { linhas, truncado: projetos.length >= LIMITE_DE_OBRAS, resumo, pontualidade };
+  const truncado = projetos.length >= LIMITE_DE_OBRAS;
+  // Só quando cortou: quantas obras existem de fato com os filtros do banco (para a tela dizer "300 de N").
+  const totalNoBanco = truncado ? await prisma.projeto.count({ where }) : null;
+  return { linhas, truncado, totalNoBanco, resumo, pontualidade };
 }
 
 // ---------------------------------------------------------------------------------------------------------

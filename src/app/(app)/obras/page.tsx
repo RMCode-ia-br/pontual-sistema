@@ -31,7 +31,7 @@ export default async function PaginaObras({ searchParams }: { searchParams: Prom
   const andamento = filtros.situacao === "andamento";
   const visao = andamento && (Array.isArray(brutos.visao) ? brutos.visao[0] : brutos.visao) === "quadro" ? "quadro" : "lista";
 
-  const [{ linhas, truncado, resumo, pontualidade }, usuarios, equipes] = await Promise.all([listarObras(filtros), listarUsuariosAtivos(), listarEquipesAtivas()]);
+  const [{ linhas, truncado, totalNoBanco, resumo, pontualidade }, usuarios, equipes] = await Promise.all([listarObras(filtros), listarUsuariosAtivos(), listarEquipesAtivas()]);
 
   const consulta = (extra: Record<string, string | undefined>) =>
     montarConsulta({ situacao: filtros.situacao === "concluidas" ? "concluidas" : undefined, visao: visao === "quadro" ? "quadro" : undefined, busca: filtros.busca, etapa: filtros.etapa, semaforo: filtros.semaforo, responsavel: filtros.responsavelId, equipe: filtros.equipeId, de: filtros.de, ate: filtros.ate, ...extra });
@@ -137,7 +137,7 @@ export default async function PaginaObras({ searchParams }: { searchParams: Prom
 
       {truncado ? (
         <p role="note" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          Mostrando só as primeiras {LIMITE_DE_OBRAS} obras. Use a busca e os filtros para chegar às demais.
+          Mostrando {LIMITE_DE_OBRAS}{totalNoBanco ? ` de ${totalNoBanco}` : ""} obras. Use a busca e os filtros para chegar às demais.
         </p>
       ) : null}
 
