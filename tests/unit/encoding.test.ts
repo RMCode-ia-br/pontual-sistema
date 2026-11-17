@@ -45,12 +45,12 @@ describe("codificacao dos arquivos do projeto", () => {
   it("nenhum arquivo tem texto UTF-8 corrompido", () => {
     const ruins = todos.filter((f) => CORROMPIDO.test(fs.readFileSync(f, "utf8"))).map((f) => path.relative(RAIZ, f));
     expect(ruins).toEqual([]);
-  });
+  }, 60_000); // lê todos os arquivos do projeto: com a suíte inteira em paralelo passava dos 5 s padrão
 
   it("nenhum arquivo comeca com BOM", () => {
     const ruins = todos.filter((f) => fs.readFileSync(f, "utf8").charCodeAt(0) === 0xfeff).map((f) => path.relative(RAIZ, f));
     expect(ruins).toEqual([]);
-  });
+  }, 60_000);
 
   it("o detector reconhece a corrupcao tipica (o teste nao e vazio)", () => {
     expect(CORROMPIDO.test(`A${c(0xc3, 0xa7, 0xc3, 0xb5)}es`)).toBe(true);

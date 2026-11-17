@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { calcularFunil, type LinhaDoFunil } from "@/lib/dominio/relatorio-funil";
+import { calcularFunil, conversaoDoFunil, fasesQueContamComoChegada, type LinhaDoFunil } from "@/lib/dominio/relatorio-funil";
 
 const d = (iso: string) => new Date(`${iso}T15:00:00Z`);
-const linha = (over: Partial<LinhaDoFunil> = {}): LinhaDoFunil => ({ origem: "GOOGLE", status: "NOVO_LEAD", valorEstimadoCentavos: null, fases: [], primeiraVisitaRealizadaEm: null, ...over });
+const linha = (over: Partial<LinhaDoFunil> = {}): LinhaDoFunil => ({ origem: "GOOGLE", status: "NOVO_LEAD", valorEstimadoCentavos: null, fases: [], ...over });
 
 describe("funil comercial: indicadores", () => {
   it("sem projetos, tudo zerado e sem percentuais inventados", () => {
@@ -13,7 +13,6 @@ describe("funil comercial: indicadores", () => {
     expect(r.conversao.every((c) => c.percentualDoTotal === null)).toBe(true);
     expect(r.taxaDeFechamento).toBeNull();
     expect(r.ticketMedioCentavos).toBeNull();
-    expect(r.tempoVisitaPropostaDias).toBeNull();
     expect(r.porOrigem).toEqual([]);
   });
 
@@ -63,23 +62,6 @@ describe("funil comercial: indicadores", () => {
     expect(r.porOrigem.find((o) => o.origem === null)).toMatchObject({ leads: 1, aprovados: 1 });
   });
 
-  it("tempo visita → proposta: média em dias de calendário, só com as duas datas; visita registrada depois da proposta fica fora e é contada", () => {
-    const r = calcularFunil([
-      linha({ primeiraVisitaRealizadaEm: d("2026-11-01"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-04") }] }), // 3
-      linha({ primeiraVisitaRealizadaEm: d("2026-11-01"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-06") }, { para: "PROPOSTA_ENVIADA", em: d("2026-11-20") }] }), // 5 (a primeira)
-      linha({ primeiraVisitaRealizadaEm: d("2026-11-10"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-08") }] }), // visita depois da proposta: fora da média
-      linha({ primeiraVisitaRealizadaEm: d("2026-11-05"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-05") }] }), // mesmo dia: 0 entra
-      linha({ primeiraVisitaRealizadaEm: d("2026-11-01") }), // sem proposta: fora
-      linha({ fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-04") }] }), // sem visita: fora
-    ]);
-    expect(r.tempoVisitaPropostaDias).toEqual({ media: 2.7, amostra: 3, foraDaMedia: 1 }); // (3 + 5 + 0) / 3
-  });
-
-  it("tempo visita → proposta: só há projetos de fora, então não há média, mas a contagem aparece", () => {
-    const r = calcularFunil([linha({ primeiraVisitaRealizadaEm: d("2026-11-10"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-08") }] })]);
-    expect(r.tempoVisitaPropostaDias).toEqual({ media: null, amostra: 0, foraDaMedia: 1 });
-  });
-
   it("taxa de fechamento só existe com decisões; ticket médio usa o valor dos aprovados", () => {
     const sem = calcularFunil([linha({ status: "PROPOSTA_ENVIADA", fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-04") }] })]);
     expect(sem.taxaDeFechamento).toBeNull();
@@ -93,5 +75,22 @@ describe("funil comercial: indicadores", () => {
     ]);
     expect(r.taxaDeFechamento).toBe(66.7); // 2 aprovados ÷ (2 + 1)
     expect(r.ticketMedioCentavos).toBe(1_500_001); // (1.000.000 + 2.000.001) ÷ 2, arredondado
+  });
+});
+
+describe("funil: peças usadas pelo SQL", () => {
+  it("as fases que contam como chegada incluem a etapa, as seguintes e execução e concluído; a primeira etapa todo projeto cumpre", () => {
+    expect(fasesQueContamComoChegada("NOVO_LEAD")).toBeNull();
+    expect(fasesQueContamComoChegada("PROPOSTA_ENVIADA")).toEqual(["PROPOSTA_ENVIADA", "NEGOCIACAO", "APROVADO", "EM_EXECUCAO", "CONCLUIDO"]);
+    expect(fasesQueContamComoChegada("APROVADO")).toEqual(["APROVADO", "EM_EXECUCAO", "CONCLUIDO"]);
+  });
+
+  it("a conversão sai das contagens: 100% do total na 1ª etapa, da anterior em branco sem base e nunca passa de 100%", () => {
+    const c = conversaoDoFunil([10, 8, 6, 4, 2, 1], 10);
+    expect(c.map((x) => x.chegaram)).toEqual([10, 8, 6, 4, 2, 1]);
+    expect(c[0]).toMatchObject({ percentualDaAnterior: null, percentualDoTotal: 100 });
+    expect(c[1]).toMatchObject({ percentualDaAnterior: 80, percentualDoTotal: 80 });
+    expect(c[5]).toMatchObject({ percentualDaAnterior: 50, percentualDoTotal: 10 });
+    expect(conversaoDoFunil([0, 0, 0, 0, 0, 0], 0).every((x) => x.percentualDoTotal === null && x.percentualDaAnterior === null)).toBe(true);
   });
 });

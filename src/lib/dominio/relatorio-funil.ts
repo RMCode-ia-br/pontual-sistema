@@ -1,18 +1,14 @@
 /**
  * Indicadores do funil comercial (spec seção 8), calculados sobre uma COORTE: os projetos criados no período.
- * Código puro: a consulta só entrega as linhas e este módulo conta. Definições (mostradas na tela):
+ * Em produção a coorte é contada pelo banco (`src/modules/relatorios/funil.ts`, com SQL agregado, sem limite de projetos);
+ * {@link calcularFunil} é a MESMA conta feita em memória sobre linhas, usada como referência nos testes (o teste de
+ * integração compara as duas). Definições (mostradas na tela):
  * - "chegou à fase" = o projeto passou por ela em algum momento (histórico de fases), mesmo que hoje esteja em outra;
  * - conversão entre fases = quantos chegaram à fase seguinte ÷ quantos chegaram à anterior;
- * - tempo visita → proposta = data de envio da primeira proposta − data da primeira visita realizada (dias, só
- *   projetos que têm as duas datas);
- * - taxa de fechamento e ticket médio dependem de projetos APROVADOS (propostas, Fase 3): sem decisões, ficam nulos.
+ * - taxa de fechamento e ticket médio dependem de projetos APROVADOS: sem decisões, ficam nulos.
+ * O tempo da visita à proposta saiu daqui: tem visão própria (`tempoVisitaAteProposta`, mesma regra do painel).
  */
-import { differenceInCalendarDays } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
-
-import { FUSO_PADRAO } from "../formatadores";
 import { COLUNAS_DO_FUNIL, type StatusProjeto } from "./funil";
-import { entraNaMediaDeDias, mediaDeDias } from "./indicadores";
 
 export type LinhaDoFunil = {
   origem: string | null;
@@ -20,7 +16,6 @@ export type LinhaDoFunil = {
   valorEstimadoCentavos: number | null;
   /** Fases pelas quais passou, com a data de cada passagem. */
   fases: { para: StatusProjeto; em: Date }[];
-  primeiraVisitaRealizadaEm: Date | null;
 };
 
 /** Etapas do funil na ordem em que um projeto avança (a primeira, "Novo contato", todo projeto cumpre). */
@@ -34,25 +29,39 @@ export type ResultadoDoFunil = {
   /** Quantos chegaram a cada etapa e a conversão em relação à etapa anterior (null sem base). */
   conversao: { etapa: StatusProjeto; chegaram: number; percentualDaAnterior: number | null; percentualDoTotal: number | null }[];
   porOrigem: { origem: string | null; leads: number; comVisita: number; comPropostaEnviada: number; aprovados: number; perdidos: number }[];
-  /** `media` é null quando só há projetos de fora (visita registrada depois da proposta). Null sem nenhum caso. */
-  tempoVisitaPropostaDias: { media: number | null; amostra: number; foraDaMedia: number } | null;
   /** Aprovados ÷ (aprovados + perdidos que chegaram a ter proposta enviada). Null sem nenhuma decisão. */
   taxaDeFechamento: number | null;
   ticketMedioCentavos: number | null;
 };
 
-const percentual = (parte: number, base: number): number | null => (base === 0 ? null : Math.round((parte / base) * 1000) / 10);
+export const percentualDoFunil = (parte: number, base: number): number | null => (base === 0 ? null : Math.round((parte / base) * 1000) / 10);
 
 /**
- * "Chegou à etapa" = passou por ela OU por qualquer etapa posterior (o funil permite pular fases). Assim a contagem
- * nunca aumenta de uma etapa para a seguinte e a conversão nunca passa de 100%.
+ * As fases em que um projeto "chegou à etapa" (ela ou qualquer posterior: o funil permite pular fases). Assim a contagem
+ * nunca aumenta de uma etapa para a seguinte e a conversão nunca passa de 100%. `null` para a primeira etapa (todo projeto a cumpre).
  */
-function chegouA(linha: LinhaDoFunil, etapa: StatusProjeto): boolean {
+export function fasesQueContamComoChegada(etapa: StatusProjeto): StatusProjeto[] | null {
   const indice = ETAPAS_DO_FUNIL.indexOf(etapa as (typeof ETAPAS_DO_FUNIL)[number]);
-  if (indice <= 0) return true;
+  if (indice <= 0) return null;
   // Etapas dali em diante; "aprovado" inclui execução e concluído (todos vêm depois de qualquer etapa do funil).
-  const alcancadas = new Set<StatusProjeto>([...ETAPAS_DO_FUNIL.slice(indice), ...FASES_APROVADAS]);
-  return linha.fases.some((x) => alcancadas.has(x.para)) || alcancadas.has(linha.status);
+  return [...new Set<StatusProjeto>([...ETAPAS_DO_FUNIL.slice(indice), ...FASES_APROVADAS])];
+}
+
+/** A conversão a partir das contagens de quem chegou a cada etapa (na ordem de {@link ETAPAS_DO_FUNIL}). */
+export function conversaoDoFunil(chegaram: readonly number[], total: number): ResultadoDoFunil["conversao"] {
+  return ETAPAS_DO_FUNIL.map((etapa, i) => ({
+    etapa,
+    chegaram: chegaram[i],
+    percentualDaAnterior: i === 0 ? null : percentualDoFunil(chegaram[i], chegaram[i - 1]),
+    percentualDoTotal: percentualDoFunil(chegaram[i], total),
+  }));
+}
+
+function chegouA(linha: LinhaDoFunil, etapa: StatusProjeto): boolean {
+  const alcancadas = fasesQueContamComoChegada(etapa);
+  if (!alcancadas) return true;
+  const set = new Set(alcancadas);
+  return linha.fases.some((x) => set.has(x.para)) || set.has(linha.status);
 }
 
 export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
@@ -63,13 +72,10 @@ export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
     return { status, quantidade: daFase.length, valorCentavos: daFase.reduce((s, l) => s + (l.valorEstimadoCentavos ?? 0), 0) };
   });
 
-  const chegaram = ETAPAS_DO_FUNIL.map((etapa) => linhas.filter((l) => chegouA(l, etapa)).length);
-  const conversao = ETAPAS_DO_FUNIL.map((etapa, i) => ({
-    etapa,
-    chegaram: chegaram[i],
-    percentualDaAnterior: i === 0 ? null : percentual(chegaram[i], chegaram[i - 1]),
-    percentualDoTotal: percentual(chegaram[i], total),
-  }));
+  const conversao = conversaoDoFunil(
+    ETAPAS_DO_FUNIL.map((etapa) => linhas.filter((l) => chegouA(l, etapa)).length),
+    total,
+  );
 
   const origens = new Map<string | null, LinhaDoFunil[]>();
   for (const l of linhas) origens.set(l.origem, [...(origens.get(l.origem) ?? []), l]);
@@ -84,20 +90,6 @@ export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
     }))
     .sort((a, b) => b.leads - a.leads);
 
-  // Visita → proposta: só projetos com as duas datas. Visita registrada DEPOIS da proposta (dias negativos) fica fora da
-  // média e é contada à parte (mesma regra do painel: `entraNaMediaDeDias`).
-  const dias: number[] = [];
-  let foraDaMedia = 0;
-  for (const l of linhas) {
-    const envio = l.fases.filter((f) => f.para === "PROPOSTA_ENVIADA").sort((a, b) => a.em.getTime() - b.em.getTime())[0]?.em;
-    if (!envio || !l.primeiraVisitaRealizadaEm) continue;
-    const d = differenceInCalendarDays(toZonedTime(envio, FUSO_PADRAO), toZonedTime(l.primeiraVisitaRealizadaEm, FUSO_PADRAO));
-    if (entraNaMediaDeDias(d)) dias.push(d);
-    else foraDaMedia += 1;
-  }
-  const media = mediaDeDias(dias);
-  const tempoVisitaPropostaDias = media === null && foraDaMedia === 0 ? null : { media, amostra: dias.length, foraDaMedia };
-
   const aprovados = linhas.filter((l) => chegouA(l, "APROVADO"));
   const perdidosComProposta = linhas.filter((l) => l.status === "PERDIDO" && chegouA(l, "PROPOSTA_ENVIADA"));
   const decididos = aprovados.length + perdidosComProposta.length;
@@ -108,8 +100,7 @@ export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
     porFase,
     conversao,
     porOrigem,
-    tempoVisitaPropostaDias,
-    taxaDeFechamento: decididos === 0 ? null : percentual(aprovados.length, decididos),
+    taxaDeFechamento: decididos === 0 ? null : percentualDoFunil(aprovados.length, decididos),
     ticketMedioCentavos: comValor.length === 0 ? null : Math.round(comValor.reduce((s, l) => s + (l.valorEstimadoCentavos ?? 0), 0) / comValor.length),
   };
 }
