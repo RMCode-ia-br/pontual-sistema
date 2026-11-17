@@ -1,4 +1,4 @@
-import { History, ListChecks, PackageX, TriangleAlert, UserPlus, Users, Handshake } from "lucide-react";
+import { History, ListChecks, MessageCircle, PackageX, TriangleAlert, UserPlus, Users, Handshake } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -223,9 +223,15 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
                         {v.local ? ` · ${v.local}` : ""}
                       </span>
                     </Link>
-                    <Link href={`/agenda/${v.id}`} className="text-primary text-xs hover:underline">
-                      Enviar lembrete
-                    </Link>
+                    {v.lembreteHref ? (
+                      <a href={v.lembreteHref} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex min-h-8 items-center gap-1 text-xs hover:underline">
+                        <MessageCircle className="size-3.5" aria-hidden /> Enviar lembrete
+                      </a>
+                    ) : (
+                      <Link href={`/agenda/${v.id}`} className="text-primary inline-flex min-h-8 items-center text-xs hover:underline">
+                        Abrir a visita
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -7,6 +7,9 @@ import { FASES_ABERTAS, type StatusProjeto } from "@/lib/dominio/funil";
 import { cortarMotivosDePerda } from "@/lib/dominio/indicadores";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { limitesEmInstantes, mesDaData, type Periodo } from "@/lib/periodo";
+import { linkDaMensagemDoModelo, primeiroNome } from "@/lib/dominio/modelos-texto";
+import { variaveisDaVisita } from "@/modules/agenda/queries";
+import { obterModeloWhatsApp } from "@/modules/clientes/queries";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
 import { motivosDePerdaNoPeriodo } from "@/modules/indicadores/perdas";
 import { limiteSemRetorno } from "@/modules/projetos/queries";
@@ -14,12 +17,24 @@ import { limiteSemRetorno } from "@/modules/projetos/queries";
 export type ResumoComercial = {
   funil: { status: StatusProjeto; quantidade: number; valorCentavos: number }[];
   semRetorno: number;
-  visitas: { id: string; inicio: string; clienteNome: string | null; projetoTitulo: string | null; local: string | null; dia: "hoje" | "amanha" }[];
+  visitas: {
+    id: string;
+    inicio: string;
+    clienteNome: string | null;
+    projetoTitulo: string | null;
+    local: string | null;
+    dia: "hoje" | "amanha";
+    /** Link do WhatsApp com o lembrete já escrito (só para a visita de AMANHÃ); `null` = abrir a visita para escolher a mensagem. */
+    lembreteHref: string | null;
+  }[];
   origensDoPeriodo: { origem: string | null; quantidade: number }[];
   perdasDoPeriodo: { nome: string; quantidade: number }[];
   /** O que ficou fora dos {@link MOTIVOS_NO_PAINEL} primeiros motivos (a tela avisa, nunca corta em silêncio). */
   perdasOcultas: { motivos: number; projetos: number };
 };
+
+/** Chave do modelo de WhatsApp do lembrete de visita (texto editável em Configurações). */
+export const CHAVE_DO_LEMBRETE_DE_VISITA = "whatsapp.lembrete_visita";
 
 /** Quantos motivos de perda o painel mostra; o resto fica no relatório do funil. */
 export const MOTIVOS_NO_PAINEL = 6;
@@ -38,7 +53,7 @@ export async function resumoComercial(periodo?: Periodo): Promise<ResumoComercia
   const { inicio, fimExclusivo } = limitesEmInstantes(periodo ?? mesDaData(hoje));
   const config = await obterConfiguracao();
 
-  const [porFase, semRetorno, visitas, origens, perdas] = await Promise.all([
+  const [porFase, semRetorno, visitas, modeloDoLembrete, origens, perdas] = await Promise.all([
     prisma.projeto.groupBy({ by: ["status"], where: { deletadoEm: null, status: { in: [...FASES_ABERTAS] } }, _count: { _all: true }, _sum: { valorEstimadoCentavos: true } }),
     prisma.projeto.count({
       where: { deletadoEm: null, status: { in: ["PROPOSTA_ENVIADA", "NEGOCIACAO"] }, ultimaMovimentacaoEm: { lt: limiteSemRetorno(config?.diasSemRetornoProposta ?? 7, agora) } },
@@ -47,8 +62,9 @@ export async function resumoComercial(periodo?: Periodo): Promise<ResumoComercia
       where: { deletadoEm: null, tipo: "VISITA_TECNICA", status: { in: ["AGENDADO", "CONFIRMADO", "REMARCADO"] }, inicio: { gte: limitesDoDia(hoje).inicio, lt: limitesDoDia(amanha).fim } },
       orderBy: { inicio: "asc" },
       take: 20,
-      select: { id: true, inicio: true, local: true, cliente: { select: { nome: true } }, projeto: { select: { titulo: true } } },
+      select: { id: true, inicio: true, local: true, cliente: { select: { nome: true, telefone: true, whatsapp: true } }, projeto: { select: { titulo: true } } },
     }),
+    obterModeloWhatsApp(CHAVE_DO_LEMBRETE_DE_VISITA),
     prisma.projeto.groupBy({ by: ["origem"], where: { deletadoEm: null, criadoEm: { gte: inicio, lt: fimExclusivo } }, _count: { _all: true }, orderBy: { _count: { origem: "desc" } }, take: 6 }),
     motivosDePerdaNoPeriodo(periodo ?? mesDaData(hoje)), // a MESMA fonte do relatório do funil (pela data da perda)
   ]);
@@ -62,7 +78,20 @@ export async function resumoComercial(periodo?: Periodo): Promise<ResumoComercia
       return { status, quantidade: g?._count._all ?? 0, valorCentavos: g?._sum.valorEstimadoCentavos ?? 0 };
     }),
     semRetorno,
-    visitas: visitas.map((v) => ({ id: v.id, inicio: v.inicio.toISOString(), clienteNome: v.cliente?.nome ?? null, projetoTitulo: v.projeto?.titulo ?? null, local: v.local, dia: v.inicio < limiteDeHoje ? "hoje" : "amanha" })),
+    visitas: visitas.map((v) => {
+      const dia = v.inicio < limiteDeHoje ? ("hoje" as const) : ("amanha" as const);
+      // O modelo é o "lembrete de 24 h antes" ("amanhã, {{dataVisita}}"): só serve para a visita de amanhã.
+      const lembreteHref =
+        dia === "amanha" && v.cliente
+          ? linkDaMensagemDoModelo(modeloDoLembrete, v.cliente.whatsapp ?? v.cliente.telefone, {
+              cliente: primeiroNome(v.cliente.nome),
+              nomeFantasia: config?.nomeFantasia ?? undefined,
+              linkAvaliacao: config?.linkAvaliacaoGoogle ?? undefined,
+              ...variaveisDaVisita({ inicio: v.inicio.toISOString(), local: v.local }),
+            })
+          : null;
+      return { id: v.id, inicio: v.inicio.toISOString(), clienteNome: v.cliente?.nome ?? null, projetoTitulo: v.projeto?.titulo ?? null, local: v.local, dia, lembreteHref };
+    }),
     origensDoPeriodo: origens.map((o) => ({ origem: o.origem, quantidade: o._count._all })),
     perdasDoPeriodo: perdasMostradas.map((p) => ({ nome: p.nome, quantidade: p.quantidade })),
     perdasOcultas,

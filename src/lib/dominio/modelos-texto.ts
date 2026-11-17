@@ -37,6 +37,17 @@ export function linkWhatsApp(telefone: string, mensagem?: string): string | null
   return `https://wa.me/${digitos}${mensagem ? `?text=${encodeURIComponent(mensagem)}` : ""}`;
 }
 
+/**
+ * Link do WhatsApp com a mensagem de um modelo já preenchida (ex.: lembrete de visita no painel). Devolve `null` quando
+ * falta o modelo, o telefone (ou ele não é válido) ou algum valor que o modelo pede: nunca manda mensagem com
+ * "{{variável}}" sobrando.
+ */
+export function linkDaMensagemDoModelo(modelo: string | null | undefined, telefone: string | null | undefined, valores: Record<string, string | undefined>): string | null {
+  if (!modelo || !telefone) return null;
+  const { texto, faltando } = preencherModelo(modelo, valores);
+  return faltando.length === 0 ? linkWhatsApp(telefone, texto) : null;
+}
+
 /** Primeiro nome para cumprimentar ("Maria da Silva" → "Maria"). */
 export function primeiroNome(nome: string): string {
   return nome.trim().split(/\s+/)[0] ?? "";

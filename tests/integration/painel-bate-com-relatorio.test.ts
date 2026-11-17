@@ -5,9 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
-import { dataLocalDoInstante } from "@/lib/formatadores";
+import { primeiroNome } from "@/lib/dominio/modelos-texto";
+import { dataLocalDoInstante, instanteDeDataHoraLocal } from "@/lib/formatadores";
 import { chaveDoMes, lerPeriodo, limitesEmInstantes, primeiroDiaDoMes, somarDias, somarMeses, type Periodo } from "@/lib/periodo";
-import { MOTIVOS_NO_PAINEL, resumoComercial } from "@/modules/comercial/resumo";
+import { CHAVE_DO_LEMBRETE_DE_VISITA, MOTIVOS_NO_PAINEL, resumoComercial } from "@/modules/comercial/resumo";
 import { cancelamentosNoPeriodo, listarCancelamentos } from "@/modules/indicadores/cancelamentos";
 import { janelaDeFechamento, fechamentoNaJanela, listarDecisoes, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
 import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
@@ -573,6 +574,63 @@ describe("Cancelado depois de aprovado: linha própria, sem mexer no Vendido dos
   it("período sem cancelamentos: nenhum, zero e lista vazia", async () => {
     expect(await cancelamentosNoPeriodo(MAR)).toEqual({ projetos: 0, valorAprovadoCentavos: 0 });
     expect((await listarCancelamentos(MAR)).linhas).toEqual([]);
+  });
+});
+
+describe("Atenção hoje: lembrete de WhatsApp da visita direto no painel", () => {
+  const CHAVE = CHAVE_DO_LEMBRETE_DE_VISITA;
+  const TEXTO = "Olá, {{cliente}}! Lembrando da visita amanhã, {{dataVisita}}, às {{horaVisita}}.";
+  let anterior: { titulo: string; conteudo: string; ativo: boolean } | null = null;
+  let amanha: string;
+
+  const visitaNoPainel = async (titulo: string, dia: string, hora: string, whatsapp: string | null) => {
+    const cliente = await prisma.cliente.create({ data: { nome: `${PREFIXO} Visita ${titulo}`, tipoPessoa: "PF", whatsapp } });
+    const p = await projeto(`Visita painel ${titulo}`, { status: "VISITA_AGENDADA", clienteId: cliente.id });
+    const inicio = instanteDeDataHoraLocal(dia, hora)!;
+    await prisma.eventoAgenda.create({ data: { tipo: "VISITA_TECNICA", inicio, fim: new Date(inicio.getTime() + 3_600_000), projetoId: p.id, clienteId: cliente.id, status: "AGENDADO", local: "Rua do Teste, 10" } });
+    return cliente.nome;
+  };
+  const doPainel = async (nomeDoCliente: string) => (await resumoComercial(MAR)).visitas.find((v) => v.clienteNome === nomeDoCliente);
+  const comModelo = (conteudo: string, ativo = true) => prisma.modeloTexto.upsert({ where: { chave: CHAVE }, update: { conteudo, ativo, deletadoEm: null }, create: { chave: CHAVE, titulo: `${PREFIXO} lembrete`, categoria: "WHATSAPP", conteudo, ativo } });
+
+  beforeAll(async () => {
+    amanha = somarDias(HOJE, 1);
+    const m = await prisma.modeloTexto.findUnique({ where: { chave: CHAVE }, select: { titulo: true, conteudo: true, ativo: true } });
+    anterior = m;
+    await comModelo(TEXTO);
+  });
+  afterAll(async () => {
+    // O modelo é do dono: volta ao que era (ou some, se foi o teste que o criou).
+    if (anterior) await prisma.modeloTexto.update({ where: { chave: CHAVE }, data: anterior });
+    else await prisma.modeloTexto.deleteMany({ where: { chave: CHAVE } });
+  });
+
+  it("visita de AMANHÃ com WhatsApp: o painel traz o link com o lembrete já escrito (nome, dia e hora de São Paulo)", async () => {
+    const nome = await visitaNoPainel("Amanha", amanha, "10:00", "(22) 99999-1111");
+    const v = await doPainel(nome);
+    expect(v?.dia).toBe("amanha");
+    expect(v?.lembreteHref?.startsWith("https://wa.me/5522999991111?text=")).toBe(true);
+    const dd = amanha.split("-").reverse().join("/");
+    expect(decodeURIComponent(v!.lembreteHref!.split("?text=")[1])).toBe(`Olá, ${primeiroNome(nome)}! Lembrando da visita amanhã, ${dd}, às 10:00.`);
+  });
+
+  it("visita de HOJE não usa o lembrete de 24 h (diz \"amanhã\"): o painel manda abrir a visita", async () => {
+    const nome = await visitaNoPainel("Hoje", HOJE, "23:30", "(22) 99999-2222");
+    const v = await doPainel(nome);
+    expect(v?.dia).toBe("hoje");
+    expect(v?.lembreteHref).toBeNull();
+  });
+
+  it("sem telefone válido, ou com o modelo desligado, não há link (nada de mensagem quebrada)", async () => {
+    const semTelefone = await visitaNoPainel("SemTelefone", amanha, "11:00", null);
+    expect((await doPainel(semTelefone))?.lembreteHref).toBeNull();
+    const nome = await visitaNoPainel("ModeloDesligado", amanha, "12:00", "(22) 99999-3333");
+    expect((await doPainel(nome))?.lembreteHref).not.toBeNull();
+    await comModelo(TEXTO, false);
+    expect((await doPainel(nome))?.lembreteHref).toBeNull();
+    await comModelo("Olá, {{cliente}}! Sua visita é {{variavelQueNaoExiste}}.");
+    expect((await doPainel(nome))?.lembreteHref).toBeNull();
+    await comModelo(TEXTO);
   });
 });
 
