@@ -12,6 +12,7 @@ import { toZonedTime } from "date-fns-tz";
 
 import { FUSO_PADRAO } from "../formatadores";
 import { COLUNAS_DO_FUNIL, type StatusProjeto } from "./funil";
+import { entraNaMediaDeDias, mediaDeDias } from "./indicadores";
 
 export type LinhaDoFunil = {
   origem: string | null;
@@ -35,7 +36,8 @@ export type ResultadoDoFunil = {
   conversao: { etapa: StatusProjeto; chegaram: number; percentualDaAnterior: number | null; percentualDoTotal: number | null }[];
   porOrigem: { origem: string | null; leads: number; comVisita: number; comPropostaEnviada: number; aprovados: number; perdidos: number }[];
   motivosDePerda: { motivoPerdaId: string | null; quantidade: number }[];
-  tempoVisitaPropostaDias: { media: number; amostra: number } | null;
+  /** `media` é null quando só há projetos de fora (visita registrada depois da proposta). Null sem nenhum caso. */
+  tempoVisitaPropostaDias: { media: number | null; amostra: number; foraDaMedia: number } | null;
   /** Aprovados ÷ (aprovados + perdidos que chegaram a ter proposta enviada). Null sem nenhuma decisão. */
   taxaDeFechamento: number | null;
   ticketMedioCentavos: number | null;
@@ -88,15 +90,19 @@ export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
   for (const l of linhas) if (l.status === "PERDIDO") motivos.set(l.motivoPerdaId, (motivos.get(l.motivoPerdaId) ?? 0) + 1);
   const motivosDePerda = [...motivos.entries()].map(([motivoPerdaId, quantidade]) => ({ motivoPerdaId, quantidade })).sort((a, b) => b.quantidade - a.quantidade);
 
-  // Visita → proposta: só projetos com as duas datas; nunca negativo (proposta enviada antes da visita registrada).
+  // Visita → proposta: só projetos com as duas datas. Visita registrada DEPOIS da proposta (dias negativos) fica fora da
+  // média e é contada à parte (mesma regra do painel: `entraNaMediaDeDias`).
   const dias: number[] = [];
+  let foraDaMedia = 0;
   for (const l of linhas) {
     const envio = l.fases.filter((f) => f.para === "PROPOSTA_ENVIADA").sort((a, b) => a.em.getTime() - b.em.getTime())[0]?.em;
     if (!envio || !l.primeiraVisitaRealizadaEm) continue;
     const d = differenceInCalendarDays(toZonedTime(envio, FUSO_PADRAO), toZonedTime(l.primeiraVisitaRealizadaEm, FUSO_PADRAO));
-    dias.push(Math.max(0, d));
+    if (entraNaMediaDeDias(d)) dias.push(d);
+    else foraDaMedia += 1;
   }
-  const tempoVisitaPropostaDias = dias.length ? { media: Math.round((dias.reduce((s, d) => s + d, 0) / dias.length) * 10) / 10, amostra: dias.length } : null;
+  const media = mediaDeDias(dias);
+  const tempoVisitaPropostaDias = media === null && foraDaMedia === 0 ? null : { media, amostra: dias.length, foraDaMedia };
 
   const aprovados = linhas.filter((l) => chegouA(l, "APROVADO"));
   const perdidosComProposta = linhas.filter((l) => l.status === "PERDIDO" && chegouA(l, "PROPOSTA_ENVIADA"));

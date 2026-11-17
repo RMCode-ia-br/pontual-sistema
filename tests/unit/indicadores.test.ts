@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { limiteInformado, mediaDeDias, ocupacaoDaFabrica, percentualDaMeta, percentualDoLimite, taxaDeFechamento, ticketMedio } from "@/lib/dominio/indicadores";
+import { detalheDoTempoVisitaProposta, entraNaMediaDeDias, limiteInformado, mediaDeDias, ocupacaoDaFabrica, percentualDaMeta, percentualDoLimite, taxaDeFechamento, ticketMedio } from "@/lib/dominio/indicadores";
 
 describe("taxa de fechamento", () => {
   it("aprovados ÷ (aprovados + perdidos com proposta enviada)", () => {
@@ -78,5 +78,22 @@ describe("ocupação da fábrica e meta", () => {
     expect(percentualDaMeta(15_000_000, 30_000_000)).toBe(50);
     expect(percentualDaMeta(1, 0)).toBeNull();
     expect(percentualDaMeta(1, null)).toBeNull();
+  });
+});
+
+describe("da visita à proposta: quem entra na média", () => {
+  it("visita antes ou no mesmo dia da proposta entra; visita registrada depois fica de fora", () => {
+    expect(entraNaMediaDeDias(0)).toBe(true);
+    expect(entraNaMediaDeDias(7)).toBe(true);
+    expect(entraNaMediaDeDias(-1)).toBe(false);
+    expect(entraNaMediaDeDias(-30)).toBe(false);
+    expect(entraNaMediaDeDias(Number.NaN)).toBe(false);
+  });
+
+  it("o texto diz quantos entraram e quantos ficaram de fora, e por quê", () => {
+    expect(detalheDoTempoVisitaProposta(3, 0)).toBe("3 projeto(s)");
+    expect(detalheDoTempoVisitaProposta(3, 2)).toBe("3 projeto(s) · 2 ficou(aram) de fora: visita registrada depois da proposta");
+    expect(detalheDoTempoVisitaProposta(0, 0)).toBe("Sem dados neste período");
+    expect(detalheDoTempoVisitaProposta(0, 1)).toBe("Sem dados neste período · 1 ficou(aram) de fora: visita registrada depois da proposta");
   });
 });

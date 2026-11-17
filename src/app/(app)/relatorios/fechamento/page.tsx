@@ -5,6 +5,7 @@ import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { detalheDoTempoVisitaProposta } from "@/lib/dominio/indicadores";
 import { dataLocalDoInstante, formatarData, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
@@ -53,8 +54,8 @@ export default async function PaginaDeFechamento({ searchParams }: { searchParam
         <NumeroDoPainel
           titulo="Do atendimento à proposta"
           valor={tempo.mediaDeDias === null ? "—" : `${tempo.mediaDeDias.toLocaleString("pt-BR")} dia(s)`}
-          definicao="Média de dias entre a primeira visita realizada e o envio da primeira proposta, dos projetos cuja primeira proposta foi enviada no período. Proposta enviada antes da visita registrada conta zero dia."
-          detalhe={tempo.amostra === 0 ? "Sem proposta enviada com visita registrada no período" : `${tempo.amostra} projeto(s)`}
+          definicao="Média de dias entre a primeira visita realizada e o envio da primeira proposta, dos projetos cuja primeira proposta foi enviada no período. Se a visita foi registrada depois da proposta, o projeto fica fora da média e é contado à parte."
+          detalhe={detalheDoTempoVisitaProposta(tempo.amostra, tempo.foraDaMedia)}
         />
       </section>
 

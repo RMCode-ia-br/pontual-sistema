@@ -8,6 +8,7 @@ import { FiltroSelect } from "@/components/lista/filtros-da-lista";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
+import { detalheDoTempoVisitaProposta } from "@/lib/dominio/indicadores";
 import { formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { ROTULO_ORIGEM, ORIGENS } from "@/modules/clientes/schemas";
@@ -113,8 +114,10 @@ export default async function PaginaRelatorioFunil({ searchParams }: { searchPar
             </Link>
             <div className="rounded-xl border p-4">
               <p className="text-muted-foreground text-sm">Da visita à proposta</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums">{r.tempoVisitaPropostaDias ? `${r.tempoVisitaPropostaDias.media.toLocaleString("pt-BR")} dias` : "—"}</p>
-              <p className="text-muted-foreground mt-1 text-xs">{r.tempoVisitaPropostaDias ? `Média de ${r.tempoVisitaPropostaDias.amostra} projetos.` : "Sem projetos com visita realizada e proposta enviada."}</p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums">{r.tempoVisitaPropostaDias?.media != null ? `${r.tempoVisitaPropostaDias.media.toLocaleString("pt-BR")} dias` : "—"}</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                {r.tempoVisitaPropostaDias ? detalheDoTempoVisitaProposta(r.tempoVisitaPropostaDias.amostra, r.tempoVisitaPropostaDias.foraDaMedia) : "Sem projetos com visita realizada e proposta enviada."}
+              </p>
             </div>
             <div className="rounded-xl border p-4">
               <p className="text-muted-foreground text-sm">Taxa de fechamento</p>

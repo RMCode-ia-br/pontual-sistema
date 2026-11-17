@@ -30,6 +30,21 @@ export function mediaDeDias(dias: readonly number[]): number | null {
   return Math.round((dias.reduce((s, d) => s + d, 0) * 10) / dias.length) / 10;
 }
 
+/**
+ * Da visita à proposta: o projeto entra na média só se a visita veio ANTES (ou no mesmo dia) do envio da proposta.
+ * Dias negativos = a visita foi registrada depois da proposta; o dado não diz quanto o atendimento demorou.
+ */
+export function entraNaMediaDeDias(dias: number): boolean {
+  return Number.isFinite(dias) && dias >= 0;
+}
+
+/** Texto sob o número "Da visita à proposta": quantos entraram na média e quantos ficaram de fora (e por quê). */
+export function detalheDoTempoVisitaProposta(amostra: number, foraDaMedia: number): string {
+  const base = amostra === 0 ? "Sem dados neste período" : `${amostra} projeto(s)`;
+  if (foraDaMedia <= 0) return base;
+  return `${base} · ${foraDaMedia} ficou(aram) de fora: visita registrada depois da proposta`;
+}
+
 /** Limite de faturamento com nota: vazio, zero ou negativo = "limite não informado" (null). */
 export function limiteInformado(limiteCentavos: number | null | undefined): number | null {
   return typeof limiteCentavos === "number" && Number.isFinite(limiteCentavos) && limiteCentavos > 0 ? limiteCentavos : null;

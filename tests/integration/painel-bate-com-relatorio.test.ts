@@ -252,9 +252,15 @@ beforeAll(async () => {
   const vp2 = await vp("Vis VP2"); // visita 09/01 22h SP (= 10/01 01h UTC), proposta 13/01: 4 dias em SP (3 se errasse o fuso)
   await visita(vp2.id, "2020-01-10T01:00:00Z");
   await proposta(vp2.id, { status: "ENVIADA", enviadaEm: "2020-01-13T15:00:00Z" });
-  const vp3 = await vp("Vis VP3"); // proposta enviada ANTES da visita registrada: conta 0
+  const vp3 = await vp("Vis VP3"); // proposta enviada ANTES da visita registrada (-2 dias): FICA FORA da média, contado à parte
   await visita(vp3.id, "2020-01-22T15:00:00Z");
   await proposta(vp3.id, { status: "ENVIADA", enviadaEm: "2020-01-20T15:00:00Z" });
+  const vp7 = await vp("Vis VP7"); // visita e proposta no MESMO dia (15/01, em SP): 0 dia, ENTRA na média
+  await visita(vp7.id, "2020-01-15T15:00:00Z");
+  await proposta(vp7.id, { status: "ENVIADA", enviadaEm: "2020-01-15T21:00:00Z" });
+  const vp8 = await vp("Vis VP8"); // visita 22h do dia 20 (SP) = 21/01 01h UTC; proposta 21/01 10h SP: 1 dia (em UTC seriam 0)
+  await visita(vp8.id, "2020-01-21T01:00:00Z");
+  await proposta(vp8.id, { status: "ENVIADA", enviadaEm: "2020-01-21T13:00:00Z" });
   const vp4 = await vp("Vis VP4"); // visita não realizada: fora
   await visita(vp4.id, null);
   await proposta(vp4.id, { status: "ENVIADA", enviadaEm: "2020-01-18T15:00:00Z" });
@@ -429,33 +435,38 @@ describe("Taxa de fechamento: painel × lista de decisões × SQL independente",
 });
 
 describe("Tempo da visita até a proposta: painel × SQL independente", () => {
-  it("média 2,0 dia em 3 projetos (2, 4 e 0): usa a 1ª proposta, datas de São Paulo, nunca negativo; sem visita realizada fica fora", async () => {
+  it("média 1,8 dia em 4 projetos (2, 4, 0 e 1); a visita registrada DEPOIS da proposta (-2) fica fora da média e é contada à parte", async () => {
     const r = await tempoVisitaAteProposta(JAN);
     const minhas = r.linhas.filter((l) => l.titulo.startsWith(PREFIXO));
-    expect(r.amostra).toBe(3);
-    expect(minhas).toHaveLength(3);
-    expect(minhas.map((l) => [l.titulo, l.dias]).sort()).toEqual([
-      [`${PREFIXO} Vis VP1`, 2],
-      [`${PREFIXO} Vis VP2`, 4],
-      [`${PREFIXO} Vis VP3`, 0],
+    expect(minhas.map((l) => [l.titulo, l.dias, l.naMedia]).sort()).toEqual([
+      [`${PREFIXO} Vis VP1`, 2, true],
+      [`${PREFIXO} Vis VP2`, 4, true], // visita 22h de SP: em UTC seria 3
+      [`${PREFIXO} Vis VP3`, -2, false], // visita registrada depois da proposta
+      [`${PREFIXO} Vis VP7`, 0, true], // mesmo dia: 0 entra
+      [`${PREFIXO} Vis VP8`, 1, true], // visita 22h de SP: em UTC seria 0
     ]);
-    expect(r.mediaDeDias).toBe(2);
+    expect(r.amostra).toBe(4);
+    expect(r.foraDaMedia).toBe(1);
+    expect(r.linhas.filter((l) => l.naMedia)).toHaveLength(r.amostra);
+    expect(r.mediaDeDias).toBe(1.8); // (2 + 4 + 0 + 1) / 4 = 1,75, uma casa
 
+    // SQL independente: só os dias >= 0 entram na média; os negativos são contados à parte.
     const sql = await q<{ dias: number }>(
       `WITH env AS (SELECT pr."projetoId", min(pr."enviadaEm") AS enviada FROM "Proposta" pr WHERE pr."deletadoEm" IS NULL AND pr."enviadaEm" IS NOT NULL GROUP BY 1),
             vis AS (SELECT e."projetoId", min(e."realizadoEm") AS realizada FROM "EventoAgenda" e WHERE e.tipo = 'VISITA_TECNICA' AND e."realizadoEm" IS NOT NULL AND e."deletadoEm" IS NULL AND e."projetoId" IS NOT NULL GROUP BY 1)
-       SELECT GREATEST(0, ${EM_SP("env.enviada")} - ${EM_SP("vis.realizada")})::int AS dias
+       SELECT (${EM_SP("env.enviada")} - ${EM_SP("vis.realizada")})::int AS dias
          FROM env JOIN vis USING ("projetoId") JOIN "Projeto" j ON j.id = env."projetoId" AND j."deletadoEm" IS NULL
         WHERE ${EM_SP("env.enviada")} BETWEEN $1::date AND $2::date`,
       [JAN.de, JAN.ate],
     );
-    expect(sql.map((l) => l.dias).sort()).toEqual([0, 2, 4]);
-    expect(sql.map((l) => l.dias).sort()).toEqual(r.linhas.map((l) => l.dias).sort());
-    expect(Math.round((sql.reduce((s, l) => s + l.dias, 0) * 10) / sql.length) / 10).toBe(r.mediaDeDias);
+    const dentro = sql.map((l) => l.dias).filter((d) => d >= 0);
+    expect(dentro.sort()).toEqual([0, 1, 2, 4]);
+    expect(sql.length - dentro.length).toBe(r.foraDaMedia);
+    expect(Math.round((dentro.reduce((s, d) => s + d, 0) * 10) / dentro.length) / 10).toBe(r.mediaDeDias);
   });
 
   it("período sem propostas enviadas: sem dados (null) e amostra 0", async () => {
-    expect(await tempoVisitaAteProposta(MAR)).toMatchObject({ mediaDeDias: null, amostra: 0, linhas: [] });
+    expect(await tempoVisitaAteProposta(MAR)).toMatchObject({ mediaDeDias: null, amostra: 0, foraDaMedia: 0, linhas: [] });
   });
 });
 

@@ -27,7 +27,7 @@ export async function GET(requisicao: NextRequest) {
       r.porOrigem.map((o) => [o.origem ? (ROTULO_ORIGEM[o.origem as keyof typeof ROTULO_ORIGEM] ?? o.origem) : "Não informada", o.leads, o.comVisita, o.comPropostaEnviada, o.aprovados, o.perdidos]),
     ),
     gerarCsv(["Motivo de perda", "Projetos"], r.motivos.map((m) => [m.nome, m.quantidade])),
-    gerarCsv(["Período", "Projetos", "Sem retorno hoje", "Dias médios visita a proposta", "Taxa de fechamento %"], [[`${filtros.de} a ${filtros.ate}`, r.total, r.semRetorno, r.tempoVisitaPropostaDias?.media ?? "", r.taxaDeFechamento ?? ""]]),
+    gerarCsv(["Período", "Projetos", "Sem retorno hoje", "Dias médios visita a proposta", "Fora da média (visita depois da proposta)", "Taxa de fechamento %"], [[`${filtros.de} a ${filtros.ate}`, r.total, r.semRetorno, r.tempoVisitaPropostaDias?.media ?? "", r.tempoVisitaPropostaDias?.foraDaMedia ?? 0, r.taxaDeFechamento ?? ""]]),
   ];
   if (r.truncado) secoes.push(gerarCsv(["AVISO: relatório limitado aos 20.000 projetos mais recentes do período."], []));
 

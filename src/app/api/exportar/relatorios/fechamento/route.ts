@@ -26,7 +26,9 @@ const TEMPOS: ColunaDeCsv<VisitaAteProposta>[] = [
   { titulo: "Cliente", tipo: "texto", valor: (l) => l.cliente },
   { titulo: "Visita realizada em", tipo: "dataHora", valor: (l) => l.visitaEm },
   { titulo: "Primeira proposta enviada em", tipo: "dataHora", valor: (l) => l.propostaEnviadaEm },
+  // Negativo = a visita foi registrada depois da proposta; essa linha fica fora da média.
   { titulo: "Dias", tipo: "inteiro", valor: (l) => l.dias },
+  { titulo: "Entra na média", tipo: "texto", valor: (l) => (l.naMedia ? "Sim" : "Não: visita registrada depois da proposta") },
 ];
 
 /** `?tabela=tempo` exporta o tempo visita → proposta; sem ela, as decisões (aprovados e perdidos) da janela de 90 dias. */

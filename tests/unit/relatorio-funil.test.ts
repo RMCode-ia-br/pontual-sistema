@@ -73,15 +73,21 @@ describe("funil comercial: indicadores", () => {
     expect(r.motivosDePerda).toEqual([{ motivoPerdaId: "preco", quantidade: 2 }, { motivoPerdaId: "prazo", quantidade: 1 }]);
   });
 
-  it("tempo visita → proposta: média em dias de calendário, só com as duas datas, sem negativo", () => {
+  it("tempo visita → proposta: média em dias de calendário, só com as duas datas; visita registrada depois da proposta fica fora e é contada", () => {
     const r = calcularFunil([
       linha({ primeiraVisitaRealizadaEm: d("2026-11-01"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-04") }] }), // 3
       linha({ primeiraVisitaRealizadaEm: d("2026-11-01"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-06") }, { para: "PROPOSTA_ENVIADA", em: d("2026-11-20") }] }), // 5 (a primeira)
-      linha({ primeiraVisitaRealizadaEm: d("2026-11-10"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-08") }] }), // antes da visita: 0
+      linha({ primeiraVisitaRealizadaEm: d("2026-11-10"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-08") }] }), // visita depois da proposta: fora da média
+      linha({ primeiraVisitaRealizadaEm: d("2026-11-05"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-05") }] }), // mesmo dia: 0 entra
       linha({ primeiraVisitaRealizadaEm: d("2026-11-01") }), // sem proposta: fora
       linha({ fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-04") }] }), // sem visita: fora
     ]);
-    expect(r.tempoVisitaPropostaDias).toEqual({ media: 2.7, amostra: 3 });
+    expect(r.tempoVisitaPropostaDias).toEqual({ media: 2.7, amostra: 3, foraDaMedia: 1 }); // (3 + 5 + 0) / 3
+  });
+
+  it("tempo visita → proposta: só há projetos de fora, então não há média, mas a contagem aparece", () => {
+    const r = calcularFunil([linha({ primeiraVisitaRealizadaEm: d("2026-11-10"), fases: [{ para: "PROPOSTA_ENVIADA", em: d("2026-11-08") }] })]);
+    expect(r.tempoVisitaPropostaDias).toEqual({ media: null, amostra: 0, foraDaMedia: 1 });
   });
 
   it("taxa de fechamento só existe com decisões; ticket médio usa o valor dos aprovados", () => {

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { mediaDeDias, taxaDeFechamento } from "@/lib/dominio/indicadores";
+import { entraNaMediaDeDias, mediaDeDias, taxaDeFechamento } from "@/lib/dominio/indicadores";
 import { limitesEmInstantes, somarDias, type Periodo } from "@/lib/periodo";
 
 /**
@@ -57,15 +57,28 @@ export async function listarDecisoes(j: Periodo): Promise<{ linhas: DecisaoDePro
   return { truncado: aprovados.length > LIMITE_DE_DECISOES || perdidos.length > LIMITE_DE_DECISOES, linhas: todas.slice(0, LIMITE_DE_DECISOES) };
 }
 
-export type VisitaAteProposta = { projetoId: string; codigo: string; titulo: string; cliente: string; visitaEm: Date; propostaEnviadaEm: Date; dias: number };
+export type VisitaAteProposta = {
+  projetoId: string;
+  codigo: string;
+  titulo: string;
+  cliente: string;
+  visitaEm: Date;
+  propostaEnviadaEm: Date;
+  /** Dias de calendário (São Paulo) entre a visita e o envio. NEGATIVO quando a visita foi registrada depois da proposta. */
+  dias: number;
+  /** Entra na média? Não entra quando a visita foi registrada depois do envio da proposta (dias negativos). */
+  naMedia: boolean;
+};
 
 type LinhaDoSql = { projetoId: string; codigo: string; titulo: string; cliente: string; visitaEm: Date; enviadaEm: Date; dias: number };
 
 /**
  * Projetos cuja PRIMEIRA proposta foi enviada no período e que tiveram visita realizada: dias entre a primeira visita
- * realizada e o envio (em datas de São Paulo; nunca negativo: proposta enviada antes da visita registrada conta 0).
+ * realizada e o envio (em datas de São Paulo). Visita registrada DEPOIS do envio da proposta dá dias negativos e fica
+ * FORA da média (decisão do Marcelo, 2026-11-13); a tela mostra quantos ficaram de fora (`foraDaMedia`). `amostra` conta
+ * só os que entram na média; `linhas` traz todos, cada um com `naMedia`.
  */
-export async function tempoVisitaAteProposta(p: Periodo): Promise<{ mediaDeDias: number | null; amostra: number; linhas: VisitaAteProposta[] }> {
+export async function tempoVisitaAteProposta(p: Periodo): Promise<{ mediaDeDias: number | null; amostra: number; foraDaMedia: number; linhas: VisitaAteProposta[] }> {
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
   const linhas = await prisma.$queryRaw<LinhaDoSql[]>`
     WITH env AS (
@@ -76,16 +89,14 @@ export async function tempoVisitaAteProposta(p: Periodo): Promise<{ mediaDeDias:
         FROM "EventoAgenda" e WHERE e.tipo = 'VISITA_TECNICA' AND e."realizadoEm" IS NOT NULL AND e."deletadoEm" IS NULL AND e."projetoId" IS NOT NULL GROUP BY e."projetoId"
     )
     SELECT j.id AS "projetoId", j.codigo, j.titulo, c.nome AS cliente, vis.realizada AS "visitaEm", env.enviada AS "enviadaEm",
-           GREATEST(0, ((env.enviada AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date - ((vis.realizada AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date)::int AS dias
+           (((env.enviada AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date - ((vis.realizada AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date)::int AS dias
       FROM env
       JOIN vis ON vis."projetoId" = env."projetoId"
       JOIN "Projeto" j ON j.id = env."projetoId" AND j."deletadoEm" IS NULL
       JOIN "Cliente" c ON c.id = j."clienteId"
      WHERE env.enviada >= ${inicio} AND env.enviada < ${fimExclusivo}
      ORDER BY env.enviada DESC, j.id`;
-  return {
-    mediaDeDias: mediaDeDias(linhas.map((l) => l.dias)),
-    amostra: linhas.length,
-    linhas: linhas.map((l) => ({ projetoId: l.projetoId, codigo: l.codigo, titulo: l.titulo, cliente: l.cliente, visitaEm: l.visitaEm, propostaEnviadaEm: l.enviadaEm, dias: l.dias })),
-  };
+  const todas = linhas.map((l): VisitaAteProposta => ({ projetoId: l.projetoId, codigo: l.codigo, titulo: l.titulo, cliente: l.cliente, visitaEm: l.visitaEm, propostaEnviadaEm: l.enviadaEm, dias: l.dias, naMedia: entraNaMediaDeDias(l.dias) }));
+  const naMedia = todas.filter((l) => l.naMedia);
+  return { mediaDeDias: mediaDeDias(naMedia.map((l) => l.dias)), amostra: naMedia.length, foraDaMedia: todas.length - naMedia.length, linhas: todas };
 }
