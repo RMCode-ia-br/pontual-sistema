@@ -59,3 +59,50 @@ export function totalizarPorFornecedor(recebimentos: readonly RecebimentoDeForne
   }
   return [...mapa.values()].sort((a, b) => b.valorCentavos - a.valorCentavos || a.fornecedorId.localeCompare(b.fornecedorId));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Curva ABC (valor das saídas de estoque no período)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export type ClasseAbc = "A" | "B" | "C";
+export const CORTES_ABC_PADRAO = { a: 80, b: 15 } as const;
+export type CortesAbc = { a: number; b: number };
+
+/**
+ * Lê os cortes da URL (dado não confiável): A = % do valor que a classe A cobre, B = % da classe B (o resto é C).
+ * Inteiros de 1 a 98, com A + B no máximo 99. Qualquer outra coisa volta ao padrão (80 / 15).
+ */
+export function lerCortesAbc(a: string | undefined, b: string | undefined): CortesAbc {
+  const na = Number(a);
+  const nb = Number(b);
+  const valido = (n: number) => Number.isInteger(n) && n >= 1 && n <= 98;
+  if (!valido(na) || !valido(nb) || na + nb > 99) return { ...CORTES_ABC_PADRAO };
+  return { a: na, b: nb };
+}
+
+export type ItemDaCurva<T> = T & { valorCentavos: number };
+export type LinhaDaCurva<T> = ItemDaCurva<T> & { classe: ClasseAbc; percentual: number; acumulado: number };
+
+/**
+ * Curva ABC: ordena do maior valor para o menor e dá a classe pelo acumulado ANTES do item: enquanto o acumulado anterior for
+ * menor que o corte de A, o item é A (o item que atravessa os 80% fica em A); depois, enquanto for menor que A + B, é B; o resto é C.
+ * Valor zero ou negativo não entra (quem não saiu nada não tem classe). Percentuais com uma casa.
+ */
+export function curvaAbc<T>(itens: readonly ItemDaCurva<T>[], cortes: CortesAbc = CORTES_ABC_PADRAO): { linhas: LinhaDaCurva<T>[]; totalCentavos: number } {
+  const validos = itens.filter((i) => i.valorCentavos > 0).sort((x, y) => y.valorCentavos - x.valorCentavos);
+  const total = validos.reduce((s, i) => s + i.valorCentavos, 0);
+  let antes = 0;
+  const linhas = validos.map((i) => {
+    const pctAntes = (antes / total) * 100;
+    const classe: ClasseAbc = pctAntes < cortes.a ? "A" : pctAntes < cortes.a + cortes.b ? "B" : "C";
+    antes += i.valorCentavos;
+    return { ...i, classe, percentual: Math.round((i.valorCentavos / total) * 1000) / 10, acumulado: Math.round((antes / total) * 1000) / 10 };
+  });
+  return { linhas, totalCentavos: total };
+}
+
+/** Variação percentual do custo (uma casa); `null` quando não há custo anterior ou ele é zero ("sem base": nunca infinito). */
+export function variacaoDeCusto(anteriorCentavos: number | null, novoCentavos: number): number | null {
+  if (anteriorCentavos === null || anteriorCentavos <= 0) return null;
+  return Math.round(((novoCentavos - anteriorCentavos) / anteriorCentavos) * 1000) / 10;
+}

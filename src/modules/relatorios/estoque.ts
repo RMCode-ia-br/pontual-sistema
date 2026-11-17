@@ -1,8 +1,9 @@
 import "server-only";
 
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { somarDias } from "@/lib/dominio/calendario";
-import { resumirPosicao, totalizarPorFornecedor, valorDaLinha, type ResumoDaPosicao, type TotalDoFornecedor } from "@/lib/dominio/relatorio-estoque";
+import { resumirPosicao, valorDaLinha, type ResumoDaPosicao, type TotalDoFornecedor } from "@/lib/dominio/relatorio-estoque";
 import { dataLocalDoInstante, inputParaData } from "@/lib/formatadores";
 import type { ParametrosBrutos } from "@/lib/listas/parametros";
 import { saldoDaSucata } from "@/modules/estoque/sucata-base";
@@ -10,6 +11,8 @@ import { saldoDaSucata } from "@/modules/estoque/sucata-base";
 import { DIAS_DA_JANELA_PADRAO } from "./funil";
 
 const LIMITE = 5000;
+/** Fornecedores listados em "compras por fornecedor"; passou disso, a tela avisa que cortou. */
+export const LIMITE_DE_FORNECEDORES = 500;
 const milesimos = (d: { toString(): string } | null) => (d === null ? null : Math.round(Number(d.toString()) * 1000));
 const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -35,6 +38,8 @@ export type LinhaDoEstoque = {
   /** `null` = sem custo (ou saldo não positivo): nunca zero. */
   valorCentavos: number | null;
   abaixoDoMinimo: boolean;
+  /** Produto inativo que ainda tem saldo: o saldo vale dinheiro, então entra no valor, marcado "inativo". */
+  ativo: boolean;
 };
 
 export type RelatorioDeEstoque = {
@@ -46,23 +51,24 @@ export type RelatorioDeEstoque = {
   sucataComprimentoSemPesoMm: number;
   fornecedores: (TotalDoFornecedor & { nome: string })[];
   comprasNoPeriodo: number;
+  /** Havia mais fornecedores do que o limite: a lista foi cortada. */
+  fornecedoresTruncado: boolean;
+  /** Produtos inativos com saldo (entram no valor do estoque). */
+  inativosComSaldo: number;
 };
 
 export async function carregarRelatorioDeEstoque(periodo: PeriodoDeCompras): Promise<RelatorioDeEstoque> {
   const [produtos, retalhos, sucata, recebimentos] = await Promise.all([
     prisma.produto.findMany({
-      where: { deletadoEm: null, ativo: true },
-      select: { id: true, codigo: true, descricao: true, unidade: true, saldoCache: true, estoqueMinimo: true, custoUnitarioCentavos: true },
+      // Ativos, e também os inativos que ainda têm saldo (o estoque físico existe e vale dinheiro).
+      where: { deletadoEm: null, OR: [{ ativo: true }, { saldoCache: { not: 0 } }] },
+      select: { id: true, codigo: true, descricao: true, unidade: true, ativo: true, saldoCache: true, estoqueMinimo: true, custoUnitarioCentavos: true },
       orderBy: { descricao: "asc" },
       take: LIMITE + 1,
     }),
     prisma.retalho.count({ where: { deletadoEm: null, status: "DISPONIVEL" } }),
     saldoDaSucata(prisma),
-    prisma.itemRecebimento.findMany({
-      where: { deletadoEm: null, recebimento: { deletadoEm: null, data: { gte: new Date(`${periodo.de}T00:00:00Z`), lte: new Date(`${periodo.ate}T00:00:00Z`) }, compra: { deletadoEm: null } } },
-      select: { valorCentavos: true, recebimento: { select: { compraId: true, compra: { select: { fornecedorId: true, fornecedor: { select: { razaoSocial: true, nomeFantasia: true } } } } } } },
-      take: LIMITE,
-    }),
+    totaisPorFornecedor(periodo),
   ]);
   const truncado = produtos.length > LIMITE;
   const lista = produtos.slice(0, LIMITE);
@@ -78,25 +84,44 @@ export async function carregarRelatorioDeEstoque(periodo: PeriodoDeCompras): Pro
       estoqueMinimoMilesimos: minimo,
       custoUnitarioCentavos: p.custoUnitarioCentavos,
       valorCentavos: saldo > 0 && p.custoUnitarioCentavos !== null ? valorDaLinha(saldo, p.custoUnitarioCentavos) : null,
-      abaixoDoMinimo: minimo !== null && saldo < minimo,
+      // Produto inativo não gera alerta de mínimo (saiu de linha), mas o saldo dele continua valendo no estoque.
+      abaixoDoMinimo: p.ativo && minimo !== null && saldo < minimo,
+      ativo: p.ativo,
     };
   });
-  const nomes = new Map<string, string>();
-  const compras = new Set<string>();
-  const porFornecedor = recebimentos.map((r) => {
-    const c = r.recebimento.compra;
-    nomes.set(c.fornecedorId, c.fornecedor.nomeFantasia ?? c.fornecedor.razaoSocial);
-    compras.add(r.recebimento.compraId);
-    return { fornecedorId: c.fornecedorId, valorCentavos: r.valorCentavos };
-  });
   return {
-    posicao: resumirPosicao(linhas.map((l) => ({ saldoMilesimos: l.saldoMilesimos, custoUnitarioCentavos: l.custoUnitarioCentavos, estoqueMinimoMilesimos: l.estoqueMinimoMilesimos }))),
+    posicao: resumirPosicao(linhas.map((l) => ({ saldoMilesimos: l.saldoMilesimos, custoUnitarioCentavos: l.custoUnitarioCentavos, estoqueMinimoMilesimos: l.ativo ? l.estoqueMinimoMilesimos : null }))),
     linhas,
     truncado,
     retalhosDisponiveis: retalhos,
     sucataMilesimosKg: sucata.pesoMilesimosKg,
     sucataComprimentoSemPesoMm: sucata.comprimentoSemPesoMm,
-    fornecedores: totalizarPorFornecedor(porFornecedor).map((t) => ({ ...t, nome: nomes.get(t.fornecedorId) ?? "—" })),
-    comprasNoPeriodo: compras.size,
+    fornecedores: recebimentos.linhas,
+    comprasNoPeriodo: recebimentos.compras,
+    fornecedoresTruncado: recebimentos.truncado,
+    inativosComSaldo: linhas.filter((l) => !l.ativo && l.saldoMilesimos !== 0).length,
+  };
+}
+
+/** Total recebido por fornecedor no período, somado no banco (sem carregar item por item). Item sem preço conta à parte, nunca como zero. */
+async function totaisPorFornecedor(p: PeriodoDeCompras): Promise<{ linhas: (TotalDoFornecedor & { nome: string })[]; compras: number; truncado: boolean }> {
+  const base = Prisma.sql`
+    FROM "ItemRecebimento" ir
+    JOIN "RecebimentoCompra" r ON r.id = ir."recebimentoId" AND r."deletadoEm" IS NULL
+    JOIN "Compra" c ON c.id = r."compraId" AND c."deletadoEm" IS NULL
+    JOIN "Fornecedor" f ON f.id = c."fornecedorId"
+   WHERE ir."deletadoEm" IS NULL AND r.data >= ${p.de}::date AND r.data <= ${p.ate}::date`;
+  const [linhas, totais] = await Promise.all([
+    prisma.$queryRaw<{ id: string; nome: string; valor: bigint; itens: number; sem_valor: number }[]>`
+      SELECT f.id, COALESCE(f."nomeFantasia", f."razaoSocial") AS nome, COALESCE(sum(ir."valorCentavos"), 0)::bigint AS valor,
+             count(*)::int AS itens, count(*) FILTER (WHERE ir."valorCentavos" IS NULL)::int AS sem_valor
+        ${base} GROUP BY f.id, f."nomeFantasia", f."razaoSocial"
+       ORDER BY valor DESC, f.id LIMIT ${LIMITE_DE_FORNECEDORES + 1}`,
+    prisma.$queryRaw<{ compras: number }[]>`SELECT count(DISTINCT c.id)::int AS compras ${base}`,
+  ]);
+  return {
+    linhas: linhas.slice(0, LIMITE_DE_FORNECEDORES).map((l) => ({ fornecedorId: l.id, nome: l.nome, valorCentavos: Number(l.valor), itens: l.itens, semValor: l.sem_valor })),
+    compras: totais[0]?.compras ?? 0,
+    truncado: linhas.length > LIMITE_DE_FORNECEDORES,
   };
 }

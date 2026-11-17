@@ -83,6 +83,7 @@ describe("resumo e relatório de estoque", () => {
 
   it("compras: aberta, rascunho e atrasada (previsão passada, derivada de hoje); recebido por fornecedor no período", async () => {
     const antes = await resumoDeEstoque(HOJE);
+    const antesDia14 = await resumoDeEstoque("2026-11-14"); // base própria da data de 14/11 (compra real atrasada em outra data não pode entrar na conta)
     const antesRel = await carregarRelatorioDeEstoque(periodo);
     const f = await prisma.fornecedor.create({ data: { razaoSocial: `${PREFIXO} Fornecedor` } });
     const base = { fornecedorId: f.id, tipo: "MATERIAL" as const, destino: "ESTOQUE" as const };
@@ -102,7 +103,7 @@ describe("resumo e relatório de estoque", () => {
     expect(resumo.comprasEmAberto - antes.comprasEmAberto).toBe(2); // cancelada e rascunho não são "em aberto"
     expect(resumo.comprasAtrasadas - antes.comprasAtrasadas).toBe(1); // só a de 15/11; a de 25/11 ainda não
     // Derivado de hoje: no dia 14 nenhuma das duas está atrasada.
-    expect((await resumoDeEstoque("2026-11-14")).comprasAtrasadas - antes.comprasAtrasadas).toBe(0);
+    expect((await resumoDeEstoque("2026-11-14")).comprasAtrasadas - antesDia14.comprasAtrasadas).toBe(0);
 
     const rel = await carregarRelatorioDeEstoque(periodo);
     const nosso = rel.fornecedores.find((x) => x.fornecedorId === f.id);

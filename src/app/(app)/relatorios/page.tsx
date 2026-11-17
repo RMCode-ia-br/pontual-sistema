@@ -1,4 +1,4 @@
-import { Banknote, BarChart3, Boxes, Factory, Filter, HandCoins, HardHat, Landmark, Percent, Receipt, Ruler, Scale, Target, Users } from "lucide-react";
+import { Banknote, BarChart3, Boxes, Factory, Filter, HandCoins, HardHat, Landmark, Percent, Receipt, Ruler, Scale, Star, Target, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -70,7 +70,16 @@ export default async function PaginaRelatorios() {
             <Factory className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
             <span>
               <span className="block font-medium">Produção da fábrica</span>
-              <span className="text-muted-foreground text-sm">Quanto da capacidade está ocupada hoje e quais obras estão na fábrica.</span>
+              <span className="text-muted-foreground text-sm">Quanto da capacidade está ocupada hoje, os m² produzidos por mês e as obras em andamento (com CSV).</span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link href="/relatorios/avaliacoes" className="hover:bg-accent flex gap-3 rounded-xl border p-4 transition-colors">
+            <Star className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
+            <span>
+              <span className="block font-medium">Avaliações no Google</span>
+              <span className="text-muted-foreground text-sm">Das obras entregues, para quais já se pediu a avaliação e quais pedidos estão atrasados.</span>
             </span>
           </Link>
         </li>
