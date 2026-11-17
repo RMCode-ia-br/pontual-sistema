@@ -5,7 +5,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { prisma } from "@/lib/db";
 import { formatarQuantidade } from "@/lib/dominio/estoque";
 import { linkWhatsApp } from "@/lib/dominio/modelos-texto";
-import { montarTextoDoPedido } from "@/lib/dominio/texto-pedido-compra";
+import { dataDoPedido, montarTextoDoPedido } from "@/lib/dominio/texto-pedido-compra";
 import { formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { carregarLogo } from "@/modules/propostas/pdf/gerar";
 
@@ -35,7 +35,7 @@ export async function dadosDoPedidoPdf(c: CompraDetalhe): Promise<{ dados: Dados
     logoCaminho: cfg?.logoCaminho ?? null,
     dados: {
       numero: c.numero,
-      data: (c.dataPedido ?? new Date().toISOString().slice(0, 10)),
+      data: dataDoPedido(c.dataPedido),
       fornecedor: c.fornecedor,
       empresa: { nomeFantasia: cfg?.nomeFantasia ?? null, razaoSocial: cfg?.razaoSocial ?? null, corPrimaria: cfg?.corPrimaria ?? null, cnpj: cfg?.cnpj ?? null, endereco: cfg?.endereco ?? null, cidade: cfg?.cidade ?? null, uf: cfg?.uf ?? null, cep: cfg?.cep ?? null, telefone: cfg?.telefone ?? null, email: cfg?.emailContato ?? null },
       previsaoEntrega: c.previsaoEntrega,

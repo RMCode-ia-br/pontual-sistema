@@ -77,7 +77,7 @@ test.describe("financeiro: contas e lançamentos", () => {
     await page.getByRole("button", { name: "Editar conta" }).click();
     await page.getByLabel("Informar o saldo agora").check();
     await page.getByLabel("Saldo nessa data").fill("100000");
-    await page.getByLabel("Data do saldo").fill(new Date().toISOString().slice(0, 10));
+    await page.getByLabel("Data do saldo").fill(new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })); // a data do servidor é a de São Paulo
     await page.getByRole("button", { name: "Salvar" }).click();
     await expect(toast(page, "Conta atualizada.")).toBeVisible();
     await expect(page.getByText("Saldo não informado")).toHaveCount(0);

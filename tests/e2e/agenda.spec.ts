@@ -52,7 +52,9 @@ test("preparação: cadastra o cliente e o projeto da agenda", async ({ page }) 
 });
 
 test("a agenda abre nas quatro visões, sem rolagem horizontal, e orienta quando está vazia", async ({ page }) => {
-  await page.goto("/agenda");
+  // Uma data distante: o teste não depende de haver (ou não) compromissos reais nos próximos 30 dias.
+  // Os links das visões preservam `data`, então a Lista abre vazia no mesmo trecho.
+  await page.goto("/agenda?data=2099-01-01");
   await expect(page.getByRole("heading", { name: "Agenda", exact: true })).toBeVisible();
   const visoes = page.getByRole("navigation", { name: "Visão da agenda" });
   for (const nome of ["Semana", "Dia", "Lista", "Mês"]) {

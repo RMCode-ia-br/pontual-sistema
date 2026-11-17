@@ -225,7 +225,7 @@ export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boole
       await c.query(
         // Parcela em aberto sempre tem vencimento (hoje); a que aguarda a etapa não tem, como no sistema.
         `INSERT INTO "ContaReceber" (id, "projetoId", "clienteId", ordem, descricao, "valorCentavos", gatilho, status, vencimento, "atualizadoEm")
-         VALUES ($1, $2, $3, $4, $5, $6, $7::"GatilhoPagamento", $8::"StatusContaReceber", CASE WHEN $8 = 'ABERTA' THEN CURRENT_DATE END, now())`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7::"GatilhoPagamento", $8::"StatusContaReceber", CASE WHEN $8 = 'ABERTA' THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date END, now())`,
         [randomUUID(), projetoId, clienteId, ordem, descricao, valor, gatilho, status],
       );
     }
@@ -298,7 +298,7 @@ export async function atribuirEquipeAEtapas(projetoId: string, nomeDaEquipe: str
 export async function concluirEtapasAnterioresDaObra(projetoId: string): Promise<void> {
   await comConexao((c) =>
     c.query(
-      `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = COALESCE("inicioReal", CURRENT_DATE), "fimReal" = CURRENT_DATE
+      `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = COALESCE("inicioReal", (now() AT TIME ZONE 'America/Sao_Paulo')::date), "fimReal" = (now() AT TIME ZONE 'America/Sao_Paulo')::date
         WHERE "projetoId" = $1 AND "deletadoEm" IS NULL AND status IN ('PENDENTE', 'EM_ANDAMENTO', 'BLOQUEADA')
           AND ordem < (SELECT ordem FROM "EtapaProjeto" WHERE "projetoId" = $1 AND tipo = 'ENTREGA' AND "deletadoEm" IS NULL)`,
       [projetoId],
@@ -310,7 +310,7 @@ export async function concluirEtapasAnterioresDaObra(projetoId: string): Promise
 export async function concluirMarcoDaGarantia(projetoId: string, diasAtras: number): Promise<void> {
   await comConexao((c) =>
     c.query(
-      `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = CURRENT_DATE - $2::int, "fimReal" = CURRENT_DATE - $2::int
+      `UPDATE "EtapaProjeto" SET status = 'CONCLUIDA', "inicioReal" = (now() AT TIME ZONE 'America/Sao_Paulo')::date - $2::int, "fimReal" = (now() AT TIME ZONE 'America/Sao_Paulo')::date - $2::int
         WHERE "projetoId" = $1 AND "marcoGarantia" AND "deletadoEm" IS NULL`,
       [projetoId, diasAtras],
     ),
@@ -321,7 +321,7 @@ export async function concluirMarcoDaGarantia(projetoId: string, diasAtras: numb
 export async function atrasarEtapaDaObra(projetoId: string, tipo: string, diasAtras: number): Promise<void> {
   await comConexao((c) =>
     c.query(
-      `UPDATE "EtapaProjeto" SET "inicioPrevisto" = CURRENT_DATE - ($3::int + 2), "fimPrevisto" = CURRENT_DATE - $3::int
+      `UPDATE "EtapaProjeto" SET "inicioPrevisto" = (now() AT TIME ZONE 'America/Sao_Paulo')::date - ($3::int + 2), "fimPrevisto" = (now() AT TIME ZONE 'America/Sao_Paulo')::date - $3::int
         WHERE "projetoId" = $1 AND tipo::text = $2 AND "deletadoEm" IS NULL`,
       [projetoId, tipo, diasAtras],
     ),
@@ -556,7 +556,7 @@ export async function recebidoDaObra(projetoId: string): Promise<number> {
 /** Deixa a parcela da obra de teste vencida há `diasAtras` dias (o vencimento original é o que manda no atraso). */
 export async function vencerParcelaDaObra(projetoId: string, ordem: number, diasAtras: number): Promise<void> {
   await comConexao(async (c) => {
-    await c.query(`UPDATE "ContaReceber" SET vencimento = CURRENT_DATE - $3::int WHERE "projetoId" = $1 AND ordem = $2`, [projetoId, ordem, diasAtras]);
+    await c.query(`UPDATE "ContaReceber" SET vencimento = (now() AT TIME ZONE 'America/Sao_Paulo')::date - $3::int WHERE "projetoId" = $1 AND ordem = $2`, [projetoId, ordem, diasAtras]);
   });
 }
 
@@ -635,7 +635,7 @@ export async function criarPerfilBarraDeTeste(codigo: string, descricao: string,
        VALUES ($1, $2, $3, 'BARRA', $4, 6000, 0.5, $5, now())`,
       [id, codigo, descricao, custoCentavos, barras],
     );
-    await c.query(`INSERT INTO "MovimentoEstoque" (id, "produtoId", tipo, quantidade, data, "custoUnitarioCentavos", "atualizadoEm") VALUES ($1, $2, 'ENTRADA_COMPRA', $3, CURRENT_DATE, $4, now())`, [randomUUID(), id, barras, custoCentavos]);
+    await c.query(`INSERT INTO "MovimentoEstoque" (id, "produtoId", tipo, quantidade, data, "custoUnitarioCentavos", "atualizadoEm") VALUES ($1, $2, 'ENTRADA_COMPRA', $3, (now() AT TIME ZONE 'America/Sao_Paulo')::date, $4, now())`, [randomUUID(), id, barras, custoCentavos]);
     return id;
   });
 }
@@ -881,7 +881,7 @@ export async function criarPropostaRascunhoDeTeste(nome: string): Promise<Propos
     await c.query(`INSERT INTO "Projeto" (id, codigo, titulo, "clienteId", status, "atualizadoEm") VALUES ($1, $2, $3, $4, 'ELABORANDO_PROPOSTA'::"StatusProjeto", now())`, [projetoId, `P-0000-${randomUUID().slice(0, 8)}`, titulo, clienteId]);
     await c.query(
       `INSERT INTO "Proposta" (id, "projetoId", numero, "numeroSequencial", ano, revisao, data, "clienteNome", "modoPrazo", "prazoTotalMaxDias", "atualizadoEm")
-       VALUES ($1, $2, $3, 1, 20, 0, CURRENT_DATE, $4, 'TOTAL'::"ModoPrazo", 35, now())`,
+       VALUES ($1, $2, $3, 1, 20, 0, (now() AT TIME ZONE 'America/Sao_Paulo')::date, $4, 'TOTAL'::"ModoPrazo", 35, now())`,
       [propostaId, projetoId, numero, `E2E Cliente ${nome}`],
     );
     await c.query(`INSERT INTO "OpcaoProposta" (id, "propostaId", nome, ordem, "atualizadoEm") VALUES ($1, $2, 'Opção 1', 0, now())`, [opcaoId, propostaId]);

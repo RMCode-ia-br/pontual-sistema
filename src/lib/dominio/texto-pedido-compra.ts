@@ -1,6 +1,13 @@
 // Texto do pedido de compra para o fornecedor (WhatsApp e PDF). Puro: recebe dados prontos e devolve texto. Nada fixo da empresa:
 // o nome vem de Configurações. Preço só aparece quando foi informado (nunca "R$ 0,00" para o que não tem preço).
 
+import { dataLocalDoInstante } from "../formatadores";
+
+/** Data do pedido: a informada ou, na falta dela, o dia de HOJE em São Paulo (nunca a data em UTC, que vira "amanhã" depois das 21h). */
+export function dataDoPedido(dataPedido: string | null, agora: Date = new Date()): string {
+  return dataPedido ?? dataLocalDoInstante(agora);
+}
+
 export type ItemDoPedido = {
   descricao: string;
   quantidade: string;
