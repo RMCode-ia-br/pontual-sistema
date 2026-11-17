@@ -60,9 +60,11 @@ test("configurações: markup e acréscimo da nota fiscal são editáveis e vali
   const antes = await tirarSnapshotConfiguracao();
   try {
     await page.goto("/configuracoes/empresa");
-    await expect(page.getByLabel(/Markup padrão sobre o custo/)).toHaveValue("80");
-    await expect(page.getByLabel(/Markup de vidro temperado e guarda-corpo/)).toHaveValue("100");
-    await expect(page.getByLabel(/Acréscimo quando a venda é com nota fiscal/)).toHaveValue("5");
+    // Os valores que estão no banco (o dono pode mudá-los): o teste lê o banco, não supõe 80, 100 ou 5.
+    const percentual = (pb: unknown) => String(Number(pb) / 100).replace(".", ","); // 8000 → "80"; 550 → "5,5"
+    await expect(page.getByLabel(/Markup padrão sobre o custo/)).toHaveValue(percentual(antes?.markupPadraoPb));
+    await expect(page.getByLabel(/Markup de vidro temperado e guarda-corpo/)).toHaveValue(percentual(antes?.markupVidroTemperadoPb));
+    await expect(page.getByLabel(/Acréscimo quando a venda é com nota fiscal/)).toHaveValue(percentual(antes?.acrescimoNotaPb));
 
     await page.getByLabel(/Acréscimo quando a venda é com nota fiscal/).fill("abc");
     await page.getByRole("button", { name: "Salvar configurações" }).click();

@@ -164,6 +164,7 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "Funcionario" WHERE nome LIKE 'E2E %'`);
   if (ids.length > 0) await c.query(`DELETE FROM "FiltroSalvo" WHERE "usuarioId" = ANY($1)`, [ids]);
 
+  await c.query(`DELETE FROM "ModeloTexto" WHERE titulo LIKE 'E2E %' AND chave LIKE 'e2e.%'`);
   await c.query(`DELETE FROM "Tarefa" WHERE titulo LIKE 'E2E %'`);
   await c.query(`DELETE FROM "Feriado" WHERE nome LIKE 'E2E %'`);
   for (const tabela of ["LinhaAluminio", "AcabamentoAluminio", "TipoVidro", "CategoriaProduto", "MotivoPerda", "MotivoBloqueio"]) {
@@ -200,9 +201,43 @@ export async function prepararUsuarioE2E(opcoes: OpcoesUsuario = {}): Promise<vo
 }
 
 /**
- * Cria uma obra de teste (projeto aprovado com parcelas 50/25/25) e, por padrão, as etapas copiadas do modelo
- * padrão, todas pendentes e SEM datas nem prazo (o teste os define pela interface). Tudo com prefixo "E2E ",
- * que a limpeza apaga. Devolve o id do projeto.
+ * As 9 etapas de uma obra de teste. Lista PRÓPRIA do teste (não lê o modelo de etapas do dono, que ele pode editar: nomes,
+ * ordem, quem libera parcela). Mesma forma do modelo que vem da seed: a medição exata sem prazo, fabricação libera a
+ * entrega do material, a instalação dos vidros libera a parcela final e é o marco da garantia.
+ */
+const ETAPAS_DE_TESTE: { tipo: string; nome: string; grupoPrazo: string | null; liberaGatilho: string | null; marcoGarantia: boolean }[] = [
+  { tipo: "MEDICAO_EXATA", nome: "Medição exata", grupoPrazo: null, liberaGatilho: null, marcoGarantia: false },
+  { tipo: "PEDIDO_MATERIAL", nome: "Pedido de material", grupoPrazo: "MATERIAL", liberaGatilho: null, marcoGarantia: false },
+  { tipo: "FABRICACAO", nome: "Fabricação", grupoPrazo: "MATERIAL", liberaGatilho: "ENTREGA_MATERIAL", marcoGarantia: false },
+  { tipo: "INSTALACAO_ESQUADRIAS", nome: "Instalação das esquadrias", grupoPrazo: "EXECUCAO", liberaGatilho: null, marcoGarantia: false },
+  { tipo: "MEDICAO_VIDROS", nome: "Medição dos vidros", grupoPrazo: "VIDROS_FINALIZACAO", liberaGatilho: null, marcoGarantia: false },
+  { tipo: "PEDIDO_VIDROS", nome: "Pedido dos vidros", grupoPrazo: "VIDROS_FINALIZACAO", liberaGatilho: null, marcoGarantia: false },
+  { tipo: "INSTALACAO_VIDROS", nome: "Instalação dos vidros", grupoPrazo: "VIDROS_FINALIZACAO", liberaGatilho: "ENTREGA_E_INSTALACAO", marcoGarantia: true },
+  { tipo: "ACABAMENTO", nome: "Acabamento", grupoPrazo: "VIDROS_FINALIZACAO", liberaGatilho: null, marcoGarantia: false },
+  { tipo: "ENTREGA", nome: "Entrega", grupoPrazo: "VIDROS_FINALIZACAO", liberaGatilho: null, marcoGarantia: false },
+];
+
+/**
+ * O modelo de etapas padrão do dono ainda é o que vem da seed (as 9 etapas de `ETAPAS_DE_TESTE`, na ordem)? As specs que
+ * conferem a TELA do modelo (nomes, quem libera parcela) só fazem sentido nesse caso: se o dono personalizou o modelo, elas
+ * são ignoradas com o motivo, em vez de falhar por uma edição legítima dele.
+ */
+export async function modeloDeEtapasEhOPadraoDaSeed(): Promise<boolean> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ tipo: string; nome: string; grupoPrazo: string | null; liberaGatilho: string | null; marcoGarantia: boolean }>(
+      `SELECT i.tipo, i.nome, i."grupoPrazo", i."liberaGatilho", i."marcoGarantia"
+         FROM "ModeloEtapaItem" i JOIN "ModeloEtapas" m ON m.id = i."modeloId"
+        WHERE m.padrao AND m."deletadoEm" IS NULL AND i."deletadoEm" IS NULL AND i.ativo ORDER BY i.ordem`,
+    );
+    const chave = (e: { tipo: string; nome: string; grupoPrazo: string | null; liberaGatilho: string | null; marcoGarantia: boolean }) => [e.tipo, e.nome, e.grupoPrazo, e.liberaGatilho, e.marcoGarantia].join("|");
+    return JSON.stringify(r.rows.map(chave)) === JSON.stringify(ETAPAS_DE_TESTE.map(chave));
+  });
+}
+
+/**
+ * Cria uma obra de teste (projeto aprovado com parcelas 50/25/25) e, por padrão, as 9 etapas de `ETAPAS_DE_TESTE`,
+ * todas pendentes e SEM datas nem prazo (o teste os define pela interface). Tudo com prefixo "E2E ", que a limpeza
+ * apaga. Devolve o id do projeto.
  */
 export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boolean; status?: "APROVADO" | "NOVO_LEAD" } = {}): Promise<string> {
   return comConexao(async (c) => {
@@ -230,17 +265,11 @@ export async function criarObraDeTeste(nome: string, opcoes: { semEtapas?: boole
       );
     }
     if (!opcoes.semEtapas) {
-      const itens = await c.query<{ tipo: string; nome: string; ordem: number; grupoPrazo: string | null; peso: number; liberaGatilho: string | null; marcoGarantia: boolean }>(
-        `SELECT i.tipo, i.nome, i.ordem, i."grupoPrazo", i.peso, i."liberaGatilho", i."marcoGarantia"
-           FROM "ModeloEtapaItem" i JOIN "ModeloEtapas" m ON m.id = i."modeloId"
-          WHERE m.padrao AND m."deletadoEm" IS NULL AND i."deletadoEm" IS NULL AND i.ativo ORDER BY i.ordem`,
-      );
-      if (itens.rows.length === 0) throw new Error("O modelo de etapas padrão não existe no banco de teste (rode a seed).");
-      for (const [indice, i] of itens.rows.entries()) {
+      for (const [indice, e] of ETAPAS_DE_TESTE.entries()) {
         await c.query(
           `INSERT INTO "EtapaProjeto" (id, "projetoId", tipo, nome, ordem, "grupoPrazo", peso, "liberaGatilho", "marcoGarantia", "atualizadoEm")
-           VALUES ($1, $2, $3::"TipoEtapa", $4, $5, $6::"GrupoPrazo", $7, $8::"GatilhoPagamento", $9, now())`,
-          [randomUUID(), projetoId, i.tipo, i.nome, indice + 1, i.grupoPrazo, i.peso, i.liberaGatilho, i.marcoGarantia],
+           VALUES ($1, $2, $3::"TipoEtapa", $4, $5, $6::"GrupoPrazo", 1, $7::"GatilhoPagamento", $8, now())`,
+          [randomUUID(), projetoId, e.tipo, e.nome, indice + 1, e.grupoPrazo, e.liberaGatilho, e.marcoGarantia],
         );
       }
     }
@@ -458,7 +487,23 @@ export async function contarAnexosDoE2E(): Promise<number> {
   });
 }
 
-// ---- Modelos de texto: o teste edita um modelo real e o restaura ----
+// ---- Modelos de texto: o teste cria o PRÓPRIO modelo (inativo, "E2E ...") e o remove; não mexe nos do dono ----
+
+/** Cria um modelo de WhatsApp de teste, INATIVO (não aparece no menu "Mensagem pronta" de ninguém). Devolve a chave e o título. */
+export async function criarModeloDeTextoDeTeste(conteudo: string): Promise<{ chave: string; titulo: string }> {
+  const chave = `e2e.${randomUUID().slice(0, 8)}`;
+  const titulo = `E2E Modelo de WhatsApp ${chave.slice(4)}`;
+  await comConexao((c) =>
+    c.query(`INSERT INTO "ModeloTexto" (id, chave, titulo, categoria, conteudo, ativo, ordem, "atualizadoEm") VALUES ($1, $2, $3, 'WHATSAPP', $4, false, 9999, now())`, [randomUUID(), chave, titulo, conteudo]),
+  );
+  return { chave, titulo };
+}
+
+export async function removerModeloDeTextoDeTeste(chave: string): Promise<void> {
+  await comConexao((c) => c.query(`DELETE FROM "ModeloTexto" WHERE chave = $1 AND chave LIKE 'e2e.%'`, [chave]));
+}
+
+// ---- Modelos de texto (helpers antigos): editar um modelo REAL e restaurá-lo. Evite: prefira criarModeloDeTextoDeTeste. ----
 
 export type ModeloTextoLinha = { id: string; titulo: string; conteudo: string; ativo: boolean };
 

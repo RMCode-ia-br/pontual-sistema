@@ -6,14 +6,13 @@ import {
   criarEspessuraDeVidroDeTeste,
   criarFeriadoDeTeste,
   criarLinhaDeTeste,
+  criarModeloDeTextoDeTeste,
   criarMotivoDeBloqueioDeTeste,
   lerCampoConfiguracao,
-  obterModeloTexto,
   prepararUsuarioE2E,
+  removerModeloDeTextoDeTeste,
   restaurarConfiguracao,
-  restaurarModeloTexto,
   tirarSnapshotConfiguracao,
-  type ModeloTextoLinha,
   type SnapshotConfiguracao,
 } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
@@ -43,20 +42,21 @@ test.describe("empresa, logo e auditoria", () => {
     await entrarEEsperarPainel(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
   });
 
-  test("mostra os valores informados pelo dono e não pede alíquota nem limite do Simples", async ({ page }) => {
+  test("mostra os valores que estão no banco (os do dono) e não pede alíquota nem limite do Simples", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
     await expect(page.getByText("Defina a alíquota do Simples")).toHaveCount(0);
     await expect(page.getByLabel("Alíquota efetiva do Simples")).toHaveCount(0);
     await expect(page.getByLabel("Limite anual do Simples Nacional")).toHaveCount(0);
-    // Financeiro: parâmetros editáveis com os padrões.
-    await expect(page.getByLabel("Vence em breve: próximos")).toHaveValue("7");
-    await expect(page.getByLabel("Gerar contas recorrentes para os próximos")).toHaveValue("3");
-    // Regra do dono: markup 80%, 100% para vidro temperado/guarda-corpo e 5% de acréscimo com nota.
-    await expect(page.getByLabel("Markup padrão sobre o custo")).toHaveValue("80");
-    await expect(page.getByLabel("Markup de vidro temperado e guarda-corpo")).toHaveValue("100");
-    await expect(page.getByLabel("Acréscimo quando a venda é com nota fiscal")).toHaveValue("5");
-    // Dados reais da empresa vêm do seed e do banco, não do código.
-    await expect(page.getByLabel("CNPJ")).toHaveValue("37.323.333/0001-61");
+    // O formulário mostra o que está no banco (o dono pode mudar estes valores: o teste lê o banco, não supõe 7, 80 ou 5).
+    const noBanco = original as Record<string, unknown>;
+    const percentual = (pb: unknown) => String(Number(pb) / 100).replace(".", ","); // 8000 → "80"; 550 → "5,5"
+    await expect(page.getByLabel("Vence em breve: próximos")).toHaveValue(String(noBanco.diasAlertaVencimento));
+    await expect(page.getByLabel("Gerar contas recorrentes para os próximos")).toHaveValue(String(noBanco.mesesRecorrenciaAFrente));
+    await expect(page.getByLabel("Markup padrão sobre o custo")).toHaveValue(percentual(noBanco.markupPadraoPb));
+    await expect(page.getByLabel("Markup de vidro temperado e guarda-corpo")).toHaveValue(percentual(noBanco.markupVidroTemperadoPb));
+    await expect(page.getByLabel("Acréscimo quando a venda é com nota fiscal")).toHaveValue(percentual(noBanco.acrescimoNotaPb));
+    // Os dados da empresa vêm do banco, não do código (compara só os dígitos: o campo mostra o CNPJ formatado).
+    expect((await page.getByLabel("CNPJ").inputValue()).replace(/D/g, "")).toBe(String(noBanco.cnpj ?? "").replace(/D/g, ""));
   });
 
   test("valida no servidor: CNPJ inválido e percentuais fora do limite", async ({ page }) => {
@@ -348,25 +348,26 @@ test.describe("modelos de texto", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(64) } });
 
-  let original: ModeloTextoLinha;
+  // O teste edita o PRÓPRIO modelo (criado aqui, inativo, "E2E ..."), não um que o dono possa ter mudado ou apagado.
+  let proprio: { chave: string; titulo: string };
 
   test.beforeAll(async () => {
-    original = await obterModeloTexto("whatsapp.follow_up");
-    await prepararUsuarioE2E({ senhaDefinitiva: true });
+    await prepararUsuarioE2E({ senhaDefinitiva: true }); // limpa os dados "E2E ..." antigos: o modelo próprio nasce DEPOIS
+    proprio = await criarModeloDeTextoDeTeste("Olá, {{cliente}}! Mensagem de teste da Pontual.");
   });
 
   test.afterAll(async () => {
-    await restaurarModeloTexto(original);
+    await removerModeloDeTextoDeTeste(proprio.chave);
   });
 
-  test("lista os modelos da seed e edita um (com as variáveis em destaque)", async ({ page }) => {
+  test("lista os modelos e edita o do teste (com as variáveis em destaque)", async ({ page }) => {
     await entrarEEsperarPainel(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
     await page.goto("/configuracoes/modelos-texto");
     await semRolagemHorizontal(page);
     await expect(page.getByRole("heading", { name: "Notas da proposta" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Mensagens de WhatsApp" })).toBeVisible();
 
-    await page.getByRole("button", { name: `Editar ${original.titulo}` }).click();
+    await page.getByRole("button", { name: `Editar ${proprio.titulo}` }).click();
     const dialogo = page.getByRole("dialog");
     await expect(dialogo.locator("code").filter({ hasText: /cliente/ })).toBeVisible();
     await dialogo.getByLabel("Título").fill("E2E Título novo");

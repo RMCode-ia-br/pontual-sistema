@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { contasDaProposta, criarCondicaoDePagamentoDeTeste, criarTipologiaDeTeste, prepararUsuarioE2E, tarefasDoProjeto } from "./banco";
+import { contasDaProposta, criarCondicaoDePagamentoDeTeste, criarTipologiaDeTeste, lerCampoConfiguracao, obterModeloTexto, prepararUsuarioE2E, tarefasDoProjeto } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
@@ -11,7 +11,18 @@ test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(93) } });
 const TIPOLOGIA = "E2E Janela de correr";
 const CONDICAO = "E2E 50% sinal + 25% material + 25% vidros e instalação";
 
+// O que a proposta nova herda de Configurações (o dono pode mudar): o teste lê o banco, não supõe "5%" nem o texto das notas.
+let acrescimoNotaPb = 0;
+let validadePadrao = "";
+let inicioDasNotas = "";
+const centavosParaTexto = (c: number) => `R$ ${(c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const percentualParaTexto = (pb: number) => String(pb / 100).replace(".", ","); // 500 → "5"; 550 → "5,5"
+
 test.beforeAll(async () => {
+  acrescimoNotaPb = Number(await lerCampoConfiguracao("acrescimoNotaPb"));
+  validadePadrao = (await obterModeloTexto("proposta.termos.validade").catch(() => null))?.conteudo ?? "Até alteração dos fornecedores";
+  // As notas padrão vêm de um modelo de texto com {{nomeFantasia}}: confere o começo da primeira nota, até a primeira variável.
+  inicioDasNotas = ((await obterModeloTexto("proposta.notas").catch(() => null))?.conteudo ?? "").split(String.fromCharCode(10))[0].split("{{")[0].trim();
   await prepararUsuarioE2E({ senhaDefinitiva: true });
   await criarTipologiaDeTeste(TIPOLOGIA);
   await criarCondicaoDePagamentoDeTeste(CONDICAO);
@@ -66,15 +77,15 @@ test("cria a proposta a partir do projeto, com número, cliente e textos padrão
 
   await expect(page.getByRole("heading", { name: /^Proposta \d{4}-\d{2}$/ })).toBeVisible();
   await expect(page.getByLabel("Cliente", { exact: true })).toHaveValue(CLIENTE);
-  // Textos padrão do modelo (Apêndice A) e validade padrão.
-  await expect(page.getByLabel("Notas importantes", { exact: true })).toHaveValue(/Este serviço está sob os termos e condições da/);
-  await expect(page.getByLabel("Validade (texto)")).toHaveValue("Até alteração dos fornecedores");
-  await expect(page.getByLabel("Acréscimo da nota fiscal (%)")).toHaveValue("5");
+  // Textos padrão do modelo (Apêndice A) e validade padrão: os que estão em Configurações agora.
+  if (inicioDasNotas) expect(await page.getByLabel("Notas importantes", { exact: true }).inputValue()).toContain(inicioDasNotas);
+  await expect(page.getByLabel("Validade (texto)")).toHaveValue(validadePadrao);
+  await expect(page.getByLabel("Acréscimo da nota fiscal (%)")).toHaveValue(percentualParaTexto(acrescimoNotaPb));
   await expect(page.getByLabel(/Comissão do arquiteto/)).toHaveValue("0");
   await semRolagemHorizontal(page);
 });
 
-test("itens: total é a soma calculada; com nota soma 5% em linha separada", async ({ page }) => {
+test("itens: total é a soma calculada; com nota soma o acréscimo de Configurações em linha separada", async ({ page }) => {
   await page.goto(`/propostas/${idProposta}`);
   await expect(page.getByText("Nenhum item nesta opção")).toBeVisible();
 
@@ -90,11 +101,12 @@ test("itens: total é a soma calculada; com nota soma 5% em linha separada", asy
   await expect(page.getByRole("article", { name: "Item 1" })).toContainText(`1 un — ${TIPOLOGIA}`);
   await expect(page.getByRole("article", { name: "Item 2" })).toBeVisible();
 
-  // Com nota: 13.180,00 × 1,05 = 13.839,00 (acréscimo 659,00), em linha separada.
+  // Com nota: 13.180,00 + acréscimo (o percentual que está em Configurações), em linha separada. Com 5%: 659,00 e 13.839,00.
+  const acrescimoCentavos = Math.round((1_318_000 * acrescimoNotaPb) / 10_000);
   await page.getByLabel("Esta venda é COM nota fiscal").check();
-  await expect(totais.getByText("Acréscimo da nota fiscal (5%)")).toBeVisible();
-  await expect(totais.getByText("R$ 659,00")).toBeVisible();
-  await expect(totais.getByText("R$ 13.839,00")).toBeVisible();
+  await expect(totais.getByText(`Acréscimo da nota fiscal (${percentualParaTexto(acrescimoNotaPb)}%)`)).toBeVisible();
+  await expect(totais.getByText(centavosParaTexto(acrescimoCentavos))).toBeVisible();
+  await expect(totais.getByText(centavosParaTexto(1_318_000 + acrescimoCentavos))).toBeVisible();
   await expect(totais.getByText("com nota fiscal")).toBeVisible();
   await capturar(page, "proposta-editor");
 });

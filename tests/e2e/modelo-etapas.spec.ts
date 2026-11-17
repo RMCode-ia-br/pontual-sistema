@@ -1,14 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { prepararUsuarioE2E, restaurarModeloDeEtapas, tirarSnapshotDoModeloDeEtapas } from "./banco";
+import { modeloDeEtapasEhOPadraoDaSeed, prepararUsuarioE2E, restaurarModeloDeEtapas, tirarSnapshotDoModeloDeEtapas } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(93) } });
 
+let modeloPadrao = true;
+const MOTIVO_DO_IGNORADO = "o dono personalizou o modelo de etapas: estas conferências valem para o modelo padrão da seed (9 etapas)";
+
 test.beforeAll(async () => {
   await prepararUsuarioE2E({ senhaDefinitiva: true });
+  modeloPadrao = await modeloDeEtapasEhOPadraoDaSeed();
 });
 
 test.beforeEach(async ({ page }) => {
@@ -16,6 +20,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("modelo de etapas: mostra as 9 etapas do padrão, avisa o que ficaria sem funcionar e não rola na horizontal", async ({ page }) => {
+  test.skip(!modeloPadrao, MOTIVO_DO_IGNORADO);
   await page.goto("/configuracoes/modelo-etapas");
   await expect(page.getByRole("heading", { name: "Modelo de etapas", level: 1 })).toBeVisible();
   await expect(page.getByLabel("Nome da etapa 1")).toHaveValue("Medição exata");
@@ -39,6 +44,7 @@ test("modelo de etapas: mostra as 9 etapas do padrão, avisa o que ficaria sem f
 });
 
 test("modelo de etapas: regras do modelo bloqueiam o salvamento e explicam o motivo", async ({ page }) => {
+  test.skip(!modeloPadrao, MOTIVO_DO_IGNORADO);
   await page.goto("/configuracoes/modelo-etapas");
 
   // Dois gatilhos iguais.
