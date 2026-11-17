@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, FileDown, GitCompare, Loader2, Mail, MessageCircle, Send, Undo2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileDown, GitCompare, Loader2, Mail, MessageCircle, Send, Undo2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -30,6 +30,8 @@ type Props = {
   motivos: { id: string; nome: string }[];
   linkWhatsApp: string | null;
   linkEmail: string | null;
+  /** Existe revisão mais nova (rascunho ou enviada) do mesmo número: aprovar esta a descartaria (Fase 7A.1). */
+  revisaoMaisNova?: { id: string; rotulo: string; aviso: string } | null;
 };
 
 const FORMAS = [
@@ -152,7 +154,7 @@ export function PainelCiclo(p: Props) {
       <ConfirmarAcao aberto={dialogo === "cancelar"} aoFechar={fechar} titulo={`Cancelar a proposta ${p.numero}?`} descricao="Ela deixa de poder ser aprovada. O histórico fica guardado." botao="Cancelar proposta" pendente={pendente} aoConfirmar={() => rodar(() => cancelarProposta(p.propostaId))} />
 
       <Dialog open={dialogo === "aprovar"} onOpenChange={(a) => !a && fechar()}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Aprovar a proposta {p.numero}</DialogTitle>
             <DialogDescription>
@@ -161,6 +163,19 @@ export function PainelCiclo(p: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
+            {p.revisaoMaisNova ? (
+              <div role="alert" className="flex flex-col gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                <p className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+                  <span>
+                    <strong>Atenção:</strong> {p.revisaoMaisNova.aviso}
+                  </span>
+                </p>
+                <Link href={`/propostas/${p.revisaoMaisNova.id}`} className={buttonVariants({ variant: "outline", size: "sm" }) + " w-fit"}>
+                  Abrir a {p.revisaoMaisNova.rotulo}
+                </Link>
+              </div>
+            ) : null}
             {p.opcoes.length > 1 ? (
               <label className="grid gap-1 text-sm">
                 Opção aprovada

@@ -30,20 +30,23 @@ export function diasDesdeOEnvio(enviadaEm: Date | null, agora: Date = new Date()
 
 const variante = (s: string) => (s === "APROVADA" ? "default" : s === "RECUSADA" || s === "CANCELADA" ? "destructive" : "secondary");
 
-export function TabelaPropostas({ propostas, mostrarProjeto = true }: { propostas: PropostaDaLista[]; mostrarProjeto?: boolean }) {
+/** `marcas` (de `marcasDeRevisao`): números com mais de uma revisão e a revisão vigente de cada um. */
+export function TabelaPropostas({ propostas, mostrarProjeto = true, marcas }: { propostas: PropostaDaLista[]; mostrarProjeto?: boolean; marcas?: { vigentes: string[]; comRevisoes: string[] } }) {
   return (
     <ul className="grid gap-2">
       {propostas.map((p) => {
         const dias = p.status === "ENVIADA" ? diasDesdeOEnvio(p.enviadaEm) : null;
+        const temRevisoes = marcas?.comRevisoes.includes(p.numero) ?? false;
         return (
           <li key={p.id}>
             <Link href={`/propostas/${p.id}`} className="hover:bg-muted/50 grid gap-1 rounded-xl border p-4 transition-colors sm:grid-cols-[1fr_auto] sm:items-center">
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2 font-medium">
                   {p.numero}
-                  {p.revisao > 0 ? <span className="text-muted-foreground text-xs font-normal">{formatarRevisao(p.revisao)}</span> : null}
+                  {p.revisao > 0 ? <span className="text-muted-foreground text-xs font-normal">{formatarRevisao(p.revisao)}</span> : temRevisoes ? <span className="text-muted-foreground text-xs font-normal">Original</span> : null}
                   {p.parte ? <span className="text-muted-foreground text-xs font-normal">{p.parte}</span> : null}
                   <Badge variant={variante(p.status)}>{ROTULO_STATUS_PROPOSTA[p.status]}</Badge>
+                  {temRevisoes && marcas?.vigentes.includes(p.id) ? <Badge variant="outline">Vigente</Badge> : null}
                   {p.comNotaFiscal ? <Badge variant="outline">Com nota</Badge> : null}
                 </p>
                 <p className="text-muted-foreground truncate text-sm">

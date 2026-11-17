@@ -179,6 +179,9 @@ test("ciclo: enviar congela, nova revisão compara, aprovar gera parcelas e leva
   await page.goto(`/propostas/${idProposta}`);
   await page.getByRole("button", { name: "Aprovar", exact: true }).click();
   const dialogo = page.getByRole("dialog");
+  // Fase 7A.1: a Rev. 1 (rascunho) é mais nova; o diálogo avisa e aponta para ela, mas deixa aprovar a original.
+  await expect(dialogo.getByText("A Rev. 1 é mais recente (rascunho). Aprovar esta, a original, vai descartar a Rev. 1.")).toBeVisible();
+  await expect(dialogo.getByRole("link", { name: "Abrir a Rev. 1" })).toBeVisible();
   await dialogo.getByLabel("Opção aprovada").selectOption({ index: 0 });
   await dialogo.getByLabel("Forma do aceite").selectOption("WHATSAPP");
   await dialogo.getByRole("button", { name: "Aprovar proposta" }).click();

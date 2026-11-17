@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { situacaoDasRevisoes } from "@/lib/dominio/desfazer-aprovacao";
 import { calcularPaginacao, lerParametrosLista, type ParametrosBrutos } from "@/lib/listas/parametros";
 import { STATUS_PROPOSTA } from "./schemas";
 
@@ -146,6 +147,27 @@ export async function listarProjetosParaProposta() {
     take: 300,
     select: { id: true, codigo: true, titulo: true, cliente: { select: { nome: true } } },
   });
+}
+
+/**
+ * Para as listas: dos números que aparecem na tela, quais têm mais de uma revisão e qual é a vigente de cada um
+ * (consulta todas as revisões, mesmo as que o filtro da lista esconde).
+ */
+export async function marcasDeRevisao(numeros: string[]): Promise<{ vigentes: string[]; comRevisoes: string[] }> {
+  const unicos = [...new Set(numeros)];
+  if (unicos.length === 0) return { vigentes: [], comRevisoes: [] };
+  const todas = await prisma.proposta.findMany({ where: { numero: { in: unicos }, deletadoEm: null }, select: { id: true, numero: true, revisao: true, status: true } });
+  const porNumero = new Map<string, typeof todas>();
+  for (const p of todas) porNumero.set(p.numero, [...(porNumero.get(p.numero) ?? []), p]);
+  const vigentes: string[] = [];
+  const comRevisoes: string[] = [];
+  for (const [numero, grupo] of porNumero) {
+    if (grupo.length < 2) continue;
+    comRevisoes.push(numero);
+    const { vigenteId } = situacaoDasRevisoes(grupo.map((g) => ({ id: g.id, revisao: g.revisao, status: g.status, temSnapshot: false })));
+    if (vigenteId) vigentes.push(vigenteId);
+  }
+  return { vigentes, comRevisoes };
 }
 
 /** Todas as revisões do mesmo número (da mais nova para a mais antiga). */

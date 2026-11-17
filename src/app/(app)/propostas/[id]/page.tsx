@@ -13,7 +13,9 @@ import { calcularTotais } from "@/lib/dominio/preco";
 import { formatarData, formatarMoeda, formatarDataHora, hojeCalendario } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
+import { revisaoMaisNovaEmAberto, rotuloDaRevisao, situacaoDasRevisoes, textoDoAvisoDeRevisaoMaisNova } from "@/lib/dominio/desfazer-aprovacao";
 import { AcoesDaProposta } from "@/modules/propostas/components/acoes-da-proposta";
+import { AcoesDeAprovacao } from "@/modules/propostas/components/acoes-de-aprovacao";
 import { EditorProposta } from "@/modules/propostas/components/editor-proposta";
 import { PainelCiclo } from "@/modules/propostas/components/painel-ciclo";
 import { itensComCustoDesatualizado, listarMotivosDeRecusa, listarOpcoesDoEditor, listarRevisoes, obterMensagemDeEnvio, obterPropostaParaEditor } from "@/modules/propostas/queries";
@@ -60,6 +62,13 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
   const vencida = status === "ENVIADA" && proposta.validadeAte && proposta.validadeAte < hojeCalendario();
   const variante = status === "APROVADA" ? "default" : status === "RECUSADA" || status === "CANCELADA" ? "destructive" : "secondary";
 
+  // Qual revisão vale (7A.1): evita aprovar a original sem ver que existe uma revisão mais nova.
+  const revisoesBasicas = revisoes.map((r) => ({ id: r.id, revisao: r.revisao, status: r.status as StatusProposta, temSnapshot: r.enviadaEm !== null }));
+  const temRevisoes = revisoes.length > 1;
+  const { vigenteId } = situacaoDasRevisoes(revisoesBasicas);
+  const vigente = revisoesBasicas.find((r) => r.id === vigenteId) ?? null;
+  const maisNova = revisaoMaisNovaEmAberto({ id: proposta.id, revisao: proposta.revisao }, revisoesBasicas);
+
   return (
     <>
       <p className="mb-2 text-sm">
@@ -69,11 +78,20 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
       </p>
       <CabecalhoPagina
         titulo={`Proposta ${proposta.numero}`}
-        descricao={`${proposta.clienteNome}${proposta.parte ? ` · ${proposta.parte}` : ""}${proposta.revisao > 0 ? ` · ${formatarRevisao(proposta.revisao)}` : ""}`}
+        descricao={`${proposta.clienteNome}${proposta.parte ? ` · ${proposta.parte}` : ""}${proposta.revisao > 0 ? ` · ${formatarRevisao(proposta.revisao)}` : temRevisoes ? " · Original" : ""}`}
         acoes={<AcoesDaProposta propostaId={proposta.id} numero={proposta.numero} rascunho={rascunho} />}
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Badge variant={variante}>{ROTULO_STATUS_PROPOSTA[status]}</Badge>
+        {temRevisoes && vigente?.id === proposta.id ? <Badge variant="outline">Revisão vigente</Badge> : null}
+        {temRevisoes && vigente && vigente.id !== proposta.id ? (
+          <Badge variant="outline">
+            Não vigente: a vigente é a{" "}
+            <Link href={`/propostas/${vigente.id}`} className="underline">
+              {rotuloDaRevisao(vigente.revisao)}
+            </Link>
+          </Badge>
+        ) : null}
         {proposta.comNotaFiscal ? <Badge variant="outline">Com nota fiscal</Badge> : <Badge variant="outline">Sem nota fiscal</Badge>}
         {vencida ? <Badge variant="destructive">Validade vencida em {formatarData(proposta.validadeAte as Date)}</Badge> : null}
         {proposta.validadeEncerradaPorReajuste ? <Badge variant="destructive">Validade encerrada por reajuste</Badge> : null}
@@ -106,15 +124,26 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
           motivos={motivos}
           linkWhatsApp={wa}
           linkEmail={email}
+          revisaoMaisNova={maisNova ? { id: maisNova.id, rotulo: rotuloDaRevisao(maisNova.revisao), aviso: textoDoAvisoDeRevisaoMaisNova({ revisao: proposta.revisao }, maisNova) } : null}
         />
-        {revisoes.length > 1 ? (
+        {status === "APROVADA" || status === "SUBSTITUIDA" ? (
+          <AcoesDeAprovacao
+            propostaId={proposta.id}
+            numero={proposta.numero}
+            revisao={proposta.revisao}
+            status={status}
+            temSnapshot={proposta.enviadaEm !== null}
+            irmas={revisoesBasicas.filter((r) => r.id !== proposta.id)}
+          />
+        ) : null}
+        {temRevisoes ? (
           <p className="text-muted-foreground mt-2 text-sm">
             Revisões deste número:{" "}
             {revisoes.map((r, i) => (
               <span key={r.id}>
                 {i > 0 ? " · " : ""}
                 {r.id === proposta.id ? <strong>{r.revisao === 0 ? "original" : formatarRevisao(r.revisao)}</strong> : <Link href={`/propostas/${r.id}`} className="text-primary underline">{r.revisao === 0 ? "original" : formatarRevisao(r.revisao)}</Link>}
-                {` (${ROTULO_STATUS_PROPOSTA[r.status as StatusProposta].toLowerCase()})`}
+                {` (${ROTULO_STATUS_PROPOSTA[r.status as StatusProposta].toLowerCase()}${r.id === vigenteId ? ", vigente" : ""})`}
               </span>
             ))}
           </p>

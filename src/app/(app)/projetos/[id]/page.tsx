@@ -26,7 +26,7 @@ import { ControleDoProjeto } from "@/modules/projetos/components/controle-do-pro
 import { FormProjeto } from "@/modules/projetos/components/form-projeto";
 import { ResumoDoProjeto } from "@/modules/projetos/components/resumo-do-projeto";
 import { listarMotivosPerda, obterProjeto } from "@/modules/projetos/queries";
-import { listarPropostasDoProjeto } from "@/modules/propostas/queries";
+import { listarPropostasDoProjeto, marcasDeRevisao } from "@/modules/propostas/queries";
 import { TabelaPropostas } from "@/modules/propostas/components/tabela-propostas";
 import { ListaTarefas } from "@/modules/tarefas/components/lista-tarefas";
 import { listarTarefas } from "@/modules/tarefas/queries";
@@ -193,7 +193,7 @@ async function PropostasDoProjeto({ projetoId }: { projetoId: string }) {
       {propostas.length === 0 ? (
         <EstadoVazio icone={FileText} titulo="Nenhuma proposta neste projeto" descricao="Crie a proposta: ela já nasce com o cliente, o endereço da obra e os textos padrão, e você importa as medidas da visita." />
       ) : (
-        <TabelaPropostas propostas={propostas} mostrarProjeto={false} />
+        <TabelaPropostas propostas={propostas} mostrarProjeto={false} marcas={await marcasDeRevisao(propostas.map((p) => p.numero))} />
       )}
     </div>
   );

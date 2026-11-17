@@ -859,3 +859,61 @@ export async function criarRecebimentoDeTeste(projetoId: string, opcoes: { data:
 export async function definirLimiteComNotaNoBanco(centavos: number | null): Promise<void> {
   await comConexao((c) => c.query(`UPDATE "ConfiguracaoEmpresa" SET "limiteSimplesCentavos" = $1 WHERE id = 'singleton'`, [centavos]));
 }
+
+// ---- Fase 7A.1: desfazer, trocar e reabrir a aprovação ----
+
+export type PropostaDeTeste = { projetoId: string; propostaId: string; numero: string; titulo: string };
+
+/**
+ * Obra "E2E Obra <nome>" (fase "Elaborando proposta") com UMA proposta em RASCUNHO pronta para enviar: uma opção, dois itens
+ * (R$ 12.000,00 + R$ 800,00 = R$ 12.800,00) e cronograma 50% na confirmação / 50% na entrega e instalação. O número é
+ * "E2E-xxxxxx" (não consome a fila real). Tudo tem prefixo "E2E " e é apagado por `limpar()`.
+ */
+export async function criarPropostaRascunhoDeTeste(nome: string): Promise<PropostaDeTeste> {
+  return comConexao(async (c) => {
+    const clienteId = randomUUID();
+    const projetoId = randomUUID();
+    const propostaId = randomUUID();
+    const opcaoId = randomUUID();
+    const numero = `E2E-${randomUUID().slice(0, 6)}`;
+    const titulo = `E2E Obra ${nome}`;
+    await c.query(`INSERT INTO "Cliente" (id, "tipoPessoa", nome, "atualizadoEm") VALUES ($1, 'PF', $2, now())`, [clienteId, `E2E Cliente ${nome}`]);
+    await c.query(`INSERT INTO "Projeto" (id, codigo, titulo, "clienteId", status, "atualizadoEm") VALUES ($1, $2, $3, $4, 'ELABORANDO_PROPOSTA'::"StatusProjeto", now())`, [projetoId, `P-0000-${randomUUID().slice(0, 8)}`, titulo, clienteId]);
+    await c.query(
+      `INSERT INTO "Proposta" (id, "projetoId", numero, "numeroSequencial", ano, revisao, data, "clienteNome", "modoPrazo", "prazoTotalMaxDias", "atualizadoEm")
+       VALUES ($1, $2, $3, 1, 20, 0, CURRENT_DATE, $4, 'TOTAL'::"ModoPrazo", 35, now())`,
+      [propostaId, projetoId, numero, `E2E Cliente ${nome}`],
+    );
+    await c.query(`INSERT INTO "OpcaoProposta" (id, "propostaId", nome, ordem, "atualizadoEm") VALUES ($1, $2, 'Opção 1', 0, now())`, [opcaoId, propostaId]);
+    for (const [ordem, valor] of [[0, 1_200_000], [1, 80_000]] as const) {
+      const itemId = randomUUID();
+      await c.query(
+        `INSERT INTO "ItemProposta" (id, "propostaId", "opcaoId", ordem, descricao, "valorManualCentavos", "precoTotalCentavos", "atualizadoEm") VALUES ($1, $2, $3, $4, $5, $6, $6, now())`,
+        [itemId, propostaId, opcaoId, ordem, `ITEM E2E ${ordem + 1}`, valor],
+      );
+      await c.query(`INSERT INTO "ItemPropostaMedida" (id, "itemId", "larguraMm", "alturaMm", quantidade, "atualizadoEm") VALUES ($1, $2, 1000, 1000, 1, now())`, [randomUUID(), itemId]);
+    }
+    for (const [ordem, descricao, gatilho] of [[1, "Sinal", "CONFIRMACAO"], [2, "Entrega e instalação", "ENTREGA_E_INSTALACAO"]] as const) {
+      await c.query(
+        `INSERT INTO "PropostaParcela" (id, "propostaId", ordem, descricao, "percentualPb", gatilho, forma, "atualizadoEm") VALUES ($1, $2, $3, $4, 5000, $5::"GatilhoPagamento", 'PIX'::"FormaPagamento", now())`,
+        [randomUUID(), propostaId, ordem, descricao, gatilho],
+      );
+    }
+    return { projetoId, propostaId, numero, titulo };
+  });
+}
+
+/** Status de cada revisão de um número, da original para a mais nova. */
+export async function statusDasRevisoes(numero: string): Promise<{ revisao: number; status: string }[]> {
+  return comConexao(async (c) => (await c.query<{ revisao: number; status: string }>(`SELECT revisao, status::text AS status FROM "Proposta" WHERE numero = $1 AND "deletadoEm" IS NULL ORDER BY revisao`, [numero])).rows);
+}
+
+/** O que está vivo na obra: etapas, parcelas ligadas a alguma proposta e valor fechado (para conferir o desfazer e a troca). */
+export async function estadoDaObraDeTeste(projetoId: string): Promise<{ etapasVivas: number; parcelasVivas: number; valorFechadoCentavos: number | null; status: string; prazoDias: number | null }> {
+  return comConexao(async (c) => {
+    const etapas = await c.query<{ n: number }>(`SELECT count(*)::int AS n FROM "EtapaProjeto" WHERE "projetoId" = $1 AND "deletadoEm" IS NULL`, [projetoId]);
+    const parcelas = await c.query<{ n: number }>(`SELECT count(*)::int AS n FROM "ContaReceber" WHERE "projetoId" = $1 AND "deletadoEm" IS NULL`, [projetoId]);
+    const p = await c.query<{ valorFechadoCentavos: number | null; status: string; prazoDias: number | null }>(`SELECT "valorFechadoCentavos", status::text AS status, "prazoDias" FROM "Projeto" WHERE id = $1`, [projetoId]);
+    return { etapasVivas: etapas.rows[0].n, parcelasVivas: parcelas.rows[0].n, valorFechadoCentavos: p.rows[0].valorFechadoCentavos, status: p.rows[0].status, prazoDias: p.rows[0].prazoDias };
+  });
+}

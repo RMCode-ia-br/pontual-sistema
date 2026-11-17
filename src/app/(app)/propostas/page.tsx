@@ -9,7 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { Selecao } from "@/components/formulario";
-import { listarPropostas } from "@/modules/propostas/queries";
+import { listarPropostas, marcasDeRevisao } from "@/modules/propostas/queries";
 import { ROTULO_STATUS_PROPOSTA, STATUS_PROPOSTA } from "@/modules/propostas/schemas";
 import { TabelaPropostas } from "@/modules/propostas/components/tabela-propostas";
 
@@ -71,7 +71,7 @@ export default async function PaginaPropostas({ searchParams }: { searchParams: 
         />
       ) : (
         <>
-          <TabelaPropostas propostas={linhas} />
+          <TabelaPropostas propostas={linhas} marcas={await marcasDeRevisao(linhas.map((l) => l.numero))} />
           <PaginacaoLista base="/propostas" atuais={{ busca: parametros.busca || undefined, status: filtros.status, revisoes: filtros.revisoes === "todas" ? "todas" : undefined, tamanho: parametros.tamanho, ordem: parametros.ordem, direcao: parametros.direcao }} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>
       )}
