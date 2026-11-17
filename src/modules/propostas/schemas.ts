@@ -4,6 +4,7 @@ import { FORMAS_PAGAMENTO, GATILHOS, MAXIMO_PARCELAS_CARTAO, validarParcelas, ty
 import { valorParaCentavos } from "@/lib/dominio/numeros";
 import { percentualParaPontosBase } from "@/lib/dominio/preco";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
+import { normalizarQuebrasDeLinha } from "@/lib/validadores/texto-multilinha";
 
 export const MODOS_PRECO = ["MANUAL", "TABELA", "COMPOSICAO"] as const;
 export const ROTULO_MODO_PRECO: Record<(typeof MODOS_PRECO)[number], string> = { MANUAL: "Valor manual", TABELA: "Tabela de preços", COMPOSICAO: "Composição (custo + markup)" };
@@ -20,6 +21,13 @@ export const ROTULO_STATUS_PROPOSTA: Record<(typeof STATUS_PROPOSTA)[number], st
 };
 
 const texto = (max: number) => z.string().trim().max(max, `Use no máximo ${max} caracteres.`);
+/** Tamanho máximo dos dados para pagamento (várias linhas), na proposta e no padrão da empresa. */
+export const LIMITE_DADOS_PAGAMENTO = 1000;
+/** Só o modelo cinza do campo vazio (placeholder); nenhum dado real é gravado por ele. */
+export const EXEMPLO_DADOS_PAGAMENTO = ["Favorecido: …", "Banco: …", "Agência: …", "Conta: …", "Chave Pix: …"].join("\n");
+/** Dica sob o campo de dados para pagamento (proposta e Configurações). */
+export const DICA_DADOS_PAGAMENTO = "Uma informação por linha, por exemplo: Favorecido, Banco, Agência, Conta, Chave Pix. As quebras de linha saem iguais no PDF.";
+const textoEmLinhas = (max: number) => z.preprocess((v) => (typeof v === "string" ? normalizarQuebrasDeLinha(v) : v), texto(max).optional());
 const idOpcional = z.string().trim().max(64).nullish().transform((v) => (v ? v : null));
 const inteiroOpcional = (rotulo: string, min: number, max: number) =>
   z
@@ -176,7 +184,8 @@ export const propostaSchema = z.object({
   validadeAte: data,
   condicaoId: idOpcional,
   condicaoTextoLivre: texto(500).optional(),
-  dadosPagamento: texto(500).optional(),
+  /** Várias linhas, uma informação por linha (favorecido, banco, agência, conta, Pix). */
+  dadosPagamento: textoEmLinhas(LIMITE_DADOS_PAGAMENTO),
   notas: z.array(texto(1000).min(1)).max(40, "No máximo 40 notas."),
   exibirValorPorItem: z.boolean(),
   descricoesMaiusculas: z.boolean(),

@@ -2,6 +2,7 @@ import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
 
 import { linhasDePagamento, linhasDePrazo, notasNumeradas, textoDoRodape } from "@/lib/dominio/texto-proposta";
 import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
+import { linhasDoTexto } from "@/lib/validadores/texto-multilinha";
 
 import type { ConteudoProposta } from "../conteudo";
 import { CaixaTitulo, COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, moeda, NEGRITO, Rodape } from "./comum";
@@ -153,7 +154,16 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
               ))}
             </View>
           ))}
-          {c.pagamento.dadosPagamento ? <Text style={{ ...NEGRITO, fontSize: 8.5, marginTop: 4 }}>{c.pagamento.dadosPagamento}</Text> : null}
+          {c.pagamento.dadosPagamento ? (
+            // Uma linha de texto por linha digitada (favorecido, banco, agência, conta, Pix). Linha em branco vira espaço.
+            <View style={{ marginTop: 4 }}>
+              {linhasDoTexto(c.pagamento.dadosPagamento).map((l, i) => (
+                <Text key={i} style={{ ...NEGRITO, fontSize: 8.5 }}>
+                  {l === "" ? " " : l}
+                </Text>
+              ))}
+            </View>
+          ) : null}
 
           {prazo.length > 0 ? (
             <View style={{ marginTop: 8 }}>

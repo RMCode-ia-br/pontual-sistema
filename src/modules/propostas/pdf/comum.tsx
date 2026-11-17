@@ -2,12 +2,13 @@ import { Font, Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
 
 import { ALTURA_QUADRO, gerarDesenho, LARGURA_QUADRO, type TipoDesenho } from "@/lib/dominio/desenho";
 import { FAMILIA_PDF, registrarFontesDoPdf } from "@/lib/pdf/fontes";
+import { quebrasDaPalavra } from "@/lib/pdf/quebra-de-palavras";
 import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca } from "@/lib/tema/derivar";
 
 export { FAMILIA_PDF };
 
-// As propostas reais não hifenizam palavras ("TEM-PERADO"): desliga a hifenização automática do react-pdf.
-Font.registerHyphenationCallback((palavra) => [palavra]);
+// As propostas reais não hifenizam palavras ("TEM-PERADO"): a palavra fica inteira, salvo as longas demais para caber numa linha.
+Font.registerHyphenationCallback((palavra) => quebrasDaPalavra(palavra));
 // Geist, a mesma fonte da interface (os TTF vão junto no deploy; ver next.config.ts).
 registrarFontesDoPdf();
 

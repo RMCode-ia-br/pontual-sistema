@@ -106,11 +106,16 @@ test("salvar, recarregar, duplicar opção e item; rascunho não aceita item sem
   // Cronograma 50/25/25 do modelo.
   await page.getByLabel("Modelo de condição de pagamento").selectOption({ label: CONDICAO });
   await expect(page.getByText("Soma: 100%")).toBeVisible();
+  // Dados para pagamento em várias linhas (uma informação por linha): as quebras sobrevivem ao salvar e recarregar.
+  const dadosPagamento = "Favorecido: E2E Empresa\nBanco: E2E Banco\nAgência: 0001\nConta: 12345-6\nChave Pix: e2e@exemplo.com.br";
+  await page.getByLabel("Dados para pagamento", { exact: true }).fill(dadosPagamento);
+  await capturar(page, "proposta-dados-pagamento");
   await page.getByRole("button", { name: "Salvar proposta" }).click();
   await expect(toast(page, "Proposta salva")).toBeVisible();
   await aguardarAvisosSumirem(page);
 
   await page.reload();
+  await expect(page.getByLabel("Dados para pagamento", { exact: true })).toHaveValue(dadosPagamento);
   await expect(page.getByLabel("Esta venda é COM nota fiscal")).toBeChecked();
   await expect(page.getByLabel("Parte (ex.: Parte 01/02)")).toHaveValue("Parte 01/02");
   await expect(page.getByLabel("Percentual da parcela 1")).toHaveValue("50");

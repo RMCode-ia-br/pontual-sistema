@@ -1,3 +1,8 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -8,6 +13,9 @@ import { PropostaPdf } from "@/modules/propostas/pdf/proposta-pdf";
 import { conteudoDeExemplo } from "./fixtures-proposta";
 
 type Documento = Parameters<typeof renderToBuffer>[0];
+/** `pdftotext` (poppler) lê o texto do PDF; sem ele, só os testes que o usam são pulados (o resto roda). */
+const temPdftotext = spawnSync("pdftotext", ["-v"], { stdio: "ignore" }).error === undefined; // o poppler sai com 99 em -v; só ENOENT importa
+
 const paginas = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Type \/Page[^s]/g) ?? []).length;
 
 describe("PDF da proposta (react-pdf)", () => {
@@ -37,6 +45,59 @@ describe("PDF da proposta (react-pdf)", () => {
     expect(c.opcoes[1].totais.totalCentavos).toBe(99750);
     const pdf = await renderToBuffer(createElement(PropostaPdf, { c, logo: null }) as unknown as Documento);
     expect(pdf.length).toBeGreaterThan(4000);
+  });
+
+  describe.skipIf(!temPdftotext)("dados para pagamento em várias linhas", () => {
+    // Defeito conhecido, só da camada de TEXTO do PDF (o desenho está certo; PENDENCIAS): depois de algumas gerações no
+    // mesmo processo, o "c" minúsculo da fonte em negrito deixa de constar no texto extraído ("Ban o"). Estes testes
+    // verificam as QUEBRAS e a integridade do texto, então comparam os dois lados sem essa letra.
+    const semC = (texto: string) => texto.replace(/[c ]/g, "");
+
+    /** Texto do PDF na ordem de leitura, como `pdftotext` o extrai (uma linha do papel por linha de saída), sem o "c". */
+    async function textoDoPdf(dadosPagamento: string): Promise<string[]> {
+      const c = conteudoDeExemplo([{ descricao: "PORTA", valorCentavos: 100000 }]);
+      c.pagamento.dadosPagamento = dadosPagamento;
+      const pdf = await renderToBuffer(createElement(PropostaPdf, { c, logo: null }) as unknown as Documento);
+      const dir = mkdtempSync(join(tmpdir(), "pdf-pagamento-"));
+      try {
+        const arquivo = join(dir, "proposta.pdf");
+        writeFileSync(arquivo, pdf);
+        return execFileSync("pdftotext", ["-raw", "-enc", "UTF-8", arquivo, "-"], { encoding: "utf8" })
+          .split("\n")
+          .map((l) => semC(l.trim()));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it("cada linha digitada sai em uma linha do papel, na mesma ordem", async () => {
+      const digitado = ["Favorecido: Pontual Soluções", "Banco: Exemplo S.A.", "Agência: 0001", "Conta: 12345-6", "Chave Pix: exemplo@pontual.com.br"];
+      const linhas = await textoDoPdf(digitado.join("\n"));
+      const esperado = digitado.map(semC);
+      const i = linhas.findIndex((l) => l === esperado[0]);
+      expect(i).toBeGreaterThan(-1);
+      expect(linhas.slice(i, i + 5)).toEqual(esperado);
+    });
+
+    it("fim de linha do navegador (CRLF) não deixa lixo nem junta as linhas", async () => {
+      const linhas = await textoDoPdf("Banco: A\r\nConta: B");
+      const i = linhas.findIndex((l) => l === semC("Banco: A"));
+      expect(i).toBeGreaterThan(-1);
+      expect(linhas[i + 1]).toBe(semC("Conta: B"));
+    });
+
+    it("linha muito longa quebra sem cortar nenhum caractere", async () => {
+      const longa = "Chave Pix: " + "abcdefghij0123456789".repeat(8); // uma palavra de 160 caracteres sem espaço
+      const linhas = await textoDoPdf(`Banco: Exemplo\n${longa}\nConta: 1`);
+      const de = linhas.findIndex((l) => l === semC("Banco: Exemplo"));
+      const ate = linhas.findIndex((l) => l === semC("Conta: 1"));
+      expect(de).toBeGreaterThan(-1);
+      expect(ate).toBeGreaterThan(de);
+      const doMeio = linhas.slice(de + 1, ate);
+      expect(doMeio.length).toBeGreaterThan(1); // ocupou mais de uma linha do papel
+      // Nada se perdeu: sem os espaços e sem o hífen que marca a quebra, é o texto digitado.
+      expect(doMeio.join("").replace(/[\s-]/g, "")).toBe(semC(longa).replace(/\s/g, ""));
+    });
   });
 
   it("a folha de produção também gera (sem valores)", async () => {

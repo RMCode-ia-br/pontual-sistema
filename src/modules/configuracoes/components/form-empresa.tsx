@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 import { enviarAnexo } from "@/modules/anexos/components/anexos";
+import { DICA_DADOS_PAGAMENTO, EXEMPLO_DADOS_PAGAMENTO, LIMITE_DADOS_PAGAMENTO } from "@/modules/propostas/schemas";
 
 import { definirLogoEmpresa, salvarEmpresa } from "../actions/empresa";
 
@@ -184,8 +185,8 @@ export function FormEmpresa({ valores, marcados, categoriasDeReceita }: Props) {
           </div>
           {t("consultorNome", "Consultor na assinatura")}
           {t("consultorCargo", "Cargo na assinatura")}
-          <Campo id="dadosPagamento" rotulo="Dados para pagamento (aparecem nos termos)" erro={erros.dadosPagamento} className="sm:col-span-2">
-            <AreaTexto id="dadosPagamento" name="dadosPagamento" maxLength={500} defaultValue={valores.dadosPagamento} {...ariaDoCampo("dadosPagamento", erros.dadosPagamento)} />
+          <Campo id="dadosPagamento" rotulo="Dados para pagamento (aparecem nos termos)" erro={erros.dadosPagamento} dica={`${DICA_DADOS_PAGAMENTO} Vale para as propostas novas; as já criadas não mudam.`} className="sm:col-span-2">
+            <AreaTexto id="dadosPagamento" name="dadosPagamento" rows={5} maxLength={LIMITE_DADOS_PAGAMENTO} placeholder={EXEMPLO_DADOS_PAGAMENTO} defaultValue={valores.dadosPagamento} {...ariaDoCampo("dadosPagamento", erros.dadosPagamento, DICA_DADOS_PAGAMENTO)} />
           </Campo>
           <div className="grid gap-1 sm:col-span-2">
             <CaixaMarcacao id="pdfExibirValorPorItem" name="pdfExibirValorPorItem" rotulo="Mostrar o valor de cada item no PDF" defaultChecked={marcados.pdfExibirValorPorItem} />

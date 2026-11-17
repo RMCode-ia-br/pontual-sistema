@@ -4,6 +4,8 @@ import { faixasValidas } from "@/lib/dominio/porte";
 import { MARKUP_MAXIMO_PB, percentualParaPontosBase, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarTelefone, normalizarTelefone, parseMoedaParaCentavos } from "@/lib/formatadores";
 import { emailValido, formatarCep, formatarCnpj, somenteDigitos, urlHttpValida, validarCnpj } from "@/lib/validadores";
+import { normalizarQuebrasDeLinha } from "@/lib/validadores/texto-multilinha";
+import { LIMITE_DADOS_PAGAMENTO } from "@/modules/propostas/schemas";
 
 /** Campo ausente do FormData vira texto vazio (ex.: caixa de seleção desmarcada). */
 const campo = <T extends z.ZodType>(schema: T) => z.preprocess((v) => v ?? "", schema);
@@ -15,6 +17,21 @@ const texto = (max: number) =>
       .trim()
       .max(max, `Use no máximo ${max} caracteres.`)
       .transform((v) => (v === "" ? null : v)),
+  );
+
+/** Texto de várias linhas (textarea): as quebras do meio são preservadas e padronizadas em LF. */
+const textoEmLinhas = (max: number) =>
+  campo(
+    z
+      .string()
+      .transform(normalizarQuebrasDeLinha)
+      .pipe(
+        z
+          .string()
+          .trim()
+          .max(max, `Use no máximo ${max} caracteres.`)
+          .transform((v) => (v === "" ? null : v)),
+      ),
   );
 
 const url = campo(
@@ -247,7 +264,7 @@ export const empresaSchema = z
     reiniciaNumeracaoPorAno: marcado,
     consultorNome: texto(120),
     consultorCargo: texto(120),
-    dadosPagamento: texto(500),
+    dadosPagamento: textoEmLinhas(LIMITE_DADOS_PAGAMENTO),
     pdfExibirValorPorItem: marcado,
     pdfDescricoesMaiusculas: marcado,
   })

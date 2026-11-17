@@ -20,6 +20,7 @@ import { useProtecaoDeSaida } from "@/lib/hooks/usar-protecao-de-saida";
 
 import { duplicarOpcao, duplicarItem, importarMedidasDaVisita, moverGrupo, moverItem, removerGrupo, removerItem, removerOpcao, salvarGrupo, salvarOpcao } from "../actions/estrutura";
 import { salvarProposta } from "../actions/propostas";
+import { DICA_DADOS_PAGAMENTO, EXEMPLO_DADOS_PAGAMENTO, LIMITE_DADOS_PAGAMENTO } from "../schemas";
 import type { ItemSer, OpcoesEditor, PropostaSer } from "../tipos";
 import { DialogoItem } from "./dialogo-item";
 import { PainelTotais } from "./painel-totais";
@@ -434,7 +435,19 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
               ) : null}
             </div>
           )}
-          {campo("Dados para pagamento (aparecem nos termos)", f.dadosPagamento, (v) => set("dadosPagamento", v), { max: 500 })}
+          <label className="grid gap-1 text-sm">
+            Dados para pagamento (aparecem nos termos)
+            <AreaTexto
+              value={f.dadosPagamento}
+              rows={5}
+              maxLength={LIMITE_DADOS_PAGAMENTO}
+              disabled={L}
+              aria-label="Dados para pagamento"
+              placeholder={EXEMPLO_DADOS_PAGAMENTO}
+              onChange={(e) => set("dadosPagamento", e.target.value)}
+            />
+            <span className="text-muted-foreground text-xs">{DICA_DADOS_PAGAMENTO}</span>
+          </label>
         </section>
 
         {/* ---------- Notas e PDF ---------- */}
