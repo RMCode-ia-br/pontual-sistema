@@ -3,7 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { lerPeriodo, limitesDeCalendario, limitesEmInstantes, type Periodo } from "@/lib/periodo";
-import { carregarCustoDaObra } from "@/modules/obras/queries-custo";
+import { carregarCustosDasObras } from "@/modules/obras/queries-custo";
 
 export type SituacaoDoRelatorio = "andamento" | "concluidas" | "todas";
 
@@ -48,7 +48,7 @@ export type RelatorioDeMargem = {
 
 const LIMITE = 150;
 
-/** Margem de cada obra (a mesma conta da aba "Custo e margem" da obra, uma obra por vez, com a origem de cada custo lá). */
+/** Margem de cada obra (a mesma conta da aba "Custo e margem" da obra, lida em LOTE: o mesmo número de consultas para 1 ou 150 obras). */
 /**
  * Com período, filtra as concluídas pela data da conclusão e as demais pela data da aprovação (primeira aprovação do projeto).
  */
@@ -65,9 +65,11 @@ export async function carregarMargemDasObras(f: FiltroDeMargem): Promise<Relator
     take: LIMITE + 1,
     select: { id: true, codigo: true, titulo: true, status: true, cliente: { select: { nome: true } } },
   });
+  const dasObras = obras.slice(0, LIMITE);
+  const custos = await carregarCustosDasObras(dasObras.map((o) => o.id));
   const linhas: LinhaDeMargem[] = [];
-  for (const o of obras.slice(0, LIMITE)) {
-    const c = (await carregarCustoDaObra(o.id)).resultado;
+  for (const o of dasObras) {
+    const c = custos.get(o.id)!.resultado;
     linhas.push({
       id: o.id,
       codigo: o.codigo,

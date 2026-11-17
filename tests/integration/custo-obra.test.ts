@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { UsuarioSessao } from "@/lib/auth/sessao";
@@ -9,7 +9,7 @@ import { criarCompra, receberCompra } from "@/modules/compras/servico";
 import { registrarMovimentoDeEstoque } from "@/modules/estoque/servico";
 import { estornarLancamento, registrarLancamento } from "@/modules/financeiro/servico-lancamentos";
 import { criarContasAPagar, registrarPagamento } from "@/modules/financeiro/servico-pagar";
-import { carregarCustoDaObra } from "@/modules/obras/queries-custo";
+import { carregarCustoDaObra, carregarCustosDasObras } from "@/modules/obras/queries-custo";
 
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
 
@@ -18,6 +18,17 @@ import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
  * de cada custo. O resultado é conferido contra uma soma SQL independente. O custo de mão de obra por m² de Configurações é
  * trocado e restaurado; o contador de compras volta ao que era.
  */
+/** Cada consulta SQL do cliente do app neste arquivo é contada (para provar que o lote não faz uma rodada por obra). */
+const consultas = vi.hoisted(() => ({ n: 0 }));
+vi.mock("@/lib/db", async () => {
+  const { criarClientePrisma } = await import("@/lib/db/criar-cliente");
+  const prisma = criarClientePrisma(process.env.DIRECT_URL ?? process.env.DATABASE_URL, { logDeConsultas: true });
+  (prisma as unknown as { $on: (e: "query", f: () => void) => void }).$on("query", () => {
+    consultas.n += 1;
+  });
+  return { prisma };
+});
+
 const PREFIXO = "Int Cus";
 const LOGIN = "int-custo-obra";
 const prisma = criarClientePrisma(process.env.DIRECT_URL ?? process.env.DATABASE_URL);
@@ -236,5 +247,47 @@ describe("margem incompleta: nunca zero", () => {
     const c = await carregarCustoDaObra(outraObraId);
     expect(c.propostas).toEqual([]);
     expect(c.resultado).toMatchObject({ incompleto: true, margemCentavos: null, receitaDaMargemCentavos: null });
+  });
+});
+
+describe("carga em lote (margem por obra): o mesmo resultado, sem uma rodada de consultas por obra", () => {
+  it("o custo de várias obras de uma vez é IDÊNTICO ao de cada obra sozinha (linhas, origens, margem e contas ignoradas)", async () => {
+    const clienteId = (await prisma.cliente.findFirstOrThrow({ where: { nome: `${PREFIXO} Cliente` } })).id;
+    // Uma terceira obra com dado próprio: despesa avulsa e proposta aprovada sem preço de material.
+    const terceira = await prisma.projeto.create({ data: { codigo: `P-0000-${randomUUID().slice(0, 8)}`, titulo: `${PREFIXO} Terceira obra`, clienteId, status: "APROVADO", responsavelId: usuario.id, valorFechadoCentavos: 500_000 } });
+    await tx((t) => registrarLancamento(t, { data: DIA, tipo: "SAIDA", valorCentavos: 7_700, contaFinanceiraId, categoriaId: categoriaDespesaId, descricao: `${PREFIXO} Cola da terceira obra`, forma: null, comNotaFiscal: false, projetoId: terceira.id }, ctx()));
+
+    const ids = [obraId, outraObraId, terceira.id];
+    const lote = await carregarCustosDasObras(ids);
+    expect([...lote.keys()].sort()).toEqual([...ids].sort());
+    for (const id of ids) expect(lote.get(id)).toEqual(await carregarCustoDaObra(id));
+
+    // A obra com dados reais de custo não pode ter perdido nada na partição por obra.
+    expect(lote.get(obraId)!.resultado.custoConhecidoCentavos).toBeGreaterThan(0);
+    expect(lote.get(outraObraId)!.propostas).toEqual([]);
+    expect(lote.get(terceira.id)!.linhas.some((l) => l.descricao.includes("Cola da terceira obra"))).toBe(true);
+    // O custo da terceira obra não vaza para as outras (a partição por projeto está certa).
+    expect(lote.get(obraId)!.linhas.some((l) => l.descricao.includes("Cola da terceira obra"))).toBe(false);
+  });
+
+  it("o número de consultas ao banco NÃO cresce com o número de obras", async () => {
+    const outras = await prisma.projeto.findMany({ where: { titulo: { startsWith: PREFIXO }, deletadoEm: null }, select: { id: true } });
+    expect(outras.length).toBeGreaterThanOrEqual(3);
+    consultas.n = 0;
+    await carregarCustosDasObras([obraId]);
+    const comUma = consultas.n;
+    consultas.n = 0;
+    await carregarCustosDasObras(outras.map((o) => o.id));
+    const comVarias = consultas.n;
+    expect(comUma).toBeGreaterThan(0);
+    expect(comVarias).toBe(comUma); // a obra tem proposta aprovada: os dois casos fazem as mesmas consultas
+    // Teto fixo (cada consulta do Prisma com relações pode virar mais de uma instrução SQL); antes eram ~18 por OBRA.
+    expect(comVarias).toBeLessThanOrEqual(25);
+  });
+
+  it("lista vazia não consulta nada e devolve mapa vazio", async () => {
+    consultas.n = 0;
+    expect((await carregarCustosDasObras([])).size).toBe(0);
+    expect(consultas.n).toBe(0);
   });
 });

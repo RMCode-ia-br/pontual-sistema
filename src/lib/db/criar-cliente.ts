@@ -11,8 +11,11 @@ import { PrismaClient } from "../../generated/prisma/client";
  *   (ver docs/DECISOES.md).
  *
  * Importa o cliente gerado por caminho relativo para funcionar também no `tsx` (seed).
+ *
+ * `logDeConsultas` liga o evento "query" (só para testes e para medir desempenho): cada consulta SQL vira um evento
+ * `cliente.$on("query", ...)`. Nunca ligado no app.
  */
-export function criarClientePrisma(connectionString: string | undefined): PrismaClient {
+export function criarClientePrisma(connectionString: string | undefined, opcoes: { logDeConsultas?: boolean } = {}): PrismaClient {
   if (!connectionString) {
     throw new Error("DATABASE_URL não configurada.");
   }
@@ -26,5 +29,5 @@ export function criarClientePrisma(connectionString: string | undefined): Prisma
     max: 5,
   });
 
-  return new PrismaClient({ adapter });
+  return new PrismaClient({ adapter, ...(opcoes.logDeConsultas ? { log: [{ emit: "event" as const, level: "query" as const }] } : {}) });
 }
