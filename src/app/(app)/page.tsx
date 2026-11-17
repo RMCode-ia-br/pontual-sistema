@@ -15,21 +15,12 @@ import { montarConsulta } from "@/lib/listas/parametros";
 import { ehMesInteiro, lerPeriodo, mesDaData, parametrosDoPeriodo, periodoDeComparacao, rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
 import { cn } from "@/lib/utils";
 import { ROTULO_TIPO_EVENTO, type TipoEvento } from "@/modules/agenda/schemas";
-import { resumoDeCadastros } from "@/modules/cadastros/resumo";
 import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
-import { resumoComercial } from "@/modules/comercial/resumo";
-import { resumoDeEstoque } from "@/modules/estoque/resumo";
-import { resumoFinanceiro } from "@/modules/financeiro/resumo";
-import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
-import { DIAS_DA_JANELA_DE_FECHAMENTO, fechamentoNaJanela, janelaDeFechamento, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
+import { DIAS_DA_JANELA_DE_FECHAMENTO, janelaDeFechamento } from "@/modules/indicadores/fechamento";
 import { DEFINICAO_DOS_MOTIVOS_DE_PERDA } from "@/modules/indicadores/perdas";
-import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
-import { vendidoNoPeriodo } from "@/modules/indicadores/vendas";
-import { resumoDeObras } from "@/modules/obras/resumo";
+import { carregarDadosDoPainel } from "@/modules/painel/dados";
 import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
-import { resumoDePropostas } from "@/modules/propostas/resumo";
-import { listarTarefas, resumoDeTarefas } from "@/modules/tarefas/queries";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -65,26 +56,15 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
   // O relatório do funil só lê "de" e "ate" (não "mes"): o link leva as datas do período, para a lista bater com o número.
   const consultaDeAte = montarConsulta({ de: periodo.de, ate: periodo.ate });
 
-  const [vendido, vendidoAnterior, vendidoAnoPassado, recebido, recebidoAnterior, recebidoAnoPassado, comNota, fechamento, tempo, fabrica, resumo, proximas, cadastros, comercial, propostas, obras, fin, estoque] = await Promise.all([
-    vendidoNoPeriodo(periodo),
-    vendidoNoPeriodo(cmp.anterior),
-    vendidoNoPeriodo(cmp.anoPassado),
-    recebidoNoPeriodo(periodo),
-    recebidoNoPeriodo(cmp.anterior),
-    recebidoNoPeriodo(cmp.anoPassado),
-    faturamentoComNota(hoje),
-    fechamentoNaJanela(janela),
-    tempoVisitaAteProposta(periodo),
-    ocupacaoAtualDaFabrica(hoje),
-    resumoDeTarefas(usuario.id),
-    listarTarefas({ status: "abertas" }),
-    resumoDeCadastros(),
-    resumoComercial(periodo),
-    resumoDePropostas(),
-    resumoDeObras(agora, periodo),
-    resumoFinanceiro(),
-    resumoDeEstoque(hoje),
-  ]);
+  const { vendido, vendidoAnterior, vendidoAnoPassado, recebido, recebidoAnterior, recebidoAnoPassado, comNota, fechamento, tempo, fabrica, resumo, proximas, cadastros, comercial, propostas, obras, fin, estoque } = await carregarDadosDoPainel({
+    usuarioId: usuario.id,
+    periodo,
+    anterior: cmp.anterior,
+    anoPassado: cmp.anoPassado,
+    janela,
+    hoje,
+    agora,
+  });
 
   const mesInteiro = ehMesInteiro(periodo);
   const meta = fin.metaMensalCentavos > 0 ? fin.metaMensalCentavos : null;
