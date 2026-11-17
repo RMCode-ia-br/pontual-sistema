@@ -52,13 +52,12 @@ describe("PDF da proposta (react-pdf)", () => {
     expect(pdf.length).toBeGreaterThan(4000);
   });
 
-  describe.skipIf(!temPdftotext)("dados para pagamento em várias linhas", () => {
-    // Defeito conhecido, só da camada de TEXTO do PDF (o desenho está certo; PENDENCIAS): depois de algumas gerações no
-    // mesmo processo, o "c" minúsculo da fonte em negrito deixa de constar no texto extraído ("Ban o"). Estes testes
-    // verificam as QUEBRAS e a integridade do texto, então comparam os dois lados sem essa letra.
-    const semC = (texto: string) => texto.replace(/[c ]/g, "");
+  describe.skipIf(!temPdftotext)("dados para pagamento em várias linhas (peso normal, texto extraído igual ao digitado)", () => {
+    // O bloco usa peso NORMAL de propósito: no negrito (Geist SemiBold) o "c" minúsculo some do texto copiado do PDF quando a
+    // primeira geração do processo não usou esse "c" em negrito (ver PENDENCIAS e docs/APRENDIZADOS.md). Aqui as comparações
+    // são EXATAS: nenhuma letra pode faltar, e é isso que o teste das 30 gerações protege.
 
-    /** Texto do PDF na ordem de leitura, como `pdftotext` o extrai (uma linha do papel por linha de saída), sem o "c". */
+    /** Texto do PDF na ordem de leitura, como `pdftotext` o extrai (uma linha do papel por linha de saída). */
     async function textoDoPdf(dadosPagamento: string): Promise<string[]> {
       const c = conteudoDeExemplo([{ descricao: "PORTA", valorCentavos: 100000 }]);
       c.pagamento.dadosPagamento = dadosPagamento;
@@ -69,39 +68,53 @@ describe("PDF da proposta (react-pdf)", () => {
         writeFileSync(arquivo, pdf);
         return execFileSync(pdftotext!, ["-raw", "-enc", "UTF-8", arquivo, "-"], { encoding: "utf8" })
           .split("\n")
-          .map((l) => semC(l.trim()));
+          .map((l) => l.trim());
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     }
 
-    it("cada linha digitada sai em uma linha do papel, na mesma ordem", async () => {
+    it("cada linha digitada sai em uma linha do papel, na mesma ordem, sem perder nenhuma letra", async () => {
       const digitado = ["Favorecido: Pontual Soluções", "Banco: Exemplo S.A.", "Agência: 0001", "Conta: 12345-6", "Chave Pix: exemplo@pontual.com.br"];
       const linhas = await textoDoPdf(digitado.join("\n"));
-      const esperado = digitado.map(semC);
-      const i = linhas.findIndex((l) => l === esperado[0]);
+      const i = linhas.findIndex((l) => l === digitado[0]);
       expect(i).toBeGreaterThan(-1);
-      expect(linhas.slice(i, i + 5)).toEqual(esperado);
+      expect(linhas.slice(i, i + 5)).toEqual(digitado);
     });
+
+    it("30 gerações seguidas (a 1ª sem nenhum \"c\" no bloco, como o texto da fixture): o texto extraído confere com o digitado em TODAS", async () => {
+      const digitado = ["Favorecido: Pontual Soluções", "Banco: Exemplo S.A.", "Agência: 0001", "Conta: 12345-6", "Chave Pix: exemplo@pontual.com.br"];
+      const defeitos: string[] = [];
+      for (let g = 1; g <= 30; g++) {
+        // A 1ª geração é a que "envenenava" o negrito: o bloco dela não tem "c" (como "PIX: dados de teste" da fixture).
+        const linhas = await textoDoPdf(g === 1 ? "PIX: dados de teste" : digitado.join("\n"));
+        const esperado = g === 1 ? ["PIX: dados de teste"] : digitado;
+        const i = linhas.findIndex((l) => l === esperado[0]);
+        if (i < 0 || JSON.stringify(linhas.slice(i, i + esperado.length)) !== JSON.stringify(esperado)) {
+          defeitos.push(`geração ${g}: ${JSON.stringify(linhas.filter((l) => /Ban|Chave|Ag.ncia|PIX/.test(l)))}`);
+        }
+      }
+      expect(defeitos, "gerações cujo texto extraído não confere com o digitado").toEqual([]);
+    }, 120_000);
 
     it("fim de linha do navegador (CRLF) não deixa lixo nem junta as linhas", async () => {
       const linhas = await textoDoPdf("Banco: A\r\nConta: B");
-      const i = linhas.findIndex((l) => l === semC("Banco: A"));
+      const i = linhas.findIndex((l) => l === "Banco: A");
       expect(i).toBeGreaterThan(-1);
-      expect(linhas[i + 1]).toBe(semC("Conta: B"));
+      expect(linhas[i + 1]).toBe("Conta: B");
     });
 
     it("linha muito longa quebra sem cortar nenhum caractere", async () => {
       const longa = "Chave Pix: " + "abcdefghij0123456789".repeat(8); // uma palavra de 160 caracteres sem espaço
       const linhas = await textoDoPdf(`Banco: Exemplo\n${longa}\nConta: 1`);
-      const de = linhas.findIndex((l) => l === semC("Banco: Exemplo"));
-      const ate = linhas.findIndex((l) => l === semC("Conta: 1"));
+      const de = linhas.findIndex((l) => l === "Banco: Exemplo");
+      const ate = linhas.findIndex((l) => l === "Conta: 1");
       expect(de).toBeGreaterThan(-1);
       expect(ate).toBeGreaterThan(de);
       const doMeio = linhas.slice(de + 1, ate);
       expect(doMeio.length).toBeGreaterThan(1); // ocupou mais de uma linha do papel
       // Nada se perdeu: sem os espaços e sem o hífen que marca a quebra, é o texto digitado.
-      expect(doMeio.join("").replace(/[\s-]/g, "")).toBe(semC(longa).replace(/\s/g, ""));
+      expect(doMeio.join("").replace(/[\s-]/g, "")).toBe(longa.replace(/\s/g, ""));
     });
   });
 

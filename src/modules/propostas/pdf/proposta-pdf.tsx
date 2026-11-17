@@ -156,9 +156,11 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
           ))}
           {c.pagamento.dadosPagamento ? (
             // Uma linha de texto por linha digitada (favorecido, banco, agência, conta, Pix). Linha em branco vira espaço.
+            // Peso NORMAL, não negrito: no negrito (Geist SemiBold) o "c" minúsculo some do texto copiado do PDF (ver PENDENCIAS),
+            // e quem copia a chave Pix não pode perder letra.
             <View style={{ marginTop: 4 }}>
               {linhasDoTexto(c.pagamento.dadosPagamento).map((l, i) => (
-                <Text key={i} style={{ ...NEGRITO, fontSize: 8.5 }}>
+                <Text key={i} style={{ fontFamily: FAMILIA_PDF, fontWeight: 400, fontSize: 8.5 }}>
                   {l === "" ? " " : l}
                 </Text>
               ))}
