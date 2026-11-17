@@ -1,8 +1,16 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect as esperar, test, type Page } from "@playwright/test";
 
 import { alertaDeFormulario, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
 import { buscarAuditoriaFeitaPeloE2E, contarAnexosDoE2E, contarTarefasForaDoE2E, prepararUsuarioE2E } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
+
+/**
+ * Tempo de espera das conferências desta spec: 20 s (o padrão do Playwright é 5 s). A navegação por link ("Todas",
+ * "Concluídas"...) leva ~0,3 s com a máquina livre, mas medido com CPU 10 vezes mais lenta (Bloco 5a, Fase 7B) levou 4,5 s
+ * no p50 e passou de 5 s em 7 de 25 cliques (máximo 7,1 s). O clique nunca se perdeu: só demorava. Na rodada completa, com
+ * a máquina ocupada, o `toHaveURL` de 5 s estourava e, como a spec é serial, os testes seguintes não rodavam.
+ */
+const expect = esperar.configure({ timeout: 20_000 });
 
 test.describe.configure({ mode: "serial" });
 test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(71) } });
