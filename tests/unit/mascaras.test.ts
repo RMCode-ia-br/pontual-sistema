@@ -71,7 +71,7 @@ describe("centavosParaCampo", () => {
     const { centavosParaCampo } = await import("@/lib/formatadores/mascaras");
     expect(centavosParaCampo(123456)).toBe("1.234,56");
     expect(centavosParaCampo(5)).toBe("0,05");
-    expect(centavosParaCampo(0)).toBe("");
+    expect(centavosParaCampo(0)).toBe("0,00"); // zero guardado é um valor (não campo vazio)
     expect(centavosParaCampo(null)).toBe("");
     expect(centavosParaCampo(undefined)).toBe("");
   });

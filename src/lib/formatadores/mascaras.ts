@@ -41,10 +41,24 @@ export function mascararCep(texto: string): string {
   return d.length <= 5 ? d : `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
+/**
+ * Backspace num campo de dinheiro que mostra exatamente "0,00": devolve "" (esvazia o campo). Sem isto não haveria como
+ * limpar o zero pelo teclado, porque "0,0" volta a ser lido como zero. Qualquer outro valor: null (a máscara segue o texto).
+ */
+export function apagarMoedaZerada(valorDoCampo: string): string | null {
+  return valorDoCampo === "0,00" ? "" : null;
+}
+
 /** Dinheiro enquanto digita: "123456" → "1.234,56" (centavos à direita, como em maquininha). */
 export function mascararMoeda(texto: string): string {
-  const d = digitos(texto).replace(/^0+/, "").slice(0, 11);
-  if (d === "") return "";
+  const todos = digitos(texto);
+  const d = todos.replace(/^0+/, "").slice(0, 11);
+  if (d === "") {
+    // Sem nenhum dígito: campo vazio. SÓ ZEROS ("0", "0,", "0,0", "0,00", "R$ 0,00"): é o valor ZERO, que vale onde zero vale e é
+    // diferente de campo vazio ("saldo não informado"). Como o zero fica escrito "0,00", o campo apaga com a tecla Backspace
+    // por  (no componente), não por esta máscara.
+    return todos.length === 0 ? "" : "0,00";
+  }
   const centavos = d.padStart(3, "0");
   const inteiro = centavos.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${inteiro},${centavos.slice(-2)}`;

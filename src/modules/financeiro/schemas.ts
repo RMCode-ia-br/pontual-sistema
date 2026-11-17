@@ -46,7 +46,7 @@ function dinheiro(rotulo: string, opcoes: { permitirNegativo?: boolean; permitir
       ctx.addIssue({ code: "custom", message: `${rotulo}: informe um valor maior que zero.` });
       return z.NEVER;
     }
-    return negativo ? -centavos : centavos;
+    return negativo && centavos !== 0 ? -centavos : centavos; // "-0,00" é zero (nunca -0)
   });
 }
 

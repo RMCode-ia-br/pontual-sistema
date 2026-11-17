@@ -65,6 +65,20 @@ describe("contas financeiras: nascem sem saldo inventado", () => {
     expect(await obterContaFinanceira(id, HOJE)).toMatchObject({ saldoInicialCentavos: -150050, saldoInicialInformado: true, dataSaldoInicial: "2026-11-01", saldoAtualCentavos: -150050 });
   });
 
+  it("saldo ZERO informado (0, 0,00, R$ 0,00) é gravado como informado, com a data, e é diferente de 'não informado'", async () => {
+    for (const [i, saldo] of ["0", "0,00", "R$ 0,00"].entries()) {
+      const { id } = await tx((t) => criarContaFinanceira(t, conta({ nome: `${PREFIXO} Saldo zero ${i}`, saldoInformado: "on", saldoInicial: saldo, dataSaldoInicial: "2026-11-01" }), ctx()));
+      const c = await obterContaFinanceira(id, HOJE);
+      expect(c).toMatchObject({ saldoInicialCentavos: 0, saldoInicialInformado: true, dataSaldoInicial: "2026-11-01", saldoAtualCentavos: 0 });
+      const linha = await prisma.contaFinanceira.findUniqueOrThrow({ where: { id }, select: { saldoInicialInformado: true, saldoInicialCentavos: true, dataSaldoInicial: true } });
+      expect(linha.saldoInicialInformado).toBe(true);
+      expect(linha.saldoInicialCentavos).toBe(0);
+      expect(linha.dataSaldoInicial).not.toBeNull();
+    }
+    // Já o saldo VAZIO com a caixa marcada é recusado: não se confunde com zero.
+    await expect(tx((t) => criarContaFinanceira(t, conta({ nome: `${PREFIXO} Saldo vazio`, saldoInformado: "on", saldoInicial: "", dataSaldoInicial: "2026-11-01" }), ctx()))).rejects.toThrow(/Informe o saldo/);
+  });
+
   it("a data do saldo no futuro é recusada", async () => {
     await expect(tx((t) => criarContaFinanceira(t, conta({ nome: `${PREFIXO} Futuro`, saldoInformado: "on", saldoInicial: "10,00", dataSaldoInicial: "2026-12-01" }), ctx()))).rejects.toThrow(/futuro/);
   });

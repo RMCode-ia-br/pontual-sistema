@@ -41,6 +41,41 @@ test.describe("financeiro: contas e lançamentos", () => {
     await aguardarAvisosSumirem(page);
   });
 
+  test("saldo ZERO informado: aceita digitar 0, grava R$ 0,00 e não vira 'saldo não informado'", async ({ page }) => {
+    await page.goto("/financeiro/contas");
+    await page.getByRole("button", { name: /Nova conta|Cadastrar a primeira conta/ }).first().click();
+    await page.getByLabel("Nome").fill("E2E Caixa Zero");
+    await page.getByLabel("Informar o saldo agora").check();
+    const saldo = page.getByLabel("Saldo nessa data");
+    // Tecla a tecla: o primeiro caractere pode ser 0 (antes o campo ficava vazio).
+    await saldo.click();
+    await saldo.pressSequentially("0");
+    await expect(saldo).toHaveValue("0,00");
+    await saldo.pressSequentially(",00");
+    await expect(saldo).toHaveValue("0,00");
+    // Backspace esvazia o zero (senão não haveria como limpar o campo); digitar 5 e depois 0 segue como maquininha.
+    await saldo.press("Backspace");
+    await expect(saldo).toHaveValue("");
+    await saldo.pressSequentially("50");
+    await expect(saldo).toHaveValue("0,50");
+    await saldo.press("Control+a");
+    await saldo.press("Backspace");
+    await saldo.pressSequentially("0");
+    await expect(saldo).toHaveValue("0,00");
+    await page.getByLabel("Data do saldo").fill(new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }));
+    await page.getByRole("button", { name: "Cadastrar conta" }).click();
+    await expect(toast(page, "Conta cadastrada.")).toBeVisible();
+    const link = page.getByRole("link", { name: /E2E Caixa Zero/ });
+    await expect(link).toContainText("R$ 0,00");
+    await expect(link).not.toContainText("Saldo não informado");
+    await aguardarAvisosSumirem(page);
+
+    // Editar a conta mostra o zero guardado como 0,00 (e não campo vazio).
+    await link.click();
+    await page.getByRole("button", { name: "Editar conta" }).click();
+    await expect(page.getByLabel("Saldo nessa data")).toHaveValue("0,00");
+  });
+
   test("lança entrada e saída: o extrato e o saldo conferem", async ({ page }) => {
     await page.goto("/financeiro/contas");
     await page.getByRole("link", { name: /E2E Banco/ }).click();
