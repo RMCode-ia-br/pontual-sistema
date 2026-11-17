@@ -45,6 +45,23 @@ export function detalheDoTempoVisitaProposta(amostra: number, foraDaMedia: numbe
   return `${base} · ${foraDaMedia} ficou(aram) de fora: visita registrada depois da proposta`;
 }
 
+export type MotivoDePerda = { motivoPerdaId: string | null; nome: string; quantidade: number };
+
+/** Mais perdas primeiro; no empate, ordem alfabética do nome (a ordem nunca muda entre uma consulta e outra). */
+export function ordenarMotivosDePerda(motivos: readonly MotivoDePerda[]): MotivoDePerda[] {
+  return [...motivos].sort((a, b) => b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+/**
+ * Mostra só os `limite` primeiros motivos e diz quanto ficou de fora ("e mais 2 motivos, 5 projetos"): o painel
+ * nunca corta em silêncio.
+ */
+export function cortarMotivosDePerda(motivos: readonly MotivoDePerda[], limite: number): { mostrados: MotivoDePerda[]; ocultos: { motivos: number; projetos: number } } {
+  const mostrados = motivos.slice(0, Math.max(0, limite));
+  const resto = motivos.slice(mostrados.length);
+  return { mostrados, ocultos: { motivos: resto.length, projetos: resto.reduce((s, m) => s + m.quantidade, 0) } };
+}
+
 /** Limite de faturamento com nota: vazio, zero ou negativo = "limite não informado" (null). */
 export function limiteInformado(limiteCentavos: number | null | undefined): number | null {
   return typeof limiteCentavos === "number" && Number.isFinite(limiteCentavos) && limiteCentavos > 0 ? limiteCentavos : null;

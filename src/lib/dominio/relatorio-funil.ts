@@ -18,7 +18,6 @@ export type LinhaDoFunil = {
   origem: string | null;
   status: StatusProjeto;
   valorEstimadoCentavos: number | null;
-  motivoPerdaId: string | null;
   /** Fases pelas quais passou, com a data de cada passagem. */
   fases: { para: StatusProjeto; em: Date }[];
   primeiraVisitaRealizadaEm: Date | null;
@@ -35,7 +34,6 @@ export type ResultadoDoFunil = {
   /** Quantos chegaram a cada etapa e a conversão em relação à etapa anterior (null sem base). */
   conversao: { etapa: StatusProjeto; chegaram: number; percentualDaAnterior: number | null; percentualDoTotal: number | null }[];
   porOrigem: { origem: string | null; leads: number; comVisita: number; comPropostaEnviada: number; aprovados: number; perdidos: number }[];
-  motivosDePerda: { motivoPerdaId: string | null; quantidade: number }[];
   /** `media` é null quando só há projetos de fora (visita registrada depois da proposta). Null sem nenhum caso. */
   tempoVisitaPropostaDias: { media: number | null; amostra: number; foraDaMedia: number } | null;
   /** Aprovados ÷ (aprovados + perdidos que chegaram a ter proposta enviada). Null sem nenhuma decisão. */
@@ -86,10 +84,6 @@ export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
     }))
     .sort((a, b) => b.leads - a.leads);
 
-  const motivos = new Map<string | null, number>();
-  for (const l of linhas) if (l.status === "PERDIDO") motivos.set(l.motivoPerdaId, (motivos.get(l.motivoPerdaId) ?? 0) + 1);
-  const motivosDePerda = [...motivos.entries()].map(([motivoPerdaId, quantidade]) => ({ motivoPerdaId, quantidade })).sort((a, b) => b.quantidade - a.quantidade);
-
   // Visita → proposta: só projetos com as duas datas. Visita registrada DEPOIS da proposta (dias negativos) fica fora da
   // média e é contada à parte (mesma regra do painel: `entraNaMediaDeDias`).
   const dias: number[] = [];
@@ -114,7 +108,6 @@ export function calcularFunil(linhas: LinhaDoFunil[]): ResultadoDoFunil {
     porFase,
     conversao,
     porOrigem,
-    motivosDePerda,
     tempoVisitaPropostaDias,
     taxaDeFechamento: decididos === 0 ? null : percentual(aprovados.length, decididos),
     ticketMedioCentavos: comValor.length === 0 ? null : Math.round(comValor.reduce((s, l) => s + (l.valorEstimadoCentavos ?? 0), 0) / comValor.length),

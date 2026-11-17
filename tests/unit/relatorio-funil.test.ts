@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { calcularFunil, type LinhaDoFunil } from "@/lib/dominio/relatorio-funil";
 
 const d = (iso: string) => new Date(`${iso}T15:00:00Z`);
-const linha = (over: Partial<LinhaDoFunil> = {}): LinhaDoFunil => ({ origem: "GOOGLE", status: "NOVO_LEAD", valorEstimadoCentavos: null, motivoPerdaId: null, fases: [], primeiraVisitaRealizadaEm: null, ...over });
+const linha = (over: Partial<LinhaDoFunil> = {}): LinhaDoFunil => ({ origem: "GOOGLE", status: "NOVO_LEAD", valorEstimadoCentavos: null, fases: [], primeiraVisitaRealizadaEm: null, ...over });
 
 describe("funil comercial: indicadores", () => {
   it("sem projetos, tudo zerado e sem percentuais inventados", () => {
@@ -54,23 +54,13 @@ describe("funil comercial: indicadores", () => {
   it("origem: leads, visitas, propostas, aprovados e perdidos por canal, do maior para o menor", () => {
     const r = calcularFunil([
       linha({ origem: "GOOGLE", status: "PROPOSTA_ENVIADA", fases: [{ para: "VISITA_AGENDADA", em: d("2026-11-01") }, { para: "PROPOSTA_ENVIADA", em: d("2026-11-05") }] }),
-      linha({ origem: "GOOGLE", status: "PERDIDO", motivoPerdaId: "m1" }),
+      linha({ origem: "GOOGLE", status: "PERDIDO" }),
       linha({ origem: "INDICACAO_CLIENTE" }),
       linha({ origem: null, status: "APROVADO" }),
     ]);
     expect(r.porOrigem[0]).toEqual({ origem: "GOOGLE", leads: 2, comVisita: 1, comPropostaEnviada: 1, aprovados: 0, perdidos: 1 });
     expect(r.porOrigem.map((o) => o.origem)).toEqual(["GOOGLE", "INDICACAO_CLIENTE", null].sort((a, b) => (a === "GOOGLE" ? -1 : b === "GOOGLE" ? 1 : 0)));
     expect(r.porOrigem.find((o) => o.origem === null)).toMatchObject({ leads: 1, aprovados: 1 });
-  });
-
-  it("motivos de perda: só os perdidos, do mais frequente ao menos", () => {
-    const r = calcularFunil([
-      linha({ status: "PERDIDO", motivoPerdaId: "preco" }),
-      linha({ status: "PERDIDO", motivoPerdaId: "preco" }),
-      linha({ status: "PERDIDO", motivoPerdaId: "prazo" }),
-      linha({ status: "NEGOCIACAO", motivoPerdaId: "preco" }),
-    ]);
-    expect(r.motivosDePerda).toEqual([{ motivoPerdaId: "preco", quantidade: 2 }, { motivoPerdaId: "prazo", quantidade: 1 }]);
   });
 
   it("tempo visita → proposta: média em dias de calendário, só com as duas datas; visita registrada depois da proposta fica fora e é contada", () => {

@@ -5,6 +5,7 @@ import { somarDias } from "@/lib/dominio/calendario";
 import { calcularFunil, type LinhaDoFunil, type ResultadoDoFunil } from "@/lib/dominio/relatorio-funil";
 import { dataLocalDoInstante, inputParaData } from "@/lib/formatadores";
 import type { ParametrosBrutos } from "@/lib/listas/parametros";
+import { motivosDePerdaNoPeriodo } from "@/modules/indicadores/perdas";
 import { filtroDeProjetos, lerFiltrosProjetos, type FiltrosProjetos } from "@/modules/projetos/queries";
 
 /** Dias da janela padrão do relatório (a spec usa 90 dias para fechamento). */
@@ -42,7 +43,6 @@ export async function carregarRelatorioDoFunil(filtros: FiltrosDoRelatorio): Pro
         origem: true,
         status: true,
         valorEstimadoCentavos: true,
-        motivoPerdaId: true,
         historicoFases: { select: { para: true, criadoEm: true } },
         eventos: { where: { tipo: "VISITA_TECNICA", realizadoEm: { not: null }, deletadoEm: null }, orderBy: { realizadoEm: "asc" }, take: 1, select: { realizadoEm: true } },
       },
@@ -53,7 +53,6 @@ export async function carregarRelatorioDoFunil(filtros: FiltrosDoRelatorio): Pro
         origem: p.origem,
         status: p.status,
         valorEstimadoCentavos: p.valorEstimadoCentavos,
-        motivoPerdaId: p.motivoPerdaId,
         fases: p.historicoFases.map((h) => ({ para: h.para, em: h.criadoEm })),
         primeiraVisitaRealizadaEm: p.eventos[0]?.realizadoEm ?? null,
       });
@@ -61,10 +60,9 @@ export async function carregarRelatorioDoFunil(filtros: FiltrosDoRelatorio): Pro
   }
 
   const resultado = calcularFunil(base);
-  const ids = resultado.motivosDePerda.map((m) => m.motivoPerdaId).filter((i): i is string => !!i);
-  const nomes = ids.length ? await prisma.motivoPerda.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } }) : [];
-  const nomePorId = new Map(nomes.map((n) => [n.id, n.nome]));
-  const motivos = resultado.motivosDePerda.map((m) => ({ nome: m.motivoPerdaId ? (nomePorId.get(m.motivoPerdaId) ?? "Motivo removido") : "Sem motivo informado", quantidade: m.quantidade }));
+  // Motivos de perda: a MESMA fonte do painel, pela data da perda (e não pelos projetos criados no período).
+  const { motivos: porMotivo } = await motivosDePerdaNoPeriodo({ de: filtros.de, ate: filtros.ate }, filtros);
+  const motivos = porMotivo.map((m) => ({ nome: m.nome, quantidade: m.quantidade }));
 
   const semRetornoWhere = await filtroDeProjetos({ busca: "" }, { semRetorno: true });
   const semRetorno = semRetornoWhere ? await prisma.projeto.count({ where: semRetornoWhere }) : 0;

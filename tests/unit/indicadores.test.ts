@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detalheDoTempoVisitaProposta, entraNaMediaDeDias, limiteInformado, mediaDeDias, ocupacaoDaFabrica, percentualDaMeta, percentualDoLimite, taxaDeFechamento, ticketMedio } from "@/lib/dominio/indicadores";
+import { cortarMotivosDePerda, detalheDoTempoVisitaProposta, entraNaMediaDeDias, ordenarMotivosDePerda, limiteInformado, mediaDeDias, ocupacaoDaFabrica, percentualDaMeta, percentualDoLimite, taxaDeFechamento, ticketMedio } from "@/lib/dominio/indicadores";
 
 describe("taxa de fechamento", () => {
   it("aprovados ÷ (aprovados + perdidos com proposta enviada)", () => {
@@ -95,5 +95,32 @@ describe("da visita à proposta: quem entra na média", () => {
     expect(detalheDoTempoVisitaProposta(3, 2)).toBe("3 projeto(s) · 2 ficou(aram) de fora: visita registrada depois da proposta");
     expect(detalheDoTempoVisitaProposta(0, 0)).toBe("Sem dados neste período");
     expect(detalheDoTempoVisitaProposta(0, 1)).toBe("Sem dados neste período · 1 ficou(aram) de fora: visita registrada depois da proposta");
+  });
+});
+
+describe("motivos de perda: ordem e corte", () => {
+  const m = (nome: string, quantidade: number) => ({ motivoPerdaId: nome, nome, quantidade });
+
+  it("ordena do mais frequente ao menos, e no empate pelo nome", () => {
+    const r = ordenarMotivosDePerda([m("Prazo", 1), m("Preço", 3), m("Concorrente", 1), m("Distância", 3)]);
+    expect(r.map((x) => x.nome)).toEqual(["Distância", "Preço", "Concorrente", "Prazo"]);
+  });
+
+  it("não altera a lista original", () => {
+    const original = [m("B", 1), m("A", 2)];
+    ordenarMotivosDePerda(original);
+    expect(original.map((x) => x.nome)).toEqual(["B", "A"]);
+  });
+
+  it("corta nos primeiros e diz quantos motivos e projetos ficaram de fora", () => {
+    const todos = ordenarMotivosDePerda([m("A", 5), m("B", 4), m("C", 3), m("D", 2), m("E", 1)]);
+    const { mostrados, ocultos } = cortarMotivosDePerda(todos, 3);
+    expect(mostrados.map((x) => x.nome)).toEqual(["A", "B", "C"]);
+    expect(ocultos).toEqual({ motivos: 2, projetos: 3 });
+  });
+
+  it("sem corte quando cabe, e lista vazia dá zero ocultos", () => {
+    expect(cortarMotivosDePerda([m("A", 1)], 6)).toEqual({ mostrados: [m("A", 1)], ocultos: { motivos: 0, projetos: 0 } });
+    expect(cortarMotivosDePerda([], 6)).toEqual({ mostrados: [], ocultos: { motivos: 0, projetos: 0 } });
   });
 });

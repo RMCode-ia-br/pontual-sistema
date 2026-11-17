@@ -12,6 +12,7 @@ import { detalheDoTempoVisitaProposta } from "@/lib/dominio/indicadores";
 import { formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { ROTULO_ORIGEM, ORIGENS } from "@/modules/clientes/schemas";
+import { DEFINICAO_DOS_MOTIVOS_DE_PERDA } from "@/modules/indicadores/perdas";
 import { PORTES, ROTULO_PORTE } from "@/modules/projetos/schemas";
 import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
 import { GraficoDeBarras } from "@/modules/relatorios/components/grafico-de-barras";
@@ -239,6 +240,9 @@ export default async function PaginaRelatorioFunil({ searchParams }: { searchPar
             <h2 id="r-perdas" className="text-lg font-medium">
               Por que se perdem
             </h2>
+            <Definicao titulo="motivos de perda">
+              Perdidos no período (pela data da perda): {DEFINICAO_DOS_MOTIVOS_DE_PERDA} Por isso este total pode ser diferente do número de projetos criados no período, e também da coluna “Perdidos” da tabela por origem, que conta só os projetos criados no período que hoje estão perdidos.
+            </Definicao>
             {r.motivos.length === 0 ? (
               <p className="text-muted-foreground text-sm">Nenhum projeto perdido nesse período.</p>
             ) : (

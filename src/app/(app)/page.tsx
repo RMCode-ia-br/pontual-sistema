@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
+import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { NumeroDoPainel, type Comparativo } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { exigirSessao } from "@/lib/auth/sessao";
@@ -22,6 +23,7 @@ import { resumoDeEstoque } from "@/modules/estoque/resumo";
 import { resumoFinanceiro } from "@/modules/financeiro/resumo";
 import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
 import { DIAS_DA_JANELA_DE_FECHAMENTO, fechamentoNaJanela, janelaDeFechamento, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
+import { DEFINICAO_DOS_MOTIVOS_DE_PERDA } from "@/modules/indicadores/perdas";
 import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
 import { vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 import { resumoDeObras } from "@/modules/obras/resumo";
@@ -332,8 +334,15 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
                     <span className="tabular-nums">{p.quantidade}</span>
                   </li>
                 ))}
+                {comercial.perdasOcultas.motivos > 0 ? (
+                  <li className="text-muted-foreground flex justify-between gap-2 text-xs">
+                    <span>e mais {comercial.perdasOcultas.motivos} motivo(s)</span>
+                    <span className="tabular-nums">{comercial.perdasOcultas.projetos}</span>
+                  </li>
+                ) : null}
               </ul>
             )}
+            <ComoECalculado texto={DEFINICAO_DOS_MOTIVOS_DE_PERDA} className="mt-1" />
             <Link href={`/relatorios/funil${consultaDeAte}`} className="text-primary mt-2 inline-block text-xs hover:underline">
               Ver o relatório completo
             </Link>

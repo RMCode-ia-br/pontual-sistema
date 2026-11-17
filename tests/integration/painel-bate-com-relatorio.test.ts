@@ -7,14 +7,17 @@ import type { Prisma } from "@/generated/prisma/client";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { chaveDoMes, lerPeriodo, limitesEmInstantes, primeiroDiaDoMes, somarDias, somarMeses, type Periodo } from "@/lib/periodo";
+import { MOTIVOS_NO_PAINEL, resumoComercial } from "@/modules/comercial/resumo";
 import { janelaDeFechamento, fechamentoNaJanela, listarDecisoes, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
 import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
 import { faturamentoMensal } from "@/modules/indicadores/faturamento-mensal";
 import { listarRecebimentos, recebimentosParaCsv } from "@/modules/indicadores/lista-de-recebimentos";
+import { motivosDePerdaNoPeriodo, ondePerdidosNoPeriodo } from "@/modules/indicadores/perdas";
 import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
 import { listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 import { listarObras } from "@/modules/obras/queries-lista";
 import { resumoDeObras } from "@/modules/obras/resumo";
+import { carregarRelatorioDoFunil } from "@/modules/relatorios/funil";
 
 import { comConexao } from "./banco-teste";
 
@@ -58,6 +61,7 @@ async function limpar() {
     await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (SELECT id FROM "Proposta" WHERE "projetoId" IN (${projetos}))`);
     await c.query(`DELETE FROM "Proposta" WHERE "projetoId" IN (${projetos})`);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE '${PREFIXO}%'`);
+    await c.query(`DELETE FROM "MotivoPerda" WHERE nome LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "ContaFinanceira" WHERE nome LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "CategoriaFinanceira" WHERE nome LIKE '${PREFIXO}%'`);
@@ -240,6 +244,25 @@ beforeAll(async () => {
   await perdido("Fech perdido 2", "2020-01-31T23:00:00Z", true);
   await perdido("Fech perdido sem proposta enviada", "2020-01-05T12:00:00Z", false); // não conta
   await perdido("Fech perdido fora (depois)", "2020-02-01T03:00:00Z", true); // 01/02 às 00:00 em SP: fora
+
+  // ----- Motivos de perda (janeiro/2020; motivos próprios, com prefixo) -----
+  // Já há 2 perdidos SEM motivo em janeiro (os dois "Fech perdido" acima que entram no período).
+  const motivo = async (letra: string) => (await prisma.motivoPerda.create({ data: { nome: `${PREFIXO} Motivo ${letra}`, ordem: 9999 } })).id;
+  const perdaComMotivo = (motivoPerdaId: string, quando: string, rotulo: string) => projeto(`Perda ${rotulo}`, { status: "PERDIDO", perdidoEm: instante(quando), motivoPerdaId });
+  const mA = await motivo("A");
+  const mB = await motivo("B");
+  const mC = await motivo("C");
+  const mBorda = await motivo("Borda");
+  const mOutros = await Promise.all(["D", "E", "F", "G"].map(motivo));
+  for (const [i, quando] of ["2020-01-03T13:00:00Z", "2020-01-10T13:00:00Z", "2020-01-20T13:00:00Z"].entries()) await perdaComMotivo(mA, quando, `A${i}`); // A: 3
+  for (const [i, quando] of ["2020-01-04T13:00:00Z", "2020-01-11T13:00:00Z"].entries()) await perdaComMotivo(mB, quando, `B${i}`); // B: 2
+  for (const [i, quando] of ["2020-01-05T13:00:00Z", "2020-01-12T13:00:00Z"].entries()) await perdaComMotivo(mC, quando, `C${i}`); // C: 2
+  for (const [i, m] of mOutros.entries()) await perdaComMotivo(m, "2020-01-14T13:00:00Z", `Outro${i}`); // D, E, F, G: 1 cada
+  // Borda do mês, em horário de São Paulo (UTC−3): só as duas de dentro contam.
+  await perdaComMotivo(mBorda, "2020-02-01T02:59:00Z", "Borda 23h59 do dia 31"); // 31/01 23:59 SP: DENTRO
+  await perdaComMotivo(mBorda, "2020-01-01T03:01:00Z", "Borda 00h01 do dia 1"); // 01/01 00:01 SP: DENTRO
+  await perdaComMotivo(mBorda, "2020-02-01T03:01:00Z", "Borda 00h01 de fevereiro"); // 01/02 00:01 SP: fora
+  await perdaComMotivo(mBorda, "2020-01-01T02:59:00Z", "Borda 23h59 de dezembro"); // 31/12 23:59 SP: fora
 
   // ----- Visita → proposta (janeiro/2020) -----
   const visita = (projetoId: string, realizadoEm: string | null) =>
@@ -467,6 +490,68 @@ describe("Tempo da visita até a proposta: painel × SQL independente", () => {
 
   it("período sem propostas enviadas: sem dados (null) e amostra 0", async () => {
     expect(await tempoVisitaAteProposta(MAR)).toMatchObject({ mediaDeDias: null, amostra: 0, foraDaMedia: 0, linhas: [] });
+  });
+});
+
+describe("Motivos de perda: painel × relatório do funil × SQL independente (fonte única, pela data da perda)", () => {
+  /** SQL independente: perdidos DENTRO do período em horário de São Paulo, por motivo, do maior para o menor (empate: pelo nome). */
+  async function motivosEmSql(p: Periodo) {
+    const linhas = await q<{ nome: string; qtd: number }>(
+      `SELECT COALESCE(m.nome, 'Sem motivo informado') AS nome, count(*)::int AS qtd
+         FROM "Projeto" p LEFT JOIN "MotivoPerda" m ON m.id = p."motivoPerdaId"
+        WHERE p."deletadoEm" IS NULL AND p.status = 'PERDIDO' AND ${EM_SP('p."perdidoEm"')} BETWEEN $1::date AND $2::date
+        GROUP BY 1`,
+      [p.de, p.ate],
+    );
+    return linhas.map((l) => ({ nome: l.nome, quantidade: l.qtd })).sort((a, b) => b.quantidade - a.quantidade || (a.nome < b.nome ? -1 : a.nome > b.nome ? 1 : 0));
+  }
+
+  const A_MAO = [
+    { nome: `${PREFIXO} Motivo A`, quantidade: 3 },
+    { nome: `${PREFIXO} Motivo B`, quantidade: 2 },
+    { nome: `${PREFIXO} Motivo Borda`, quantidade: 2 }, // só as duas de dentro: 31/01 23h59 e 01/01 00h01 (SP)
+    { nome: `${PREFIXO} Motivo C`, quantidade: 2 },
+    { nome: "Sem motivo informado", quantidade: 2 }, // os dois "Fech perdido" de janeiro
+    { nome: `${PREFIXO} Motivo D`, quantidade: 1 },
+    { nome: `${PREFIXO} Motivo E`, quantidade: 1 },
+    { nome: `${PREFIXO} Motivo F`, quantidade: 1 },
+    { nome: `${PREFIXO} Motivo G`, quantidade: 1 },
+  ];
+
+  it("a fonte única bate com o valor calculado à mão e com o SQL independente (borda do mês em horário de São Paulo)", async () => {
+    const r = await motivosDePerdaNoPeriodo(JAN);
+    expect(r.motivos.map((m) => ({ nome: m.nome, quantidade: m.quantidade }))).toEqual(A_MAO);
+    expect(r.total).toBe(15);
+    expect(await motivosEmSql(JAN)).toEqual(A_MAO);
+  });
+
+  it("a mesma cláusula serve a contagem e a lista: perdidos no período = soma dos motivos", async () => {
+    const total = await prisma.projeto.count({ where: ondePerdidosNoPeriodo(JAN) });
+    expect(total).toBe(15);
+    expect(await prisma.projeto.count({ where: ondePerdidosNoPeriodo(MAR) })).toBe(0);
+  });
+
+  it("o painel mostra os 6 primeiros motivos e avisa o que ficou de fora (nunca corta em silêncio)", async () => {
+    const painel = await resumoComercial(JAN);
+    expect(painel.perdasDoPeriodo).toHaveLength(MOTIVOS_NO_PAINEL);
+    expect(painel.perdasDoPeriodo).toEqual(A_MAO.slice(0, MOTIVOS_NO_PAINEL));
+    expect(painel.perdasOcultas).toEqual({ motivos: 3, projetos: 3 }); // E, F e G
+    // O que o painel mostra + o que avisa que ocultou = o total da fonte única.
+    const mostrado = painel.perdasDoPeriodo.reduce((s, m) => s + m.quantidade, 0);
+    expect(mostrado + painel.perdasOcultas.projetos).toBe(15);
+  });
+
+  it("o relatório do funil traz os MESMOS motivos do painel (todos, sem corte) para o mesmo período", async () => {
+    const funil = await carregarRelatorioDoFunil({ de: JAN.de, ate: JAN.ate });
+    expect(funil.motivos).toEqual(A_MAO);
+    const painel = await resumoComercial(JAN);
+    expect(funil.motivos.slice(0, MOTIVOS_NO_PAINEL)).toEqual(painel.perdasDoPeriodo);
+  });
+
+  it("período sem perdas: lista vazia e nada de ocultos", async () => {
+    expect((await motivosDePerdaNoPeriodo(MAR)).motivos).toEqual([]);
+    expect(await carregarRelatorioDoFunil({ de: MAR.de, ate: MAR.ate }).then((r) => r.motivos)).toEqual([]);
+    expect((await resumoComercial(MAR)).perdasOcultas).toEqual({ motivos: 0, projetos: 0 });
   });
 });
 
