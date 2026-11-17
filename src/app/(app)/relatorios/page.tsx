@@ -1,4 +1,4 @@
-import { Banknote, BarChart3, Boxes, Factory, Filter, HandCoins, HardHat, Landmark, Percent, Receipt, Scale, Target } from "lucide-react";
+import { Banknote, BarChart3, Boxes, Factory, Filter, HandCoins, HardHat, Landmark, Percent, Receipt, Ruler, Scale, Target, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -41,6 +41,24 @@ export default async function PaginaRelatorios() {
             <span>
               <span className="block font-medium">Funil e origem dos clientes</span>
               <span className="text-muted-foreground text-sm">Quantos projetos chegam a cada fase, de onde vêm, por que se perdem e quanto demora da visita à proposta.</span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link href="/relatorios/clientes" className="hover:bg-accent flex gap-3 rounded-xl border p-4 transition-colors">
+            <Users className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
+            <span>
+              <span className="block font-medium">Clientes</span>
+              <span className="text-muted-foreground text-sm">Quem fechou obra e não volta há tempo (para um contato) e onde estão as obras vendidas, por cidade.</span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link href="/relatorios/produtos-e-precos" className="hover:bg-accent flex gap-3 rounded-xl border p-4 transition-colors">
+            <Ruler className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
+            <span>
+              <span className="block font-medium">Produtos e preços</span>
+              <span className="text-muted-foreground text-sm">Que esquadrias mais entram nas propostas aprovadas, em m² e R$, e o preço médio por m² mês a mês.</span>
             </span>
           </Link>
         </li>
