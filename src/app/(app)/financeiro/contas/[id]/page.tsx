@@ -7,8 +7,10 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PaginacaoLista } from "@/components/lista/paginacao-lista";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
+import { lerParametrosLista } from "@/lib/listas/parametros";
 import { AcoesDaConta, ExtratoDaContaLista } from "@/modules/financeiro/components/extrato-da-conta";
 import { AvisoDeSaldoNaoInformado, ValorEmReais } from "@/modules/financeiro/components/painel-de-contas";
 import { lerPeriodoDoExtrato } from "@/modules/financeiro/periodo";
@@ -24,8 +26,10 @@ export default async function PaginaDaConta({ params, searchParams }: { params: 
   const conta = await obterContaFinanceira(id, hoje);
   if (!conta) notFound();
 
-  const { de, ate } = lerPeriodoDoExtrato(await searchParams, hoje);
-  const [extrato, opcoes] = await Promise.all([extratoDaConta(conta, de, ate), opcoesDeLancamento()]);
+  const brutos = await searchParams;
+  const { de, ate } = lerPeriodoDoExtrato(brutos, hoje);
+  const { pagina, tamanho } = lerParametrosLista(brutos, { ordenaveis: [], ordemPadrao: "data", tamanhoPadrao: 50 });
+  const [extrato, opcoes] = await Promise.all([extratoDaConta(conta, de, ate, { pagina, tamanho }), opcoesDeLancamento()]);
   const consultaCsv = new URLSearchParams({ de, ate }).toString();
 
   return (
@@ -109,6 +113,7 @@ export default async function PaginaDaConta({ params, searchParams }: { params: 
             Saldo no fim do período: <strong>{formatarMoeda(extrato.saldoFinalCentavos)}</strong>. Lançamento estornado aparece riscado e não conta no saldo. “Conciliar” é a conferência manual com o extrato do banco.
           </p>
           <ExtratoDaContaLista extrato={extrato} />
+          {extrato.paginacao ? <PaginacaoLista base={`/financeiro/contas/${conta.id}`} atuais={{ de, ate, tamanho }} paginacao={extrato.paginacao} tamanho={tamanho} /> : null}
         </section>
       </div>
     </>

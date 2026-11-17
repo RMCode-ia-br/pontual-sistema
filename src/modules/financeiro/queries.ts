@@ -1,7 +1,9 @@
 import "server-only";
 
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { montarExtrato, type LancamentoParaSaldo } from "@/lib/dominio/saldo";
+import type { LancamentoParaSaldo } from "@/lib/dominio/saldo";
+import { calcularPaginacao, type Paginacao } from "@/lib/listas/parametros";
 
 const comoTexto = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
@@ -77,55 +79,99 @@ export type ExtratoDaConta = {
   entradasCentavos: number;
   saidasCentavos: number;
   linhas: { lancamento: LinhaDeLancamento; saldoAposCentavos: number; incluidoNoSaldoInicial: boolean }[];
+  /** Paginação das linhas (a tela). Sem paginação (exportação), `null`. */
+  paginacao: Paginacao | null;
+  /** Exportação com mais linhas do que o limite: as demais ficaram de fora. */
+  truncado: boolean;
 };
 
-/** Extrato do período [de, ate] com saldo corrido (ordem: data, depois criação). Estornados aparecem, riscados, sem mexer no saldo. */
-export async function extratoDaConta(conta: ContaComSaldo, de: string, ate: string): Promise<ExtratoDaConta> {
-  const lancamentos = await prisma.lancamento.findMany({
-    where: { contaFinanceiraId: conta.id, deletadoEm: null },
-    orderBy: [{ data: "asc" }, { criadoEm: "asc" }],
-    select: {
-      id: true,
-      data: true,
-      tipo: true,
-      valorCentavos: true,
-      estornadoEm: true,
-      descricao: true,
-      forma: true,
-      comNotaFiscal: true,
-      conciliado: true,
-      transferenciaId: true,
-      motivoEstorno: true,
-      contaReceberId: true,
-      contaPagarId: true,
-      categoria: { select: { nome: true } },
-    },
-  });
-  const itens: LinhaDeLancamento[] = lancamentos.map((l) => ({
-    id: l.id,
-    data: l.data.toISOString().slice(0, 10),
-    tipo: l.tipo,
-    valorCentavos: l.valorCentavos,
-    estornado: l.estornadoEm !== null,
-    descricao: l.descricao,
-    categoria: l.categoria?.nome ?? null,
-    forma: l.forma,
-    comNotaFiscal: l.comNotaFiscal,
-    conciliado: l.conciliado,
-    transferenciaId: l.transferenciaId,
-    motivoEstorno: l.motivoEstorno,
-    vinculoComTitulo: l.contaReceberId !== null || l.contaPagarId !== null,
-  }));
+/** Linhas que a exportação do extrato aceita de uma vez; a tela pagina. */
+export const LIMITE_DE_LINHAS_DO_EXTRATO = 20_000;
 
-  const e = montarExtrato(conta, itens, de, ate);
-  let entradas = 0;
-  let saidas = 0;
-  for (const linha of e.linhas) {
-    if (linha.lancamento.estornado) continue;
-    if (linha.lancamento.tipo === "ENTRADA") entradas += linha.lancamento.valorCentavos;
-    else saidas += linha.lancamento.valorCentavos;
-  }
-  return { saldoAnteriorCentavos: e.saldoAnteriorCentavos, saldoFinalCentavos: e.saldoFinalCentavos, entradasCentavos: entradas, saidasCentavos: saidas, linhas: e.linhas };
+type LinhaDoSql = {
+  id: string;
+  data: Date;
+  tipo: "ENTRADA" | "SAIDA";
+  valorCentavos: number;
+  estornado: boolean;
+  descricao: string;
+  categoria: string | null;
+  forma: string | null;
+  comNotaFiscal: boolean;
+  conciliado: boolean;
+  transferenciaId: string | null;
+  motivoEstorno: string | null;
+  vinculo: boolean;
+  conta_no_saldo: boolean;
+  acumulado: bigint;
+};
+
+/**
+ * Extrato do período [de, ate] com saldo corrido (ordem: data, depois criação). Estornados aparecem, riscados, sem mexer no saldo.
+ * Tudo no banco: o saldo anterior e os totais vêm de agregados (nenhum lançamento fora do período é carregado), e o saldo depois
+ * de cada linha vem de uma soma acumulada. A regra é a de `montarExtrato` (src/lib/dominio/saldo.ts), conferida em teste.
+ * Com `pagina`/`tamanho`, traz só a página (a tela); sem eles, até {@link LIMITE_DE_LINHAS_DO_EXTRATO} linhas (exportação).
+ */
+export async function extratoDaConta(conta: ContaComSaldo, de: string, ate: string, opcoes: { pagina?: number; tamanho?: number } = {}): Promise<ExtratoDaConta> {
+  const inicial = conta.saldoInicialInformado ? conta.saldoInicialCentavos : 0;
+  // Conta no saldo: não estornado e não anterior à data do saldo inicial (quando informado).
+  const conta_no_saldo = Prisma.sql`(l."estornadoEm" IS NULL AND (${conta.saldoInicialInformado} = false OR ${conta.dataSaldoInicial}::date IS NULL OR l."data" >= ${conta.dataSaldoInicial}::date))`;
+  const efeito = Prisma.sql`(CASE WHEN l."tipo" = 'ENTRADA' THEN l."valorCentavos" ELSE -l."valorCentavos" END)`;
+
+  const [agregado] = await prisma.$queryRaw<{ anterior: bigint; do_periodo: bigint; entradas: bigint; saidas: bigint; total: number }[]>`
+    SELECT COALESCE(SUM(${efeito}) FILTER (WHERE l."data" < ${de}::date AND ${conta_no_saldo}), 0)::bigint AS anterior,
+           COALESCE(SUM(${efeito}) FILTER (WHERE l."data" >= ${de}::date AND l."data" <= ${ate}::date AND ${conta_no_saldo}), 0)::bigint AS do_periodo,
+           COALESCE(SUM(l."valorCentavos") FILTER (WHERE l."data" >= ${de}::date AND l."data" <= ${ate}::date AND l."estornadoEm" IS NULL AND l."tipo" = 'ENTRADA'), 0)::bigint AS entradas,
+           COALESCE(SUM(l."valorCentavos") FILTER (WHERE l."data" >= ${de}::date AND l."data" <= ${ate}::date AND l."estornadoEm" IS NULL AND l."tipo" = 'SAIDA'), 0)::bigint AS saidas,
+           count(*) FILTER (WHERE l."data" >= ${de}::date AND l."data" <= ${ate}::date)::int AS total
+      FROM "Lancamento" l WHERE l."contaFinanceiraId" = ${conta.id} AND l."deletadoEm" IS NULL`;
+  const total = agregado?.total ?? 0;
+  const saldoAnterior = inicial + Number(agregado?.anterior ?? 0);
+
+  const paginado = opcoes.pagina !== undefined || opcoes.tamanho !== undefined;
+  const paginacao = paginado ? calcularPaginacao(total, opcoes.pagina ?? 1, opcoes.tamanho ?? 50) : null;
+  const limite = paginacao ? paginacao.take : LIMITE_DE_LINHAS_DO_EXTRATO;
+  const salto = paginacao ? paginacao.skip : 0;
+
+  const linhas = await prisma.$queryRaw<LinhaDoSql[]>`
+    SELECT * FROM (
+      SELECT l."id", l."data", l."tipo"::text AS tipo, l."valorCentavos", (l."estornadoEm" IS NOT NULL) AS estornado, l."descricao", c."nome" AS categoria, l."forma"::text AS forma,
+             l."comNotaFiscal", l."conciliado", l."transferenciaId", l."motivoEstorno", (l."contaReceberId" IS NOT NULL OR l."contaPagarId" IS NOT NULL) AS vinculo,
+             ${conta_no_saldo} AS conta_no_saldo,
+             SUM(CASE WHEN ${conta_no_saldo} THEN ${efeito} ELSE 0 END) OVER (ORDER BY l."data", l."criadoEm", l."id")::bigint AS acumulado,
+             l."criadoEm"
+        FROM "Lancamento" l LEFT JOIN "CategoriaFinanceira" c ON c."id" = l."categoriaId"
+       WHERE l."contaFinanceiraId" = ${conta.id} AND l."deletadoEm" IS NULL AND l."data" >= ${de}::date AND l."data" <= ${ate}::date) t
+     ORDER BY t."data", t."criadoEm", t."id" LIMIT ${limite} OFFSET ${salto}`;
+
+  const itens = linhas.map((l) => ({
+    lancamento: {
+      id: l.id,
+      data: l.data.toISOString().slice(0, 10),
+      tipo: l.tipo,
+      valorCentavos: l.valorCentavos,
+      estornado: l.estornado,
+      descricao: l.descricao,
+      categoria: l.categoria,
+      forma: l.forma,
+      comNotaFiscal: l.comNotaFiscal,
+      conciliado: l.conciliado,
+      transferenciaId: l.transferenciaId,
+      motivoEstorno: l.motivoEstorno,
+      vinculoComTitulo: l.vinculo,
+    } satisfies LinhaDeLancamento,
+    saldoAposCentavos: saldoAnterior + Number(l.acumulado),
+    incluidoNoSaldoInicial: !l.estornado && !l.conta_no_saldo,
+  }));
+  return {
+    saldoAnteriorCentavos: saldoAnterior,
+    saldoFinalCentavos: saldoAnterior + Number(agregado?.do_periodo ?? 0),
+    entradasCentavos: Number(agregado?.entradas ?? 0),
+    saidasCentavos: Number(agregado?.saidas ?? 0),
+    linhas: itens,
+    paginacao,
+    truncado: !paginacao && total > LIMITE_DE_LINHAS_DO_EXTRATO,
+  };
 }
 
 export type OpcoesDeLancamento = {

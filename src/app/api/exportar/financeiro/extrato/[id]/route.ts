@@ -38,6 +38,7 @@ export async function GET(requisicao: NextRequest, contexto: { params: Promise<{
     l.conciliado ? "Sim" : "",
     l.estornado ? `Estornado: ${l.motivoEstorno ?? ""}` : incluidoNoSaldoInicial ? "Já incluído no saldo inicial" : "",
   ]);
+  if (extrato.truncado) registros.push([`AVISO: exportação limitada às ${extrato.linhas.length} primeiras linhas do período. Escolha um período menor.`]);
   if (!conta.saldoInicialInformado) registros.push(["AVISO: saldo inicial não informado; o saldo mostra só o movimento registrado."]);
 
   const csv = gerarCsv(["Data", "Descrição", "Categoria", "Forma", "Entrada", "Saída", "Saldo", "Com nota", "Conciliado", "Observação"], registros);
