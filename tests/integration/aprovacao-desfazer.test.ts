@@ -1,7 +1,9 @@
+import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { UsuarioSessao } from "@/lib/auth/sessao";
 import { criarClientePrisma } from "@/lib/db/criar-cliente";
+import { ehDeadlock } from "@/lib/db/deadlock";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { estornarLancamento } from "@/modules/financeiro/servico-lancamentos";
 import { registrarRecebimento } from "@/modules/financeiro/servico-receber";
@@ -786,4 +788,112 @@ describe("indicadores depois de desfazer e de trocar (Vendido pela data do aceit
     expect(lista.linhas.filter((l) => l.projetoId === m.projetoId).reduce((s, l) => s + l.valorCentavos, 0)).toBe(1080000);
     expect(dia((await prisma.projeto.findUniqueOrThrow({ where: { id: m.projetoId } })).dataFechamento)).toBe("2020-07-01");
   });
+});
+
+// ------------------------------------------------------------------------------------------------------------------
+// Concorrência: receber uma parcela × desfazer a aprovação (Fase 7B, Bloco 5k(3))
+//
+// A ordem das travas tem de ser a mesma nos dois: Projeto → parcelas. Antes da correção o recebimento travava a parcela e
+// DEPOIS pegava a chave do Projeto (pela chave estrangeira do lançamento), e o desfazer fazia o contrário: deadlock.
+// O intervalo é provocado de forma DETERMINÍSTICA, sem depender de sorte: o teste segura a linha da ContaFinanceira (que é
+// DELE, com prefixo; nunca uma conta real) e o lançamento do recebimento fica esperando por ela, já com a parcela travada.
+// ------------------------------------------------------------------------------------------------------------------
+
+describe("receber uma parcela e desfazer a aprovação ao mesmo tempo (ordem única de travas)", () => {
+  let contaDaCorridaId: string;
+
+  beforeAll(async () => {
+    contaDaCorridaId = (await prisma.contaFinanceira.create({ data: { nome: `${PREFIXO} Caixa da corrida` } })).id;
+  });
+
+  type Desfecho = { ok: true } | { ok: false; erro: unknown };
+  const desfecho = (p: Promise<unknown>): Promise<Desfecho> => p.then(() => ({ ok: true as const }), (erro: unknown) => ({ ok: false as const, erro }));
+  const mensagem = (d: Desfecho) => (d.ok ? "" : d.erro instanceof Error ? d.erro.message : String(d.erro));
+
+  /** Espera (até `ms`) o banco mostrar uma sessão presa numa trava cuja consulta combina com o padrão. */
+  async function esperarBloqueio(c: Client, padrao: RegExp, ms = 10_000): Promise<boolean> {
+    const limite = Date.now() + ms;
+    while (Date.now() < limite) {
+      const r = await c.query<{ query: string }>(`SELECT query FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`);
+      if (r.rows.some((l) => padrao.test(l.query))) return true;
+      await new Promise((res) => setTimeout(res, 100));
+    }
+    return false;
+  }
+
+  const receberParcela = (contaReceberId: string) =>
+    prisma.$transaction(
+      (tx) => registrarRecebimento(tx, { contaReceberId, data: dataLocalDoInstante(new Date()), valorCentavos: 100000, contaFinanceiraId: contaDaCorridaId, categoriaId: categoriaReceitaId, forma: "PIX", comNotaFiscal: false, observacao: null }, ctxFinanceiro()),
+      { timeout: 60_000, maxWait: 30_000 }, // maxWait: a máquina ocupada não pode derrubar a corrida por falta de vaga no pool
+    );
+
+  const desfazerSemPressa = (propostaId: string) =>
+    prisma.$transaction((tx) => desfazerAprovacao(tx, { usuario, propostaId, motivo: "Aprovei por engano", reabrirId: null }), { timeout: 60_000, maxWait: 30_000 });
+
+  /** O recebimento chega primeiro e fica parado no lançamento (já com a parcela travada); o desfazer chega no meio. */
+  async function receberChegaPrimeiro(titulo: string) {
+    const c = await cenarioDoEngano(titulo);
+    const parcela = await prisma.contaReceber.findFirstOrThrow({ where: { propostaId: c.propostaId, ordem: 1 } });
+    return comConexao(async (trava) => {
+      await trava.query("BEGIN");
+      try {
+        await trava.query(`SELECT id FROM "ContaFinanceira" WHERE id = $1 FOR UPDATE`, [contaDaCorridaId]);
+        const receber = desfecho(receberParcela(parcela.id));
+        await esperarBloqueio(trava, /INSERT INTO\s+"?public"?\."?Lancamento"?/i); // o recebimento está esperando a conta financeira
+        const desfazerAprovacao = desfecho(desfazerSemPressa(c.propostaId));
+        await esperarBloqueio(trava, /FOR (KEY SHARE|UPDATE)/i); // o desfazer também parou numa trava
+        await trava.query("ROLLBACK"); // solta a conta financeira: o recebimento segue e a corrida acontece
+        const [r, d] = await Promise.all([receber, desfazerAprovacao]);
+        return { c, parcela, r, d };
+      } finally {
+        await trava.query("ROLLBACK").catch(() => undefined);
+      }
+    });
+  }
+
+  /** O desfazer chega primeiro e fica parado numa etapa (travada pelo teste); o recebimento chega no meio. */
+  async function desfazerChegaPrimeiro(titulo: string) {
+    const c = await cenarioDoEngano(titulo);
+    const parcela = await prisma.contaReceber.findFirstOrThrow({ where: { propostaId: c.propostaId, ordem: 1 } });
+    const etapa = await prisma.etapaProjeto.findFirstOrThrow({ where: { projetoId: c.projetoId, deletadoEm: null } });
+    return comConexao(async (trava) => {
+      await trava.query("BEGIN");
+      try {
+        await trava.query(`SELECT id FROM "EtapaProjeto" WHERE id = $1 FOR UPDATE`, [etapa.id]);
+        const desfazerAprovacao = desfecho(desfazerSemPressa(c.propostaId));
+        await esperarBloqueio(trava, /"EtapaProjeto"[\s\S]*FOR UPDATE/i); // o desfazer já travou o projeto e a parcela e espera a etapa
+        const receber = desfecho(receberParcela(parcela.id));
+        await esperarBloqueio(trava, /"Projeto"[\s\S]*FOR KEY SHARE|"ContaReceber"[\s\S]*FOR UPDATE/i); // o recebimento chegou e parou
+        await trava.query("ROLLBACK");
+        const [r, d] = await Promise.all([receber, desfazerAprovacao]);
+        return { c, parcela, r, d };
+      } finally {
+        await trava.query("ROLLBACK").catch(() => undefined);
+      }
+    });
+  }
+
+  it("20 corridas, cada uma com obra nova: sem deadlock; o recebimento termina e o desfazer é recusado por 'já tem recebimento'", async () => {
+    const problemas: string[] = [];
+    for (let i = 1; i <= 20; i++) {
+      const { c, parcela, r, d } = await receberChegaPrimeiro(`Corrida receber primeiro ${i}`);
+      const deadlocks = [r, d].filter((x) => !x.ok && ehDeadlock(x.erro)).length;
+      if (deadlocks > 0) problemas.push(`#${i}: deadlock (${[r, d].map((x) => (x.ok ? "ok" : mensagem(x).slice(0, 60))).join(" | ")})`);
+      else if (!r.ok) problemas.push(`#${i}: o recebimento falhou: ${mensagem(r).slice(0, 80)}`);
+      else if (d.ok || !/parcela 1 já tem recebimento/.test(mensagem(d))) problemas.push(`#${i}: o desfazer devia ser recusado por recebimento: ${d.ok ? "passou" : mensagem(d).slice(0, 80)}`);
+      else if ((await prisma.lancamento.count({ where: { contaReceberId: parcela.id, estornadoEm: null } })) !== 1 || (await aprovadasDoNumero(c.numero)) !== 1) problemas.push(`#${i}: estado final incoerente`);
+    }
+    expect(problemas, `corridas com problema (${problemas.length} de 20)`).toEqual([]);
+  }, 900_000);
+
+  it("o desfazer termina antes e o recebimento é recusado, em português simples (parcela removida), sem gravar nada", async () => {
+    const { c, parcela, r, d } = await desfazerChegaPrimeiro("Corrida desfazer primeiro");
+    expect(d, `desfazer: ${mensagem(d)}`).toEqual({ ok: true });
+    expect(r.ok).toBe(false);
+    expect(mensagem(r)).toMatch(/foi removida|não existe mais/);
+    expect(mensagem(r)).toMatch(/aprovação/);
+    expect(ehDeadlock((r as { erro: unknown }).erro)).toBe(false);
+    expect(await prisma.lancamento.count({ where: { contaReceberId: parcela.id } })).toBe(0);
+    expect(await prisma.proposta.findUniqueOrThrow({ where: { id: c.propostaId } })).toMatchObject({ status: "ENVIADA" }); // o desfazer valeu
+  }, 120_000);
 });

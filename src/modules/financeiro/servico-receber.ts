@@ -8,7 +8,7 @@ import { ajustarValor, aplicarPagamento, podeCancelar, saldoDoTitulo, statusPara
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
 
-import { registrarLancamento, type ContextoFinanceiro } from "./servico-lancamentos";
+import { registrarLancamento, travarProjetoDaContaAReceber, type ContextoFinanceiro } from "./servico-lancamentos";
 import { sincronizarTarefaDeCobranca } from "./tarefa-cobranca";
 
 type Tx = Prisma.TransactionClient;
@@ -18,14 +18,20 @@ const comoTexto = (d: Date | null): string | null => (d ? d.toISOString().slice(
 
 type Forma = "PIX" | "TRANSFERENCIA" | "ESPECIE" | "CARTAO_CREDITO" | "BOLETO";
 
-/** Trava a linha e devolve a conta a receber com o cliente e a obra (para descrever o lançamento). */
+/**
+ * Trava a linha e devolve a conta a receber com o cliente e a obra (para descrever o lançamento). Primeiro o Projeto
+ * (`FOR KEY SHARE`), depois a conta (`FOR UPDATE`): a mesma ordem de "desfazer a aprovação" (sem deadlock). Depois das
+ * travas a conta é LIDA DE NOVO: se ela foi removida enquanto esta ação esperava (a aprovação foi desfeita), a ação é
+ * recusada em português simples e nada é gravado.
+ */
 async function travarConta(tx: Tx, id: string) {
+  await travarProjetoDaContaAReceber(tx, id);
   await tx.$queryRaw`SELECT "id" FROM "ContaReceber" WHERE "id" = ${id} AND "deletadoEm" IS NULL FOR UPDATE`;
   const conta = await tx.contaReceber.findFirst({
     where: { id, deletadoEm: null },
     include: { cliente: { select: { id: true, nome: true } }, projeto: { select: { id: true, codigo: true, titulo: true } } },
   });
-  if (!conta) throw new ErroNegocio("Conta a receber não encontrada.");
+  if (!conta) throw new ErroNegocio("Esta parcela não existe mais: ela foi removida (por exemplo, porque a aprovação da proposta foi desfeita). Atualize a página.");
   return conta;
 }
 
@@ -47,6 +53,7 @@ export type EntradaDeRecebimento = {
  */
 export async function registrarRecebimento(tx: Tx, e: EntradaDeRecebimento, ctx: ContextoFinanceiro) {
   const conta = await travarConta(tx, e.contaReceberId);
+  if (conta.status === "CANCELADA") throw new ErroNegocio("Esta parcela foi cancelada (por exemplo, porque a aprovação da proposta foi desfeita) e não aceita mais recebimento.");
   const r = aplicarPagamento({ status: conta.status, valorCentavos: conta.valorCentavos, valorPagoCentavos: conta.valorPagoCentavos }, e.valorCentavos);
   if (!r.ok) throw new ErroNegocio(r.erro, { valor: r.erro });
 

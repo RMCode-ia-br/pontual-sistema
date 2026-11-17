@@ -188,11 +188,25 @@ export async function estornarLancamento(tx: Tx, lancamentoId: string, motivo: s
 }
 
 /**
+ * Ordem ÚNICA de travas de quem mexe numa conta a receber: o Projeto (com `FOR KEY SHARE`) vem ANTES da conta (`FOR UPDATE`).
+ * É a mesma ordem de "desfazer a aprovação", de aprovar e de iniciar etapa (Projeto → parcelas → etapas). Antes, o
+ * recebimento travava a conta e só depois o lançamento pegava a chave do Projeto (pela chave estrangeira), e o desfazer
+ * fazia o contrário: deadlock. `KEY SHARE` não atrapalha outros recebimentos (dois ao mesmo tempo seguem; a conta continua
+ * travada uma de cada vez), mas espera um desfazer em andamento e é esperado por ele.
+ * O `projetoId` de uma conta nunca muda, então lê-lo antes de travar é seguro. Conta sem obra não tem Projeto para travar.
+ */
+export async function travarProjetoDaContaAReceber(tx: Tx, contaReceberId: string): Promise<void> {
+  const [ref] = await tx.$queryRaw<{ projetoId: string | null }[]>`SELECT "projetoId" FROM "ContaReceber" WHERE "id" = ${contaReceberId}`;
+  if (ref?.projetoId) await tx.$queryRaw`SELECT "id" FROM "Projeto" WHERE "id" = ${ref.projetoId} FOR KEY SHARE`;
+}
+
+/**
  * Desfaz o efeito de um recebimento estornado na conta a receber: valor pago, status e a marca "com nota", que volta a ser a do
  * pagamento válido mais recente que sobrou (ou, sem nenhum pagamento, a da proposta de origem). O indicador de faturamento com nota
  * lê sempre o pagamento (decisão 117); a marca da conta só precisa continuar coerente com o que sobrou.
  */
 async function refazerTituloDeReceber(tx: Tx, id: string, valorCentavos: number, ctx: ContextoFinanceiro, lancamentoEstornadoId: string) {
+  await travarProjetoDaContaAReceber(tx, id);
   const [t] = await tx.$queryRaw<{ status: StatusDoTitulo; valorCentavos: number; valorPagoCentavos: number; descricao: string; clienteId: string; projetoId: string | null }[]>`
     SELECT "status", "valorCentavos", "valorPagoCentavos", "descricao", "clienteId", "projetoId" FROM "ContaReceber" WHERE "id" = ${id} FOR UPDATE`;
   if (!t) throw new ErroNegocio("A conta a receber deste lançamento não foi encontrada.");
