@@ -113,4 +113,9 @@ describe("csvDoRelatorio", () => {
     const csv = csvDoRelatorio(COLUNAS, [], { podeVerInterno: true, aviso: 'custo "R$ 1,00" $& teste' });
     expect(csv.split("\r\n")[0]).toContain('"AVISO: custo ""R$ 1,00"" $& teste"');
   });
+  it("número com 0 casas não perde zeros do inteiro (100 continua 100)", () => {
+    expect(valorDeCsv("numero", 100, 0)).toBe("100");
+    expect(valorDeCsv("numero", 10, 0)).toBe("10");
+    expect(valorDeCsv("numero", 1.5, 3)).toBe("1,5");
+  });
 });

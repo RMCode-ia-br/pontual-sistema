@@ -24,6 +24,7 @@ async function limpar() {
   await comConexao(async (c) => {
     const projetos = `SELECT id FROM "Projeto" WHERE titulo LIKE '${PREFIXO}%'`;
     const produtos = `SELECT id FROM "Produto" WHERE codigo LIKE 'INT-ROP-%'`;
+    await c.query(`DELETE FROM "MovimentoEstoque" WHERE "produtoId" IN (${produtos})`);
     await c.query(`DELETE FROM "Tarefa" WHERE titulo LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "EtapaProjeto" WHERE "projetoId" IN (${projetos})`);
     await c.query(`DELETE FROM "MotivoBloqueio" WHERE nome LIKE '${PREFIXO}%'`);
@@ -31,7 +32,6 @@ async function limpar() {
     await c.query(`DELETE FROM "HistoricoFaseProjeto" WHERE "projetoId" IN (${projetos})`);
     await c.query(`DELETE FROM "Projeto" WHERE titulo LIKE '${PREFIXO}%'`);
     await c.query(`DELETE FROM "Cliente" WHERE nome LIKE '${PREFIXO}%'`);
-    await c.query(`DELETE FROM "MovimentoEstoque" WHERE "produtoId" IN (${produtos})`);
     await c.query(`DELETE FROM "HistoricoPreco" WHERE "produtoId" IN (${produtos})`);
     await c.query(`DELETE FROM "Produto" WHERE codigo LIKE 'INT-ROP-%'`);
   });
@@ -132,6 +132,18 @@ describe("Curva ABC das saídas de estoque", () => {
     expect(ordem).toEqual([...ordem].sort((x, y) => y - x));
     expect(c.linhas[0]?.classe).toBe("A");
     expect(c.totalCentavos).toBe(c.linhas.reduce((s, l) => s + l.valorCentavos, 0));
+  });
+
+  it("saída ESTORNADA não conta: o estorno (ajuste ligado à saída) a desfaz no valor", async () => {
+    const p = await produto("EST");
+    const o = await obra("Estorno ABC");
+    const saida = await prisma.movimentoEstoque.create({ data: { produtoId: p.id, tipo: "SAIDA_OBRA", quantidade: -10, custoUnitarioCentavos: 1_000, data: new Date("2018-04-11T00:00:00Z"), projetoId: o.id } });
+    await prisma.movimentoEstoque.create({ data: { produtoId: p.id, tipo: "AJUSTE", quantidade: 10, custoUnitarioCentavos: 1_000, data: new Date("2018-04-12T00:00:00Z"), projetoId: o.id, estornoDeId: saida.id } });
+    const c = await curvaAbcDeSaidas(PERIODO_ESTOQUE, { a: 80, b: 15 });
+    expect(c.linhas.some((l) => l.codigo === "INT-ROP-EST")).toBe(false); // líquido zero: sem linha
+    // Um ajuste comum (sem ligação com saída) NÃO entra na curva.
+    await prisma.movimentoEstoque.create({ data: { produtoId: p.id, tipo: "AJUSTE", quantidade: -3, custoUnitarioCentavos: 1_000, data: new Date("2018-04-13T00:00:00Z"), projetoId: o.id } });
+    expect((await curvaAbcDeSaidas(PERIODO_ESTOQUE, { a: 80, b: 15 })).linhas.some((l) => l.codigo === "INT-ROP-EST")).toBe(false);
   });
 
   it("período sem saída: curva vazia", async () => {

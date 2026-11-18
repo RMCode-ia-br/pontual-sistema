@@ -43,7 +43,9 @@ export function centavosParaCsv(centavos: number): string {
 
 function decimalParaCsv(n: number, casas: number): string {
   if (!Number.isFinite(n)) return "";
-  return n.toFixed(casas).replace(/\.?0+$/, "").replace(".", ",") || "0";
+  const texto = n.toFixed(casas);
+  // Só tira zeros depois da vírgula (com 0 casas, "100" continua "100").
+  return (texto.includes(".") ? texto.replace(/\.?0+$/, "") : texto).replace(".", ",") || "0";
 }
 
 /** Formata UM valor segundo o tipo da coluna. Devolve null quando não há valor (a célula sai vazia). */

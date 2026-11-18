@@ -28,7 +28,7 @@ export async function curvaAbcDeSaidas(p: PeriodoDeCompras, cortes: CortesAbc): 
            COALESCE(-sum(round(m.quantidade * m."custoUnitarioCentavos")) FILTER (WHERE m."custoUnitarioCentavos" IS NOT NULL), 0)::bigint AS valor,
            count(*) FILTER (WHERE m."custoUnitarioCentavos" IS NULL)::int AS sem_custo
       FROM "MovimentoEstoque" m JOIN "Produto" p ON p.id = m."produtoId"
-     WHERE m."deletadoEm" IS NULL AND m.tipo IN ('SAIDA_OBRA', 'DEVOLUCAO') AND m.data >= ${p.de}::date AND m.data <= ${p.ate}::date
+     WHERE m."deletadoEm" IS NULL AND (m.tipo IN ('SAIDA_OBRA', 'DEVOLUCAO') OR (m.tipo = 'AJUSTE' AND m."estornoDeId" IS NOT NULL AND m."projetoId" IS NOT NULL)) AND m.data >= ${p.de}::date AND m.data <= ${p.ate}::date
      GROUP BY p.id, p.codigo, p.descricao, p.unidade`;
   const curva = curvaAbc(linhas.map((l) => ({ produtoId: l.id, codigo: l.codigo, descricao: l.descricao, unidade: l.unidade, quantidadeMilesimos: Math.round(Number(l.qtd) * 1000), valorCentavos: num(l.valor) })), cortes);
   return { ...curva, semCusto: linhas.reduce((s, l) => s + l.sem_custo, 0), semCustoProdutos: linhas.filter((l) => l.sem_custo > 0).length };

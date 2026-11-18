@@ -15,11 +15,11 @@ export const obterConfiguracao = cache(async () => {
 export const ETIQUETA_DA_MARCA = "marca";
 
 /**
- * URL assinada da logo, guardada por 50 min (a URL vale 60): sem isso, cada página gerava uma ida ao Storage só para o
+ * URL assinada da logo, guardada por 50 min (a URL vale 24 h: mesmo servida velha depois de um fim de semana parado, ainda está válida): sem isso, cada página gerava uma ida ao Storage só para o
  * cabeçalho. A chave inclui o caminho do arquivo, então trocar a logo muda a chave sozinho; a etiqueta cobre o resto.
  * Erro do Storage NÃO é guardado (a próxima página tenta de novo).
  */
-const urlDaLogoEmCache = unstable_cache((caminho: string) => criarUrlDeDownload(caminho, 60 * 60), ["url-da-logo"], { revalidate: 50 * 60, tags: [ETIQUETA_DA_MARCA] });
+const urlDaLogoEmCache = unstable_cache((caminho: string) => criarUrlDeDownload(caminho, 24 * 60 * 60), ["url-da-logo"], { revalidate: 50 * 60, tags: [ETIQUETA_DA_MARCA] });
 
 /** Cor da marca guardada pela mesma etiqueta (layout, viewport e manifesto a pedem em TODA requisição). */
 const corDaMarcaEmCache = unstable_cache(async () => (await prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { corPrimaria: true } }))?.corPrimaria ?? null, ["cor-da-marca"], {

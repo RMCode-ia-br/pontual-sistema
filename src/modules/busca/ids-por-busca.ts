@@ -11,7 +11,8 @@ import { padraoLike } from "@/lib/listas/parametros";
  * migrações Cadastros, Comercial e Propostas; os índices novos estão na migração do Bloco 8), para o Postgres poder usá-los.
  */
 
-export const LIMITE_DE_IDS_NA_BUSCA = 2000;
+/** Teto dos ids de uma busca (abaixo do limite de parâmetros do Postgres, 32.767). Acima disso a busca é ampla demais para a lista: escolha um termo mais específico. */
+export const LIMITE_DE_IDS_NA_BUSCA = 20_000;
 
 const projeto = (a: string) => Prisma.raw(`public.f_unaccent(lower(${a}."codigo" || ' ' || ${a}."titulo"))`);
 const cliente = (a: string) => Prisma.raw(`public.f_unaccent(lower(${a}."nome" || ' ' || coalesce(${a}."nomeFantasia", '')))`);

@@ -26,6 +26,8 @@ let idRevisao = "";
 /** A propostas aprovadas de junho de 2020 listam este número? (o "Vendido" do mês do aceite) */
 async function vendidoEmJunhoListaEste(page: Page, numero: string): Promise<boolean> {
   await page.goto("/relatorios/vendas?mes=2020-06");
+  // A lista chega por streaming (a página abre antes do resumo e da tabela): espera o resumo para só então contar as linhas.
+  await page.locator('section[aria-label="Resumo das vendas"]').waitFor();
   return (await page.getByRole("table", { name: "Propostas aprovadas no período" }).getByRole("row").filter({ hasText: numero }).count()) > 0;
 }
 

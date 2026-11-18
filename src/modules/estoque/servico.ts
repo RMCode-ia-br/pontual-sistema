@@ -281,6 +281,8 @@ export async function estornarMovimentoDeEstoque(
 
   const delta = milesimosDoDecimal(original.quantidade);
   const quantidade = Math.abs(delta);
+  // Contagem inicial de ZERO (produto contado, sem estoque) não mudou o saldo: não há o que estornar.
+  if (quantidade === 0) throw new ErroNegocio("Esta contagem foi de zero e não mudou o estoque: não há o que estornar. Para corrigir, faça um ajuste com motivo.");
   // Desfazer uma ENTRADA retira do saldo: precisa de saldo, ou de confirmação (aqui o estorno é intencional e justificado).
   const desfeito = await registrarMovimentoDeEstoque(
     tx,

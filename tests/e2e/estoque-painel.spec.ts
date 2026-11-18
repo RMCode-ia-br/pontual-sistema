@@ -52,7 +52,9 @@ test("o relatório de estoque valoriza o que tem custo e aponta o que está sem 
   const linhaSemCusto = page.getByRole("listitem").filter({ hasText: "E2E Painel sem custo" });
   await expect(linhaSemCusto).toContainText("Sem custo"); // nunca R$ 0,00
   await expect(linhaSemCusto).not.toContainText("R$ 0,00");
-  await expect(page.getByRole("heading", { name: "Compras recebidas por fornecedor" })).toBeVisible();
+  // Compras por fornecedor é outra visão do relatório (uma por vez, poucos números por tela).
+  await page.getByRole("link", { name: "Compras por fornecedor" }).click();
+  await expect(page.getByText(/Recebido de .* a .* compra(s)/)).toBeVisible();
   await semRolagemHorizontal(page);
 });
 

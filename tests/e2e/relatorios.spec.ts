@@ -73,7 +73,12 @@ test("o relatório de funil e origem conta o projeto, mostra as definições e l
   const origem = page.getByRole("table", { name: "Funil por origem" });
   await expect(origem.getByRole("row", { name: /Google/ })).toContainText("1");
   await expect(page.getByRole("table", { name: "Projetos por fase atual" }).getByRole("row", { name: /Perdido/ })).toContainText("1");
-  await expect(page.getByRole("heading", { name: "Por que se perdem" })).toBeVisible();
+  // Os motivos de perda são outra visão do relatório; depois volta ao funil.
+  await page.getByRole("link", { name: "Motivos de perda" }).click();
+  await expect(page).toHaveURL(/visao=perdas/);
+  await expect(page.getByRole("heading", { name: "Por que se perdem" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("navigation", { name: "Visões do relatório de funil" }).getByRole("link", { name: "Funil", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Funil por origem" })).toBeVisible();
   // Sem propostas/aprovações, taxa de fechamento não é inventada. (O banco de desenvolvimento pode ter projetos reais
   // aprovados, e aí a taxa existe de verdade: nesse caso só conferimos que o cartão está lá.)
   if ((await contarProjetosDecididosForaDoE2E()) === 0) {
@@ -95,7 +100,7 @@ test("filtro por origem sem projetos mostra o estado vazio; o CSV segue os mesmo
   await page.goto("/relatorios/funil?origem=INSTAGRAM");
   await expect(page.getByText("Nenhum projeto criado nesse período")).toBeVisible();
 
-  const r = await page.request.get("/api/exportar/relatorios/funil");
+  const r = await page.request.get("/api/exportar/relatorios/funil?tabela=origem"); // cada visão/tabela é um CSV (Bloco 6)
   expect(r.status()).toBe(200);
   expect(r.headers()["content-type"]).toContain("text/csv");
   const csv = await r.text();
@@ -106,6 +111,6 @@ test("filtro por origem sem projetos mostra o estado vazio; o CSV segue os mesmo
   expect(csv).toContain("Perdido");
   expect((await buscarAuditoriaFeitaPeloE2E("Relatorio", "EXPORTAR")).length).toBe(1);
 
-  const vazio = await (await page.request.get("/api/exportar/relatorios/funil?origem=INSTAGRAM")).text();
+  const vazio = await (await page.request.get("/api/exportar/relatorios/funil?origem=INSTAGRAM&tabela=origem")).text();
   expect(vazio).not.toMatch(/Google;[1-9]\d*;/);
 });
