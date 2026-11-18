@@ -8,7 +8,7 @@ import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import type { Periodo } from "@/lib/periodo";
 import { desempenhoPorParceiro, sazonalidade, ticketPorPorte, ticketPorTipoDeServico, vendasPorOrigem } from "@/modules/indicadores/vendas-por-dimensao";
 import { vendidoNoPeriodo } from "@/modules/indicadores/vendas";
-import { ganhasEPerdidasPorFaixa, temposDeDecisao } from "@/modules/indicadores/tempos-e-faixas";
+import { ganhasEPerdidasPorFaixa, LIMITE_DE_LINHAS_DE_DECISAO, temposDeDecisao } from "@/modules/indicadores/tempos-e-faixas";
 import { calcularFunil } from "@/lib/dominio/relatorio-funil";
 import { carregarRelatorioDoFunil } from "@/modules/relatorios/funil";
 
@@ -399,5 +399,16 @@ describe("Ganhas × perdidas por faixa de preço", () => {
     const f = await ganhasEPerdidasPorFaixa("2019-12-31", null);
     expect(f.janela).toEqual({ de: "2019-01-01", ate: "2019-12-31" });
     expect(f.resultado.tipo === "unica" || f.resultado.casos >= 12).toBe(true);
+  });
+});
+
+describe("tempos de decisão: média sobre todas as decisões, tabela limitada", () => {
+  it("o total de decisões é a amostra mais as que ficaram fora da média, e a tabela nunca passa do limite", async () => {
+    const d = await temposDeDecisao(JAN);
+    for (const grupo of [d.aprovadas, d.perdidas]) {
+      expect(grupo.totalDeLinhas).toBe(grupo.amostra + grupo.foraDaMedia);
+      expect(grupo.linhas.length).toBeLessThanOrEqual(LIMITE_DE_LINHAS_DE_DECISAO);
+      expect(grupo.linhas.length).toBe(Math.min(grupo.totalDeLinhas, LIMITE_DE_LINHAS_DE_DECISAO));
+    }
   });
 });

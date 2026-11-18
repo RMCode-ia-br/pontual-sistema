@@ -105,8 +105,8 @@ test("calendário de instalação: etapas previstas sem agendamento; agendar lig
 
   // A etapa deixou de estar "sem agendamento", e o compromisso aparece no calendário de instalação.
   await page.goto("/obras/calendario?vista=lista");
+  await expect(page.getByRole("link", { name: "Agendar Instalação dos vidros: E2E Obra Lista A" })).toBeVisible(); // primeiro o positivo
   await expect(page.getByRole("link", { name: "Agendar Instalação das esquadrias: E2E Obra Lista A" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Agendar Instalação dos vidros: E2E Obra Lista A" })).toBeVisible();
   await expect(page.getByText("E2E Cliente Lista A").first()).toBeVisible();
 });
 

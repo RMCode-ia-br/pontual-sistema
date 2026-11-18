@@ -204,6 +204,20 @@ describe("Preço médio por m²", () => {
   });
 });
 
+describe("Clientes por cidade: caixa, acento e espaços", () => {
+  it("'Macaé', 'macae' e 'MACAÉ ' viram UMA cidade, com o nome mais frequente e a UF em maiúsculas", async () => {
+    const MAIO: Periodo = { de: "2018-05-01", ate: "2018-05-31" };
+    for (const [i, [cidade, uf]] of ([["Macaé", "RJ"], ["Macaé", "RJ"], ["macae", "rj"], ["MACAÉ ", " Rj"]] as const).entries()) {
+      const c = await cliente(`Cid ${i}`);
+      const e = await endereco(c.id, cidade, uf);
+      const p = await projeto(`Cid ${i}`, c.id, e.id);
+      await proposta(p.id, { aceitaEm: "2018-05-10T15:00:00Z", valor: 10_000 });
+    }
+    const linhas = await clientesPorCidade(MAIO);
+    expect(linhas).toEqual([{ cidade: "Macaé", uf: "RJ", clientes: 4, obras: 4, vendidoCentavos: 40_000 }]);
+  });
+});
+
 describe("Clientes por cidade", () => {
   it("agrupa pela cidade da OBRA (espaços e maiúsculas do cadastro à parte), com 'Não informada' para obra sem endereço", async () => {
     const linhas = await clientesPorCidade(MAR);

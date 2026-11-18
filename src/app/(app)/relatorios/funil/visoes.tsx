@@ -9,7 +9,7 @@ import { formatarData, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
 import { tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
-import { ganhasEPerdidasPorFaixa, temposDeDecisao } from "@/modules/indicadores/tempos-e-faixas";
+import { ganhasEPerdidasPorFaixa, LIMITE_DE_LINHAS_DE_DECISAO, temposDeDecisao } from "@/modules/indicadores/tempos-e-faixas";
 
 const th = "px-3 py-2";
 const dias = (n: number | null) => (n === null ? "—" : `${n.toLocaleString("pt-BR")} dia(s)`);
@@ -46,6 +46,11 @@ export async function VisaoTempos({ periodo }: { periodo: Periodo }) {
         />
       </section>
       <p className="text-muted-foreground mb-4 text-sm">Propostas enviadas e ainda sem resposta agora: <strong>{d.emAbertoAgora}</strong> (de qualquer data).</p>
+      {d.aprovadas.totalDeLinhas > d.aprovadas.linhas.length || d.perdidas.totalDeLinhas > d.perdidas.linhas.length ? (
+        <p role="note" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          A tabela mostra só as {LIMITE_DE_LINHAS_DE_DECISAO} decisões mais recentes de cada tipo ({d.aprovadas.totalDeLinhas} aprovadas e {d.perdidas.totalDeLinhas} perdidas no período). As médias acima valem para todas.
+        </p>
+      ) : null}
       {decisoes.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <p className="font-medium">Nenhuma proposta foi decidida neste período</p>

@@ -88,6 +88,8 @@ test("a visão geral do financeiro explica que o vencido entra no fluxo como esp
   // Sem conta financeira a visão geral só convida a cadastrar uma: cria a de teste (a limpeza apaga "E2E %").
   await page.goto("/financeiro/contas");
   await expect(page.getByRole("heading", { name: /Contas/ }).first()).toBeVisible();
+  // As telas chegam por streaming: espera a rede assentar antes de afirmar AUSÊNCIA ou contar (senão passa/falha por pressa).
+  await page.waitForLoadState("networkidle");
   if ((await page.getByText("E2E Conta Prazo").count()) === 0) {
     await page.getByRole("button", { name: /Nova conta|Cadastrar a primeira conta/ }).first().click();
     await page.getByLabel("Nome").fill("E2E Conta Prazo");

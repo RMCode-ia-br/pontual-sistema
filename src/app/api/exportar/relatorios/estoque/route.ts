@@ -23,7 +23,7 @@ const COLUNAS_POSICAO: ColunaDeCsv<LinhaDoEstoque>[] = [
   { titulo: "Custo unitário (R$)", tipo: "dinheiro", valor: (l) => l.custoUnitarioCentavos },
   // Produto com saldo e sem custo sai com a célula vazia na coluna de valor e "Sem custo" na coluna de situação: nunca zero.
   { titulo: "Valor em estoque (R$)", tipo: "dinheiro", valor: (l) => l.valorCentavos },
-  { titulo: "Situação", tipo: "texto", valor: (l) => [!l.ativo ? "Inativo" : "", l.abaixoDoMinimo ? "Abaixo do mínimo" : "", l.valorCentavos === null && l.saldoMilesimos > 0 ? "Sem custo" : ""].filter(Boolean).join("; ") || null },
+  { titulo: "Situação", tipo: "texto", valor: (l) => [!l.ativo ? "Inativo" : "", l.saldoMilesimos < 0 ? "Saldo negativo" : "", l.abaixoDoMinimo ? "Abaixo do mínimo" : "", l.valorCentavos === null && l.saldoMilesimos > 0 ? "Sem custo" : ""].filter(Boolean).join("; ") || null },
 ];
 
 const COLUNAS_FORNECEDORES: ColunaDeCsv<TotalDoFornecedor & { nome: string }>[] = [

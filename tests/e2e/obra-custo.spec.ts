@@ -39,6 +39,8 @@ test("sem proposta aprovada e sem mão de obra por m², a margem é INCOMPLETA (
 test("a sugestão de mão de obra por m² mostra a conta (ou explica por que não dá) e não grava sem confirmar", async ({ page }) => {
   await page.goto(`/obras/${obraId}?aba=custo`);
   const card = page.getByRole("region", { name: /Mão de obra: custo por m² não informado/ }).or(page.locator("section", { hasText: "Mão de obra: custo por m² não informado" }));
+  // As telas chegam por streaming: espera a rede assentar antes de afirmar AUSÊNCIA ou contar (senão passa/falha por pressa).
+  await page.waitForLoadState("networkidle");
   // O cartão só existe enquanto o custo por m² está vazio em Configurações; se já estiver preenchido, não há o que sugerir.
   if ((await card.count()) === 0) return;
   await page.getByRole("button", { name: "Sugerir a partir dos salários" }).click();

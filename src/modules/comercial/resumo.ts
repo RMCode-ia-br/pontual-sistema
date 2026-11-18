@@ -65,7 +65,7 @@ export async function resumoComercial(periodo?: Periodo): Promise<ResumoComercia
       select: { id: true, inicio: true, local: true, cliente: { select: { nome: true, telefone: true, whatsapp: true } }, projeto: { select: { titulo: true } } },
     }),
     obterModeloWhatsApp(CHAVE_DO_LEMBRETE_DE_VISITA),
-    prisma.projeto.groupBy({ by: ["origem"], where: { deletadoEm: null, criadoEm: { gte: inicio, lt: fimExclusivo } }, _count: { _all: true }, orderBy: { _count: { origem: "desc" } }, take: 6 }),
+    prisma.projeto.groupBy({ by: ["origem"], where: { deletadoEm: null, criadoEm: { gte: inicio, lt: fimExclusivo } }, _count: { _all: true }, orderBy: [{ _count: { origem: "desc" } }, { origem: "asc" }] }),
     motivosDePerdaNoPeriodo(periodo ?? mesDaData(hoje)), // a MESMA fonte do relatório do funil (pela data da perda)
   ]);
 

@@ -1,6 +1,7 @@
 import { Download, Info } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LinkDeCsvDaTabela } from "@/components/relatorios/link-de-csv-da-tabela";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
@@ -227,6 +228,7 @@ async function VisaoDoFunil({ visao, filtros }: { visao: string; filtros: Return
         <h2 id="r-conversao" className="text-lg font-medium">
           Quantos chegaram a cada fase
         </h2>
+        <LinkDeCsvDaTabela href={`/api/exportar/relatorios/funil${montarConsulta({ ...filtrosDeLista, visao: "funil", tabela: "conversao" })}`} />
         <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <caption className="sr-only">Conversão entre as fases do funil</caption>
@@ -257,6 +259,7 @@ async function VisaoDoFunil({ visao, filtros }: { visao: string; filtros: Return
         <h2 id="r-origem" className="text-lg font-medium">
           De onde vêm os clientes
         </h2>
+        <LinkDeCsvDaTabela href={`/api/exportar/relatorios/funil${montarConsulta({ ...filtrosDeLista, visao: "funil", tabela: "origem" })}`} />
         <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <caption className="sr-only">Funil por origem</caption>

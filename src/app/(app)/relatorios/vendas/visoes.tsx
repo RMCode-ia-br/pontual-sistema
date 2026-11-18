@@ -1,3 +1,6 @@
+import { LinkDeCsvDaTabela } from "@/components/relatorios/link-de-csv-da-tabela";
+import { montarConsulta } from "@/lib/listas/parametros";
+import { parametrosDoPeriodo } from "@/lib/periodo";
 import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { TabelaDeRelatorio } from "@/components/relatorios/cabecalho-de-relatorio";
 import { GraficoDeBarras } from "@/components/relatorios/grafico-de-barras";
@@ -181,6 +184,9 @@ export async function VisaoTicket({ periodo }: { periodo: Periodo }) {
             <GraficoDeBarras dados={porTipo.filter((l) => l.ticketCentavos !== null).map((l) => ({ nome: rotuloTipo(l.chave), ticket: reais(l.ticketCentavos ?? 0) }))} series={[{ chave: "ticket", rotulo: "Ticket médio" }]} formato="reais" descricao="Ticket médio por tipo de serviço, no período" />
           </div>
           {tabela("Ticket médio por tipo de serviço", "Tipo de serviço", porTipo, rotuloTipo)}
+          <LinkDeCsvDaTabela href={`/api/exportar/relatorios/vendas${montarConsulta({ ...parametrosDoPeriodo(periodo), visao: "ticket", tabela: "tipo" })}`} />
+          {tabela("Ticket médio por tipo de serviço", "Tipo de serviço", porTipo, rotuloTipo)}
+          <LinkDeCsvDaTabela href={`/api/exportar/relatorios/vendas${montarConsulta({ ...parametrosDoPeriodo(periodo), visao: "ticket", tabela: "porte" })}`} />
           {tabela("Ticket médio por porte da obra", "Porte", porPorte, rotuloPorte)}
         </>
       )}

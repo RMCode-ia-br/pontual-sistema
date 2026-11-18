@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LinkDeCsvDaTabela } from "@/components/relatorios/link-de-csv-da-tabela";
 
 import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios/cabecalho-de-relatorio";
 import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios/navegacao-de-visoes";
@@ -160,6 +161,7 @@ async function VisaoPorProposta({ periodo }: { periodo: Periodo }) {
           <h2 id="titulo-cancelados" className="mb-1 text-lg font-medium">
             Cancelado depois de aprovado
           </h2>
+          <LinkDeCsvDaTabela href={`/api/exportar/relatorios/vendas${montarConsulta({ ...parametrosDoPeriodo(periodo), tabela: "cancelados" })}`} />
           <p className="text-muted-foreground mb-3 text-sm">Estas obras continuam no “Vendido” do mês em que foram aprovadas; o cancelamento aparece aqui, no mês em que aconteceu.</p>
           {listaDeCancelados.truncado ? (
             <p role="alert" className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">

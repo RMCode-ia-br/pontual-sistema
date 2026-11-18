@@ -142,8 +142,8 @@ test("marcar como publicada no Instagram tira a obra de 'ainda não publicadas'"
   await expect(artigo(page).getByText(/Publicada em \d{2}\/\d{2}\/\d{4}/)).toBeVisible();
 
   await page.goto("/obras/galeria?publicada=nao");
+  await expect(page.getByText("Nenhuma obra com esses filtros")).toBeVisible(); // primeiro o positivo (a lista chega por streaming)
   await expect(artigo(page)).toHaveCount(0);
-  await expect(page.getByText("Nenhuma obra com esses filtros")).toBeVisible();
   await page.goto("/obras/galeria?publicada=sim");
   await expect(artigo(page)).toBeVisible();
 
@@ -177,6 +177,8 @@ test("sem a autorização do cliente a obra sai da galeria e o kit é recusado",
   await expect(page.getByText(/Sem a autorização, as fotos desta obra não aparecem/)).toBeVisible();
 
   await page.goto("/obras/galeria");
+  // As telas chegam por streaming: espera a rede assentar antes de afirmar AUSÊNCIA ou contar (senão passa/falha por pressa).
+  await page.waitForLoadState("networkidle");
   await expect(artigo(page)).toHaveCount(0);
   const [uma] = await idsDasFotosDaObra(obraId);
   const resposta = await page.request.get(`/api/obras/${obraId}/kit?fotos=${uma}`);

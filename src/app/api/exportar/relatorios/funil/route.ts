@@ -11,7 +11,7 @@ import { lerCortesDeFaixa } from "@/lib/dominio/relatorios-comerciais";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 import { tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
-import { ganhasEPerdidasPorFaixa, temposDeDecisao } from "@/modules/indicadores/tempos-e-faixas";
+import { ganhasEPerdidasPorFaixa, LIMITE_DE_LINHAS_DE_DECISAO, temposDeDecisao } from "@/modules/indicadores/tempos-e-faixas";
 import { carregarRelatorioDoFunil, lerFiltrosDoRelatorio, type RelatorioDoFunil } from "@/modules/relatorios/funil";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ type LinhaDeOrigem = RelatorioDoFunil["porOrigem"][number];
 const FASES: ColunaDeCsv<LinhaDeFase>[] = [
   { titulo: "Fase atual", tipo: "texto", valor: (f) => ROTULO_STATUS_PROJETO[f.status] },
   { titulo: "Projetos", tipo: "inteiro", valor: (f) => f.quantidade },
-  { titulo: "Valor estimado (R$)", tipo: "dinheiro", valor: (f) => f.valorCentavos },
+  { titulo: "Valor estimado (R$)", tipo: "dinheiro", valor: (f) => (f.valorCentavos > 0 ? f.valorCentavos : null) }, // sem valor estimado em nenhum projeto da fase: vazio (a tela mostra "—"), nunca 0,00
 ];
 const CONVERSAO: ColunaDeCsv<LinhaDeConversao>[] = [
   { titulo: "Fase", tipo: "texto", valor: (c) => ROTULO_STATUS_PROJETO[c.etapa] },
@@ -96,7 +96,9 @@ export async function GET(requisicao: NextRequest) {
     const d = await temposDeDecisao(periodo);
     const linhas: Decisao[] = [...d.aprovadas.linhas.map((l) => ({ ...l, resultado: "Aprovada" })), ...d.perdidas.linhas.map((l) => ({ ...l, resultado: "Perdida" }))];
     await auditar("funil-tempos", linhas.length);
-    return respostaDeCsv(csvDoRelatorio(DECISOES, linhas, opcoes), "proposta-ate-decisao.csv");
+    const cortou = d.aprovadas.totalDeLinhas > d.aprovadas.linhas.length || d.perdidas.totalDeLinhas > d.perdidas.linhas.length;
+    const aviso = cortou ? `exportação limitada às ${LIMITE_DE_LINHAS_DE_DECISAO} decisões mais recentes de cada tipo (${d.aprovadas.totalDeLinhas} aprovadas e ${d.perdidas.totalDeLinhas} perdidas no período). Escolha um período menor.` : null;
+    return respostaDeCsv(csvDoRelatorio(DECISOES, linhas, { ...opcoes, aviso }), "proposta-ate-decisao.csv");
   }
 
   if (visao === "faixas") {

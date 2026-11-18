@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LinkDeCsvDaTabela } from "@/components/relatorios/link-de-csv-da-tabela";
 
 import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios/cabecalho-de-relatorio";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
@@ -97,6 +98,7 @@ export default async function PaginaDeFechamento({ searchParams }: { searchParam
       )}
 
       <h2 className="mb-2 text-lg font-medium">Da visita à primeira proposta ({rotuloDoPeriodo(periodo)})</h2>
+      <LinkDeCsvDaTabela href={`/api/exportar/relatorios/fechamento${montarConsulta({ ...parametrosDoPeriodo(periodo), tabela: "tempo" })}`} />
       {tempo.linhas.length === 0 ? (
         <p className="text-muted-foreground rounded-xl border border-dashed p-6 text-center text-sm">Nenhuma primeira proposta foi enviada neste período para um projeto com visita registrada.</p>
       ) : (

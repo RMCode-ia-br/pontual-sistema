@@ -6,7 +6,7 @@ import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { exigirSessao } from "@/lib/auth/sessao";
-import { dataLocalDoInstante, formatarData } from "@/lib/formatadores";
+import { dataLocalDoInstante, formatarData, formatarDataCalendario } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
 import { avaliacoesDoGoogle, LIMITE_DE_ENTREGAS_NA_LISTA, type SituacaoDoPedido } from "@/modules/indicadores/operacional";
@@ -73,7 +73,7 @@ export default async function PaginaDeAvaliacoes({ searchParams }: { searchParam
                   </Link>
                 </td>
                 <td className="px-3 py-2">{l.cliente}</td>
-                <td className="px-3 py-2 tabular-nums">{formatarData(l.entregueEm)}</td>
+                <td className="px-3 py-2 tabular-nums">{formatarDataCalendario(l.entregueEm)}</td>
                 <td className="px-3 py-2">
                   {TEXTO[l.situacao]}
                   {l.situacao === "FEITO" && l.pedidoFeitoEm ? ` em ${formatarData(l.pedidoFeitoEm)}` : ""}

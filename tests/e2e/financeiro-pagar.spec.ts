@@ -103,6 +103,8 @@ test("conta atrasada aparece na aba Atrasadas, derivada da data", async ({ page 
   await expect(page.getByRole("link", { name: "E2E Conta vencida" })).toBeVisible();
   await expect(page.getByText("Atrasada há 3 dias").locator("visible=true").first()).toBeVisible();
   await page.goto("/financeiro/pagar?aba=hoje&busca=E2E%20Conta%20vencida");
+  // As telas chegam por streaming: espera a rede assentar antes de afirmar AUSÊNCIA ou contar (senão passa/falha por pressa).
+  await page.waitForLoadState("networkidle");
   await expect(page.getByRole("link", { name: "E2E Conta vencida" })).toHaveCount(0);
   await semRolagemHorizontal(page);
 });

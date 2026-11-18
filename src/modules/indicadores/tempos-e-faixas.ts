@@ -23,18 +23,23 @@ const num = (v: unknown) => Number(v ?? 0);
 export type DecisaoDaProposta = { projetoId: string; codigo: string; titulo: string; cliente: string; enviadaEm: Date; decididaEm: Date; dias: number; naMedia: boolean };
 
 export type TemposDeDecisao = {
-  aprovadas: { mediaDias: number | null; amostra: number; foraDaMedia: number; linhas: DecisaoDaProposta[] };
-  perdidas: { mediaDias: number | null; amostra: number; foraDaMedia: number; linhas: DecisaoDaProposta[]; semPropostaEnviada: number };
+  /** Média, amostra e "fora da média" valem para TODAS as decisões do período; `linhas` traz até {@link LIMITE_DE_LINHAS_DE_DECISAO} (as mais recentes) e `totalDeLinhas` diz quantas existem. */
+  aprovadas: { mediaDias: number | null; amostra: number; foraDaMedia: number; linhas: DecisaoDaProposta[]; totalDeLinhas: number };
+  perdidas: { mediaDias: number | null; amostra: number; foraDaMedia: number; linhas: DecisaoDaProposta[]; totalDeLinhas: number; semPropostaEnviada: number };
   /** Propostas enviadas que ainda não foram decididas (hoje, de qualquer data). */
   emAbertoAgora: number;
 };
 
 type LinhaDoSql = { projetoId: string; codigo: string; titulo: string; cliente: string; enviadaEm: Date; decididaEm: Date; dias: number };
 
-const montar = (linhas: LinhaDoSql[]) => {
-  const todas = linhas.map((l): DecisaoDaProposta => ({ ...l, naMedia: entraNaMediaDeDias(l.dias) }));
-  const dentro = todas.filter((l) => l.naMedia);
-  return { mediaDias: mediaDeDias(dentro.map((l) => l.dias)), amostra: dentro.length, foraDaMedia: todas.length - dentro.length, linhas: todas };
+/** Linhas listadas (as mais recentes); a média, a amostra e o "fora da média" saem de TODOS os dias do período, não só dessas. */
+export const LIMITE_DE_LINHAS_DE_DECISAO = 500;
+const TETO_DE_DIAS_LIDOS = 100_000;
+
+const montar = (linhas: LinhaDoSql[], todosOsDias: number[]) => {
+  const lista = linhas.map((l): DecisaoDaProposta => ({ ...l, naMedia: entraNaMediaDeDias(l.dias) }));
+  const dentro = todosOsDias.filter((d) => entraNaMediaDeDias(d));
+  return { mediaDias: mediaDeDias(dentro), amostra: dentro.length, foraDaMedia: todosOsDias.length - dentro.length, linhas: lista, totalDeLinhas: todosOsDias.length };
 };
 
 /**
@@ -44,28 +49,43 @@ const montar = (linhas: LinhaDoSql[]) => {
  */
 export async function temposDeDecisao(p: Periodo): Promise<TemposDeDecisao> {
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
-  const [aprovadas, perdidas, semProposta, aberto] = await Promise.all([
+  const [aprovadas, perdidas, semProposta, aberto, diasAprovadas, diasPerdidas] = await Promise.all([
     prisma.$queryRaw<LinhaDoSql[]>`
       SELECT j.id AS "projetoId", j.codigo, j.titulo, c.nome AS cliente, pr."enviadaEm", pr."aceitaEm" AS "decididaEm",
              (${SP('pr."aceitaEm"')} - ${SP('pr."enviadaEm"')})::int AS dias
         FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId" JOIN "Cliente" c ON c.id = j."clienteId"
        WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL AND pr."enviadaEm" IS NOT NULL
          AND pr."aceitaEm" >= ${inicio} AND pr."aceitaEm" < ${fimExclusivo}
-       ORDER BY pr."aceitaEm" DESC, pr.id LIMIT 500`,
+       ORDER BY pr."aceitaEm" DESC, pr.id LIMIT ${LIMITE_DE_LINHAS_DE_DECISAO}`,
     prisma.$queryRaw<LinhaDoSql[]>`
       WITH env AS (SELECT "projetoId", min("enviadaEm") AS enviada FROM "Proposta" WHERE "deletadoEm" IS NULL AND "enviadaEm" IS NOT NULL GROUP BY "projetoId")
       SELECT j.id AS "projetoId", j.codigo, j.titulo, c.nome AS cliente, env.enviada AS "enviadaEm", j."perdidoEm" AS "decididaEm",
              (${SP('j."perdidoEm"')} - ${SP("env.enviada")})::int AS dias
         FROM "Projeto" j JOIN env ON env."projetoId" = j.id JOIN "Cliente" c ON c.id = j."clienteId"
        WHERE j."deletadoEm" IS NULL AND j.status = 'PERDIDO' AND j."perdidoEm" >= ${inicio} AND j."perdidoEm" < ${fimExclusivo}
-       ORDER BY j."perdidoEm" DESC, j.id LIMIT 500`,
+       ORDER BY j."perdidoEm" DESC, j.id LIMIT ${LIMITE_DE_LINHAS_DE_DECISAO}`,
     prisma.$queryRaw<{ n: number }[]>`
       SELECT count(*)::int AS n FROM "Projeto" j
        WHERE j."deletadoEm" IS NULL AND j.status = 'PERDIDO' AND j."perdidoEm" >= ${inicio} AND j."perdidoEm" < ${fimExclusivo}
          AND NOT EXISTS (SELECT 1 FROM "Proposta" pr WHERE pr."projetoId" = j.id AND pr."deletadoEm" IS NULL AND pr."enviadaEm" IS NOT NULL)`,
     prisma.proposta.count({ where: { status: "ENVIADA", deletadoEm: null, projeto: { deletadoEm: null } } }),
+    // Só os dias de TODAS as decisões do período (um inteiro por linha): é daqui que saem a média e as contagens.
+    prisma.$queryRaw<{ dias: number }[]>`
+      SELECT (${SP('pr."aceitaEm"')} - ${SP('pr."enviadaEm"')})::int AS dias
+        FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId"
+       WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL AND pr."enviadaEm" IS NOT NULL
+         AND pr."aceitaEm" >= ${inicio} AND pr."aceitaEm" < ${fimExclusivo} LIMIT ${TETO_DE_DIAS_LIDOS}`,
+    prisma.$queryRaw<{ dias: number }[]>`
+      WITH env AS (SELECT "projetoId", min("enviadaEm") AS enviada FROM "Proposta" WHERE "deletadoEm" IS NULL AND "enviadaEm" IS NOT NULL GROUP BY "projetoId")
+      SELECT (${SP('j."perdidoEm"')} - ${SP("env.enviada")})::int AS dias
+        FROM "Projeto" j JOIN env ON env."projetoId" = j.id
+       WHERE j."deletadoEm" IS NULL AND j.status = 'PERDIDO' AND j."perdidoEm" >= ${inicio} AND j."perdidoEm" < ${fimExclusivo} LIMIT ${TETO_DE_DIAS_LIDOS}`,
   ]);
-  return { aprovadas: montar(aprovadas), perdidas: { ...montar(perdidas), semPropostaEnviada: semProposta[0]?.n ?? 0 }, emAbertoAgora: aberto };
+  return {
+    aprovadas: montar(aprovadas, diasAprovadas.map((d) => d.dias)),
+    perdidas: { ...montar(perdidas, diasPerdidas.map((d) => d.dias)), semPropostaEnviada: semProposta[0]?.n ?? 0 },
+    emAbertoAgora: aberto,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

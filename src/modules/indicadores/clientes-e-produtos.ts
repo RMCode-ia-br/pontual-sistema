@@ -64,15 +64,19 @@ export async function clientesParaReativar(referencia: string, meses: number = M
 
 export type LinhaDeCidade = { cidade: string | null; uf: string | null; clientes: number; obras: number; vendidoCentavos: number };
 
-/** Clientes, obras e R$ vendido por cidade da OBRA (endereço da obra do projeto), no período. Sem endereço de obra: "Não informada". */
+/**
+ * Clientes, obras e R$ vendido por cidade da OBRA (endereço da obra do projeto), no período. "Macaé", "macae" e "MACAÉ " são a mesma
+ * cidade (agrupa sem caixa, acento nem espaços) e a linha mostra o nome mais frequente do grupo. Sem endereço de obra: "Não informada".
+ */
 export async function clientesPorCidade(p: Periodo): Promise<LinhaDeCidade[]> {
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
   const linhas = await prisma.$queryRaw<{ cidade: string | null; uf: string | null; clientes: number; obras: number; total: bigint }[]>`
-    SELECT NULLIF(btrim(e.cidade), '') AS cidade, NULLIF(btrim(e.uf), '') AS uf,
+    SELECT mode() WITHIN GROUP (ORDER BY btrim(e.cidade)) FILTER (WHERE btrim(coalesce(e.cidade, '')) <> '') AS cidade,
+           mode() WITHIN GROUP (ORDER BY upper(btrim(e.uf))) FILTER (WHERE btrim(coalesce(e.uf, '')) <> '') AS uf,
            count(DISTINCT j."clienteId")::int AS clientes, count(DISTINCT j.id)::int AS obras, COALESCE(sum(pr."valorAprovadoCentavos"), 0)::bigint AS total
       FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId" LEFT JOIN "EnderecoCliente" e ON e.id = j."enderecoObraId"
      WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL AND pr."aceitaEm" >= ${inicio} AND pr."aceitaEm" < ${fimExclusivo}
-     GROUP BY 1, 2 ORDER BY total DESC, cidade NULLS LAST`;
+     GROUP BY NULLIF(lower(public.f_unaccent(btrim(coalesce(e.cidade, '')))), '') ORDER BY total DESC, cidade NULLS LAST`;
   return linhas.map((l) => ({ cidade: l.cidade, uf: l.uf, clientes: l.clientes, obras: l.obras, vendidoCentavos: num(l.total) }));
 }
 

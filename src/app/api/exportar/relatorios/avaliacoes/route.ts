@@ -16,7 +16,7 @@ const COLUNAS: ColunaDeCsv<EntregaParaAvaliar>[] = [
   { titulo: "Código", tipo: "texto", valor: (l) => l.codigo },
   { titulo: "Obra", tipo: "texto", valor: (l) => l.titulo },
   { titulo: "Cliente", tipo: "texto", valor: (l) => l.cliente },
-  { titulo: "Entregue em", tipo: "dataHora", valor: (l) => l.entregueEm },
+  { titulo: "Entregue em", tipo: "data", valor: (l) => l.entregueEm },
   { titulo: "Pedido", tipo: "texto", valor: (l) => SITUACAO[l.situacao] },
   { titulo: "Pedido feito em", tipo: "dataHora", valor: (l) => l.pedidoFeitoEm },
 ];

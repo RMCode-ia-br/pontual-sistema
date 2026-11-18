@@ -304,7 +304,7 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
                 ))}
               </ul>
             )}
-            <Link href={`/relatorios/funil${consultaDeAte}`} className="text-primary mt-2 inline-block text-xs hover:underline">
+            <Link href={`/relatorios/funil${consultaDeAte ? `${consultaDeAte}&` : "?"}visao=perdas`} className="text-primary mt-2 inline-block text-xs hover:underline">
               Ver o relatório completo
             </Link>
           </div>
