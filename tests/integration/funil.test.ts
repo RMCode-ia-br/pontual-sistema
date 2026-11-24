@@ -216,3 +216,20 @@ describe("funil e lista", () => {
     expect(colunas.flatMap((c) => c.cartoes).map((c) => c.id)).not.toContain(p.id);
   });
 });
+
+describe("funil e aprovação desfeita (decisão 129)", () => {
+  it("só conta como aprovado quem continua aprovado; a aprovação desfeita (histórico com APROVADO, fase de volta) fica de fora", async () => {
+    const { carregarRelatorioDoFunil, lerFiltrosDoRelatorio } = await import("@/modules/relatorios/funil");
+    const filtros = lerFiltrosDoRelatorio({});
+    const aprovados = async () => (await carregarRelatorioDoFunil(filtros)).porOrigem.reduce((s, o) => s + o.aprovados, 0);
+    const antes = await aprovados();
+
+    const vigente = await novoProjeto("Aprovado vigente", { status: "APROVADO" });
+    await prisma.historicoFaseProjeto.create({ data: { projetoId: vigente.id, para: "APROVADO" } });
+    const desfeita = await novoProjeto("Aprovação desfeita", { status: "PROPOSTA_ENVIADA" });
+    await prisma.historicoFaseProjeto.create({ data: { projetoId: desfeita.id, para: "APROVADO" } });
+    await prisma.historicoFaseProjeto.create({ data: { projetoId: desfeita.id, de: "APROVADO", para: "PROPOSTA_ENVIADA" } });
+
+    expect((await aprovados()) - antes).toBe(1);
+  });
+});

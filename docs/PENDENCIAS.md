@@ -300,3 +300,11 @@ Corrigidos na própria revisão: número negativo saindo do CSV como texto com a
 
 ## Do login sob carga (Fase 7B)
 - [ ] **Login lento com vários acessos ao mesmo tempo.** Medido em 2026-11-24 (build de produção local, banco de São Paulo, 10 logins isolados e 18 logins em lotes de 6 simultâneos): isolado p50 1,1 s e p95 1,8 s; com 6 em paralelo p50 5,8 s e p95 6,5 s. O custo parece ser o hash de senha (bcrypt, CPU) mais a gravação da tentativa, e não rede. Para a Pontual (poucos usuários) não é problema; se o uso definitivo (Fase 8) tiver muitos logins simultâneos, medir de novo no ambiente hospedado. O E2E passou a esperar até 20 s pelo painel após o login.
+
+## Da revisão sênior final da 7B (itens baixos, para a 7C ou o volume)
+- [ ] **Galeria:** com filtro de ano, a página pode mostrar menos obras do que a paginação conta (as fotos da página vêm de uma janela global, e o ano é filtrado em memória). Corrigir filtrando o ano na consulta de anexos e limitando por obra (`ROW_NUMBER() OVER (PARTITION BY entidadeId)`). Mesmo item da galeria que corta por página e não por obra.
+- [ ] **Cortes de faixa de preço digitados que não podem ser lidos** (`/relatorios/funil`): o relatório volta aos quartis sem aviso, e o "Como é calculado" ainda diz "cortes digitados". Mostrar aviso e basear a frase em `origemDosCortes`.
+- [ ] **Busca sem acento corta em 20.000 ids sem avisar** (`src/modules/busca/ids-por-busca.ts`): buscar `LIMITE+1` e devolver `{ ids, cortado }`. Improvável no volume atual.
+- [ ] **Índices de busca pouco usados:** o `OR` mistura a coluna indexada com colunas de tabelas ligadas (cliente, projeto, fornecedor); o planejador provavelmente não usa o índice sozinho. Medir no volume (7B-2) e, se preciso, trocar por `UNION` de uma subconsulta por tabela.
+- [ ] **Limite de transação × função:** `maxWait` 10 s + `timeout` 30 s passam do `maxDuration = 30` do layout; a plataforma pode cortar antes. Sem corrupção (o Postgres desfaz), só erro genérico. Baixar o `timeout` para ~20 s ou subir o `maxDuration`.
+- [ ] **Contadores "ficaram de fora" que faltam** em `tempos-e-faixas.ts`: ganhas sem valor aprovado saem da faixa de preço sem contagem (as perdidas sem valor têm), e propostas aprovadas sem `enviadaEm` saem dos tempos de decisão sem contagem.

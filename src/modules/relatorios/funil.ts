@@ -32,7 +32,11 @@ export type RelatorioDoFunil = ResultadoDoFunil & {
 /** "Chegou à etapa": o projeto passou por ela ou por uma posterior (histórico de fases ou fase atual). */
 function chegouA(etapa: StatusProjeto): Prisma.ProjetoWhereInput {
   const fases = fasesQueContamComoChegada(etapa);
-  return fases ? { OR: [{ status: { in: fases } }, { historicoFases: { some: { para: { in: fases } } } }] } : {};
+  if (!fases) return {};
+  // Aprovação desfeita não conta (decisão 129): o histórico guarda o "APROVADO" antigo, então a partir daí só vale quem
+  // ainda está aprovado ou foi cancelado DEPOIS de aprovado (o desfazer devolve a fase, o cancelamento não).
+  if (etapa === "APROVADO") return { OR: [{ status: { in: fases } }, { status: "CANCELADO", historicoFases: { some: { para: { in: fases } } } }] };
+  return { OR: [{ status: { in: fases } }, { historicoFases: { some: { para: { in: fases } } } }] };
 }
 
 /**

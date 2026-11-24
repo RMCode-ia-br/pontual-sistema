@@ -57,6 +57,8 @@ export async function listarCancelamentos(p: Periodo): Promise<{ linhas: Cancela
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
   const encontrados = await prisma.projeto.findMany({
     where: ondeCanceladosDepoisDeAprovados(p),
+    // Ordem estável no banco: se passar do limite, ficam as obras mexidas mais recentemente (o cancelamento é a última mudança).
+    orderBy: [{ atualizadoEm: "desc" }, { id: "asc" }],
     take: LIMITE_DE_CANCELAMENTOS + 1,
     select: {
       id: true,
