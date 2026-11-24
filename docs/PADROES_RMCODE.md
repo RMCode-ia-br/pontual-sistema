@@ -133,3 +133,13 @@ Tudo em `src/modules/{tarefas,configuracoes,feriados,modelos-texto,backup}` que 
 | Fluxo com prorrogação | `src/lib/dominio/fluxo-caixa.ts`, `servico-receber.ts` | vencido entra no primeiro período ou na data prometida, sem alterar o vencimento original (atraso e inadimplência continuam por ele); histórico auditável | financeiro |
 | Painel e relatório de estoque | `src/lib/dominio/relatorio-estoque.ts`, `src/modules/estoque/resumo.ts`, `src/modules/relatorios/estoque.ts` | valorização só com custo informado, sem custo à parte, abaixo do mínimo só com mínimo definido, recebido por fornecedor | estoque, compras |
 **Da Pontual (não reutilizável):** o preço do kg por acabamento do alumínio, a regra de retalho mínimo, o custo de mão de obra por m² e o texto do pedido de compra ao fornecedor.
+
+## Blocos da Fase 7B (relatórios, busca e exportação) — reutilizáveis
+| Bloco | Onde | O que entrega | Depende de |
+| --- | --- | --- | --- |
+| Período e "como é calculado" | `src/lib/periodo`, `src/components/relatorios/{seletor-de-periodo,como-e-calculado,numero-do-painel}.tsx` | período validado em fuso local, comparação, cartão que leva à lista e definição em texto | nenhuma |
+| CSV tipado de relatório | `src/lib/csv/colunas.ts`, `resposta.ts`, `link-de-csv-da-tabela.tsx` | colunas com tipo (data, dinheiro "1234,56", número, inteiro), BOM, aviso de corte na 1ª linha, coluna interna só com permissão, link por tabela, teste-guarda de que toda página de relatório exporta | nenhuma |
+| Busca sem acento por ids | `src/modules/busca/ids-por-busca.ts` | ids por `f_unaccent(lower(...))` com LIKE escapado e as listas filtram por `id IN`; expressão idêntica à do índice trigram | extensões unaccent e pg_trgm |
+| Corte com aviso | tempos de decisão, cancelamentos, estoque | lê o limite + 1, mostra "limitado a N" na tela e no CSV; média sobre todas as linhas, tabela limitada | nenhuma |
+| Cache com etiqueta | `src/modules/configuracoes/queries.ts` | `unstable_cache` com tag e `updateTag` ao salvar (revalidatePath não limpa o cache de dados) | Next |
+**Da Pontual (não reutilizável):** quais relatórios existem, a definição de venda (`ondeVendas`), reativação em meses, cortes da curva ABC e os textos de cada "como é calculado".
