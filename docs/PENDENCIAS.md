@@ -297,3 +297,6 @@ Corrigidos na própria revisão: número negativo saindo do CSV como texto com a
 ## Da Fase 7B (Bloco 8): para a janela de volume (7B-2)
 - [ ] **Lista de obras em SQL com paginação:** hoje filtra e calcula o semáforo em memória (limite de 300; a tela diz "Mostrando 300 de N obras"). O semáforo depende do prazo final com pausas (dias úteis, feriados, pausa em curso), que não é coluna guardada, então o SQL não seria exato. Decidir com medição: guardar o prazo com pausas atualizado todo dia pelo cron, ou aceitar diferença em obra com pausa em curso.
 - [ ] **Aging, DRE e fluxo de caixa** seguem lendo os títulos e lançamentos em memória (limitados pelo período e pelos títulos em aberto). Medir com volume e só então limitar (nunca cortar em silêncio: dinheiro errado é pior que lento).
+
+## Do login sob carga (Fase 7B)
+- [ ] **Login lento com vários acessos ao mesmo tempo.** Medido em 2026-11-24 (build de produção local, banco de São Paulo, 10 logins isolados e 18 logins em lotes de 6 simultâneos): isolado p50 1,1 s e p95 1,8 s; com 6 em paralelo p50 5,8 s e p95 6,5 s. O custo parece ser o hash de senha (bcrypt, CPU) mais a gravação da tentativa, e não rede. Para a Pontual (poucos usuários) não é problema; se o uso definitivo (Fase 8) tiver muitos logins simultâneos, medir de novo no ambiente hospedado. O E2E passou a esperar até 20 s pelo painel após o login.

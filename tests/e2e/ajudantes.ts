@@ -10,7 +10,8 @@ export async function entrarComo(page: Page, login: string, senha: string) {
 /** Entra e espera chegar ao painel (usuário com senha já definitiva). */
 export async function entrarEEsperarPainel(page: Page, login: string, senha: string) {
   await entrarComo(page, login, senha);
-  await expect(page).toHaveURL(/\/$/);
+  // 20 s: o login (hash de senha + registro da tentativa) leva ~1 s isolado e passa de 5 s sob carga (medido na 7B).
+  await expect(page).toHaveURL(/\/$/, { timeout: 20_000 });
 }
 
 export function ehCelular(page: Page): boolean {
