@@ -38,7 +38,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
       include: {
         opcoes: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
         grupos: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-        parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
+        parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } },
         condicao: { select: { nome: true } },
         itens: {
           where: { deletadoEm: null },
@@ -126,17 +126,19 @@ export async function problemasDaProposta(tx: Tx, propostaId: string): Promise<s
     select: {
       clienteNome: true,
       condicaoTextoLivre: true,
-      parcelas: { where: { deletadoEm: null }, select: { id: true } },
+      parcelas: { where: { deletadoEm: null, alternativaId: null }, select: { id: true } },
       opcoes: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, select: { id: true, nome: true } },
       itens: { where: { deletadoEm: null }, select: { opcaoId: true, descricao: true, precoTotalCentavos: true, medidas: { where: { deletadoEm: null }, select: { id: true } } } },
     },
   });
   if (!p) throw new ErroNegocio("Proposta não encontrada.");
-  return problemasParaEnviar({
+  const extras = await tx.alternativaPagamento.count({ where: { propostaId, deletadoEm: null } });
+  const emConstrucao = extras > 0 ? ["As formas de pagamento extras ainda não saem na proposta enviada (recurso em construção). Remova-as para enviar."] : [];
+  return [...emConstrucao, ...problemasParaEnviar({
     clienteNome: p.clienteNome,
     condicao: { temParcelas: p.parcelas.length > 0, textoLivre: p.condicaoTextoLivre },
     opcoes: p.opcoes.map((o) => ({ nome: o.nome, itens: p.itens.filter((i) => i.opcaoId === o.id).map((i) => ({ descricao: i.descricao, precoTotalCentavos: i.precoTotalCentavos, medidas: i.medidas.length })) })),
-  });
+  })];
 }
 
 /** Congela o conteúdo (R4) e marca ENVIADA. Chamada dentro da transação de quem envia ou aprova. */
@@ -228,7 +230,7 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
     where: { id: propostaId, deletadoEm: null, projeto: { deletadoEm: null } },
     include: {
       opcoes: { where: { deletadoEm: null } },
-      parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
+      parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } },
       projeto: { select: { id: true, codigo: true, titulo: true, clienteId: true, status: true, responsavelId: true, enderecoObra: { select: { condominio: true, condominioNome: true } } } },
     },
   });
@@ -384,7 +386,7 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
     include: {
       opcoes: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
       grupos: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-      parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
+      parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } },
       itens: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } } } },
     },
   });

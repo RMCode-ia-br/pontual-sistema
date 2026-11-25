@@ -36,6 +36,19 @@ export type ItemSer = {
 
 export type ParcelaSer = { descricao: string; percentualPb: number; gatilho: string; forma: string | null; diasApos: number | null; dataFixa: string | null; parcelasCartao: number | null };
 
+export type AlternativaSer = {
+  id: string;
+  nome: string;
+  condicaoId: string | null;
+  textoLivre: string | null;
+  modoAjuste: "PERCENTUAL" | "TOTAL_DIGITADO";
+  ajustePb: number;
+  repasseCartao: boolean;
+  parcelas: ParcelaSer[];
+  /** Modo TOTAL_DIGITADO: total desejado (antes da nota) por opção de produto. */
+  totais: { opcaoId: string; baseCentavos: number }[];
+};
+
 export type PropostaSer = {
   id: string;
   numero: string;
@@ -78,6 +91,8 @@ export type PropostaSer = {
   grupos: { id: string; nome: string; ordem: number }[];
   itens: ItemSer[];
   parcelas: ParcelaSer[];
+  nomePagamentoPrincipal: string | null;
+  alternativas: AlternativaSer[];
   projeto: { id: string; codigo: string; titulo: string; clienteNome: string };
 };
 
@@ -154,6 +169,18 @@ export function serializarProposta(p: PropostaDoEditor): PropostaSer {
       medidas: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
     })),
     parcelas: p.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),
+    nomePagamentoPrincipal: p.nomePagamentoPrincipal,
+    alternativas: p.alternativasPagamento.map((a) => ({
+      id: a.id,
+      nome: a.nome,
+      condicaoId: a.condicaoId,
+      textoLivre: a.textoLivre,
+      modoAjuste: a.modoAjuste,
+      ajustePb: a.ajustePb,
+      repasseCartao: a.repasseCartao,
+      parcelas: a.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),
+      totais: a.totais.map((t) => ({ opcaoId: t.opcaoId, baseCentavos: t.baseCentavos })),
+    })),
     projeto: { id: p.projeto.id, codigo: p.projeto.codigo, titulo: p.projeto.titulo, clienteNome: p.projeto.cliente.nome },
   };
 }

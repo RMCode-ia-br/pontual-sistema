@@ -111,7 +111,7 @@ export async function previaDaTroca(db: Db, e: { deId: string; paraId: string; o
   const buscar = (id: string) =>
     db.proposta.findFirst({
       where: { id, deletadoEm: null, projeto: { deletadoEm: null } },
-      select: { id: true, numero: true, revisao: true, status: true, projetoId: true, snapshot: true, aceitaEm: true, formaAceite: true, aceiteObservacao: true, opcaoAprovadaId: true, valorAprovadoCentavos: true, parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } } },
+      select: { id: true, numero: true, revisao: true, status: true, projetoId: true, snapshot: true, aceitaEm: true, formaAceite: true, aceiteObservacao: true, opcaoAprovadaId: true, valorAprovadoCentavos: true, parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } } },
     });
   const de = await buscar(e.deId);
   const para = await buscar(e.paraId);

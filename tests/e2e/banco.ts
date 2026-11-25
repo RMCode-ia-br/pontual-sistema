@@ -98,6 +98,10 @@ async function limpar(c: Client): Promise<void> {
   await c.query(`DELETE FROM "ItemPropostaMedida" WHERE "itemId" IN (SELECT id FROM "ItemProposta" WHERE "propostaId" IN (${propostasE2E}))`);
   await c.query(`DELETE FROM "ItemProposta" WHERE "propostaId" IN (${propostasE2E})`);
   await c.query(`DELETE FROM "PropostaParcela" WHERE "propostaId" IN (${propostasE2E})`);
+  // Fase 3.6a: formas de pagamento extras (os totais por opção e a escolha do aceite apontam para elas).
+  await c.query(`UPDATE "Proposta" SET "alternativaAprovadaId" = NULL WHERE id IN (${propostasE2E})`);
+  await c.query(`DELETE FROM "AlternativaPagamentoTotal" WHERE "alternativaId" IN (SELECT id FROM "AlternativaPagamento" WHERE "propostaId" IN (${propostasE2E}))`);
+  await c.query(`DELETE FROM "AlternativaPagamento" WHERE "propostaId" IN (${propostasE2E})`);
   await c.query(`DELETE FROM "GrupoProposta" WHERE "propostaId" IN (${propostasE2E})`);
   await c.query(`DELETE FROM "OpcaoProposta" WHERE "propostaId" IN (${propostasE2E})`);
   await c.query(`DELETE FROM "Proposta" WHERE id IN (${propostasE2E})`);

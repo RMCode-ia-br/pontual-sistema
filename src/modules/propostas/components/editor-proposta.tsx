@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { TipoDesenho } from "@/lib/dominio/desenho";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
-import { FORMAS_PAGAMENTO, GATILHOS, ROTULO_FORMA, ROTULO_GATILHO } from "@/lib/dominio/parcelas";
-import { percentualParaPontosBase, pontosBaseParaPercentual } from "@/lib/dominio/preco";
+import { calcularAlternativa } from "@/lib/dominio/alternativas-pagamento";
+import { calcularTotais, percentualParaPontosBase } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
 import { aoColarMoeda, centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
 import { useProtecaoDeSaida } from "@/lib/hooks/usar-protecao-de-saida";
@@ -23,15 +23,11 @@ import { salvarProposta } from "../actions/propostas";
 import { DICA_DADOS_PAGAMENTO, EXEMPLO_DADOS_PAGAMENTO, LIMITE_DADOS_PAGAMENTO } from "../schemas";
 import type { ItemSer, OpcoesEditor, PropostaSer } from "../tipos";
 import { DialogoItem } from "./dialogo-item";
+import { alternativaDeSer, entradaDeAlternativa, FormasDePagamentoExtras, type LinhaAlternativa } from "./formas-de-pagamento-extras";
+import { entradaDeParcela, linhaDeParcela, LinhasDeParcelas, pct, type LinhaParcela } from "./linhas-de-parcelas";
 import { PainelTotais } from "./painel-totais";
 
 type Props = { proposta: PropostaSer; opcoes: OpcoesEditor; somenteLeitura?: boolean; temMedidasDaVisita: boolean };
-
-type LinhaParcela = { chave: string; descricao: string; percentual: string; gatilho: string; forma: string; diasApos: string; dataFixa: string; parcelasCartao: string };
-let contador = 0;
-const novaChave = () => `c${++contador}`;
-
-const pct = (pb: number | null | undefined) => (pb === null || pb === undefined ? "" : pontosBaseParaPercentual(pb));
 
 export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMedidasDaVisita }: Props) {
   const router = useRouter();
@@ -68,14 +64,14 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
     condicaoId: proposta.condicaoId ?? "",
     condicaoTextoLivre: proposta.condicaoTextoLivre ?? "",
     dadosPagamento: proposta.dadosPagamento ?? "",
+    nomePagamentoPrincipal: proposta.nomePagamentoPrincipal ?? "",
     notas: proposta.notas.join("\n"),
     exibirValorPorItem: proposta.exibirValorPorItem,
     descricoesMaiusculas: proposta.descricoesMaiusculas,
     observacoesInternas: proposta.observacoesInternas ?? "",
   }));
-  const [parcelas, setParcelas] = useState<LinhaParcela[]>(() =>
-    proposta.parcelas.map((p) => ({ chave: novaChave(), descricao: p.descricao, percentual: pct(p.percentualPb), gatilho: p.gatilho, forma: p.forma ?? "", diasApos: p.diasApos === null ? "" : String(p.diasApos), dataFixa: p.dataFixa ?? "", parcelasCartao: p.parcelasCartao === null ? "" : String(p.parcelasCartao) })),
-  );
+  const [parcelas, setParcelas] = useState<LinhaParcela[]>(() => proposta.parcelas.map((p) => linhaDeParcela(p)));
+  const [alternativas, setAlternativas] = useState<LinhaAlternativa[]>(() => proposta.alternativas.map(alternativaDeSer));
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
 
@@ -124,7 +120,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
     const c = opcoes.condicoes.find((x) => x.id === id);
     if (!c) return;
     set("condicaoTextoLivre", c.textoLivre ?? "");
-    setParcelas(c.parcelas.map((p) => ({ chave: novaChave(), descricao: p.descricao, percentual: pct(p.percentualPb), gatilho: p.gatilho, forma: p.forma ?? "", diasApos: p.diasApos === null ? "" : String(p.diasApos), dataFixa: "", parcelasCartao: p.parcelasCartao === null ? "" : String(p.parcelasCartao) })));
+    setParcelas(c.parcelas.map((p) => linhaDeParcela(p, false)));
     setSujo(true);
   }
 
@@ -138,7 +134,8 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
         condicaoId: f.condicaoId || null,
         comNotaFiscal: f.comNotaFiscal,
         notas: f.notas.split("\n").map((n) => n.trim()).filter(Boolean),
-        parcelas: parcelas.map((p) => ({ descricao: p.descricao, percentual: p.percentual, gatilho: p.gatilho as (typeof GATILHOS)[number], forma: (p.forma || null) as (typeof FORMAS_PAGAMENTO)[number] | null, diasApos: p.diasApos, dataFixa: p.dataFixa, parcelasCartao: p.parcelasCartao })),
+        parcelas: parcelas.map(entradaDeParcela),
+        alternativas: alternativas.map(entradaDeAlternativa),
       });
       if (r.ok) {
         setSujo(false);
@@ -163,7 +160,16 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
     avisoPreco: i.avisoPreco,
   }));
   const pbNota = percentualParaPontosBase(f.acrescimoNota) ?? 0;
-  const somaParcelas = parcelas.reduce((s, p) => s + (percentualParaPontosBase(p.percentual) ?? 0) / 100, 0);
+  // Valor de cada opção (itens − desconto), o ponto de partida do ajuste de cada forma de pagamento.
+  const referencias = Object.fromEntries(calcularTotais(totaisItens.map((i) => ({ opcaoId: i.opcaoId, precoTotalCentavos: i.precoTotalCentavos, medidas: [] })), proposta.opcoes, f.comNotaFiscal, pbNota).map((t) => [t.opcaoId, t.baseCentavos]));
+  const mudarAlternativas = (fn: (a: LinhaAlternativa[]) => LinhaAlternativa[]) => {
+    setAlternativas(fn);
+    setSujo(true);
+  };
+  const mudarParcelas = (fn: (a: LinhaParcela[]) => LinhaParcela[]) => {
+    setParcelas(fn);
+    setSujo(true);
+  };
   const L = somenteLeitura;
 
   const campo = (rotulo: string, valor: string, aoMudar: (v: string) => void, extra: { tipo?: string; max?: number; modo?: "numeric" | "decimal" | "tel" | "email"; erro?: string; className?: string } = {}) => (
@@ -392,7 +398,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
         {/* ---------- Pagamento ---------- */}
         <section aria-labelledby="sec-pag" className="grid gap-3 rounded-xl border p-4">
           <h2 id="sec-pag" className="font-medium">
-            Condição de pagamento
+            Formas de pagamento
           </h2>
           <label className="grid gap-1 text-sm">
             Modelo
@@ -401,40 +407,39 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
               {opcoes.condicoes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </Selecao>
           </label>
+          {alternativas.length > 0 ? (
+            <div className="grid gap-2 rounded-lg border border-dashed p-3">
+              <label className="grid gap-1 text-sm sm:max-w-sm">
+                Nome desta forma (a principal)
+                <Input value={f.nomePagamentoPrincipal} maxLength={60} disabled={L} placeholder="Ex.: À vista" aria-label="Nome da forma principal" onChange={(e) => set("nomePagamentoPrincipal", e.target.value)} />
+              </label>
+              <p className="text-muted-foreground text-xs">Costuma ser o valor à vista: é a soma dos itens, sem ajuste. As outras formas partem dele.</p>
+            </div>
+          ) : null}
           {f.condicaoTextoLivre ? (
             <label className="grid gap-1 text-sm">
               Texto livre
               <AreaTexto value={f.condicaoTextoLivre} rows={2} disabled={L} maxLength={500} onChange={(e) => set("condicaoTextoLivre", e.target.value)} aria-label="Texto livre da condição" />
             </label>
           ) : (
-            <div className="grid gap-2">
-              {parcelas.map((p, i) => (
-                <div key={p.chave} className="grid gap-2 rounded-lg border p-2 md:grid-cols-12">
-                  <Input className="md:col-span-4" value={p.descricao} disabled={L} maxLength={120} aria-label={`Descrição da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, descricao: e.target.value } : x))); setSujo(true); }} />
-                  <Input className="md:col-span-2" inputMode="decimal" value={p.percentual} disabled={L} maxLength={8} placeholder="%" aria-label={`Percentual da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, percentual: e.target.value } : x))); setSujo(true); }} />
-                  <Selecao className="md:col-span-3" value={p.gatilho} disabled={L} aria-label={`Gatilho da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, gatilho: e.target.value } : x))); setSujo(true); }}>
-                    {GATILHOS.map((g) => <option key={g} value={g}>{ROTULO_GATILHO[g]}</option>)}
-                  </Selecao>
-                  <Selecao className="md:col-span-3" value={p.forma} disabled={L} aria-label={`Forma da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, forma: e.target.value } : x))); setSujo(true); }}>
-                    <option value="">Forma a definir</option>
-                    {FORMAS_PAGAMENTO.map((m) => <option key={m} value={m}>{ROTULO_FORMA[m]}</option>)}
-                  </Selecao>
-                  {p.gatilho === "DATA_FIXA" ? <Input className="md:col-span-4" type="date" value={p.dataFixa} disabled={L} aria-label={`Data da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, dataFixa: e.target.value } : x))); setSujo(true); }} /> : null}
-                  {p.gatilho === "DIAS_APOS_APROVACAO" ? <Input className="md:col-span-4" inputMode="numeric" value={p.diasApos} disabled={L} maxLength={3} placeholder="Dias após a aprovação" aria-label={`Dias da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, diasApos: e.target.value } : x))); setSujo(true); }} /> : null}
-                  {p.forma === "CARTAO_CREDITO" ? <Input className="md:col-span-4" inputMode="numeric" value={p.parcelasCartao} disabled={L} maxLength={2} placeholder="Parcelas no cartão (até 12)" aria-label={`Parcelas do cartão da parcela ${i + 1}`} onChange={(e) => { setParcelas((a) => a.map((x) => (x.chave === p.chave ? { ...x, parcelasCartao: e.target.value } : x))); setSujo(true); }} /> : null}
-                  {!L ? <Button type="button" variant="ghost" size="sm" className="md:col-span-1" aria-label={`Remover a parcela ${i + 1}`} onClick={() => { setParcelas((a) => a.filter((x) => x.chave !== p.chave)); setSujo(true); }}><Trash2 aria-hidden /></Button> : null}
-                </div>
-              ))}
-              {!L ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" variant="outline" size="sm" onClick={() => { setParcelas((a) => [...a, { chave: novaChave(), descricao: "", percentual: "", gatilho: "CONFIRMACAO", forma: "", diasApos: "", dataFixa: "", parcelasCartao: "" }]); setSujo(true); }}>
-                    <Plus aria-hidden /> Parcela
-                  </Button>
-                  <span className={`text-sm ${parcelas.length > 0 && Math.abs(somaParcelas - 100) > 0.001 ? "text-destructive" : "text-muted-foreground"}`}>Soma: {somaParcelas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%</span>
-                </div>
-              ) : null}
-            </div>
+            <LinhasDeParcelas linhas={parcelas} somenteLeitura={L} aoMudar={mudarParcelas} />
           )}
+          {alternativas.length > 0 ? (
+            <div className="grid gap-1 text-sm">
+              {proposta.opcoes.map((o) => {
+                const ref = referencias[o.id] ?? 0;
+                const r = ref > 0 ? calcularAlternativa({ referenciaCentavos: ref, modo: "PERCENTUAL", ajustePb: 0, comNotaFiscal: f.comNotaFiscal, acrescimoNotaPb: pbNota }) : null;
+                return r && r.ok ? <p key={o.id} className="font-semibold">Total{proposta.opcoes.length > 1 ? ` da opção ${o.nome}` : ""} nesta forma: {formatarMoeda(r.totalCentavos)}</p> : null;
+              })}
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 border-t pt-3">
+            <h3 className="text-sm font-semibold">Outras formas de pagamento</h3>
+            <p className="text-muted-foreground text-xs">Ofereça mais de uma forma (à vista com desconto, cartão em vezes...). Na aprovação você escolhe a que o cliente fechou.</p>
+            <p role="status" className="text-xs text-amber-700 dark:text-amber-400">Em preparo: por enquanto as formas extras só ficam salvas aqui. Elas ainda não saem no PDF e a proposta com formas extras não pode ser enviada. Remova-as antes de enviar.</p>
+            <FormasDePagamentoExtras alternativas={alternativas} aoMudar={mudarAlternativas} opcoesDaProposta={proposta.opcoes.map((o) => ({ id: o.id, nome: o.nome }))} referencias={referencias} condicoes={opcoes.condicoes} comNotaFiscal={f.comNotaFiscal} acrescimoNotaPb={pbNota} somenteLeitura={L} />
+          </div>
           <label className="grid gap-1 text-sm">
             Dados para pagamento (aparecem nos termos)
             <AreaTexto

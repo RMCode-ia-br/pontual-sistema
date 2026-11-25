@@ -1,9 +1,11 @@
 import { z } from "zod";
 
+import { AJUSTE_MAXIMO_PB, MAXIMO_FORMAS_PAGAMENTO } from "@/lib/dominio/alternativas-pagamento";
 import { FORMAS_PAGAMENTO, GATILHOS, MAXIMO_PARCELAS_CARTAO, validarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { valorParaCentavos } from "@/lib/dominio/numeros";
 import { percentualParaPontosBase } from "@/lib/dominio/preco";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
+import { lerEscalado } from "@/lib/validadores/numero-br";
 import { normalizarQuebrasDeLinha } from "@/lib/validadores/texto-multilinha";
 
 export const MODOS_PRECO = ["MANUAL", "TABELA", "COMPOSICAO"] as const;
@@ -156,6 +158,19 @@ export const parcelaPropostaSchema = z.object({
   parcelasCartao: texto(2).optional(),
 });
 
+export const alternativaPropostaSchema = z.object({
+  nome: texto(60).min(1, "Dê um nome à forma de pagamento."),
+  condicaoId: idOpcional,
+  textoLivre: texto(500).optional(),
+  modoAjuste: z.enum(["PERCENTUAL", "TOTAL_DIGITADO"]),
+  /** Percentual com sinal ("-5", "7,5"); vazio = zero. */
+  ajuste: texto(8).optional(),
+  repasseCartao: z.boolean(),
+  parcelas: z.array(parcelaPropostaSchema).max(24),
+  /** Modo TOTAL_DIGITADO: o total desta forma para cada opção de produto (antes da nota). */
+  totais: z.array(z.object({ opcaoId: campoIdObrigatorio("Opção inválida."), total: texto(20) })).max(30),
+});
+
 export const propostaSchema = z.object({
   id: campoIdObrigatorio("Proposta inválida."),
   parte: texto(40).optional(),
@@ -191,6 +206,9 @@ export const propostaSchema = z.object({
   descricoesMaiusculas: z.boolean(),
   observacoesInternas: texto(2000).optional(),
   parcelas: z.array(parcelaPropostaSchema).max(24),
+  /** Nome da forma principal quando há formas extras (ex.: "À vista"). */
+  nomePagamentoPrincipal: texto(60).optional(),
+  alternativas: z.array(alternativaPropostaSchema).max(MAXIMO_FORMAS_PAGAMENTO - 1, `No máximo ${MAXIMO_FORMAS_PAGAMENTO} formas de pagamento por proposta.`).default([]),
 });
 export type EntradaProposta = z.input<typeof propostaSchema>;
 
@@ -220,6 +238,50 @@ export function lerCronograma(parcelas: z.output<typeof parcelaPropostaSchema>[]
   if (lidas.length === 0) return { parcelas: [] };
   const v = validarParcelas(lidas);
   return v.ok ? { parcelas: lidas } : { erro: v.erro };
+}
+
+export type AlternativaLida = {
+  nome: string;
+  condicaoId: string | null;
+  textoLivre: string | null;
+  modoAjuste: "PERCENTUAL" | "TOTAL_DIGITADO";
+  ajustePb: number;
+  repasseCartao: boolean;
+  parcelas: (ParcelaPlanejada & { ordem: number })[];
+  totais: { opcaoId: string; baseCentavos: number }[];
+};
+
+/** Lê as formas de pagamento extras digitadas (cronograma, ajuste com sinal, totais por opção). Erros em português simples. */
+export function lerAlternativas(lista: z.output<typeof alternativaPropostaSchema>[], nomePrincipal: string): { alternativas: AlternativaLida[] } | { erro: string } {
+  const nomes = new Set<string>([nomePrincipal.trim().toLowerCase()]);
+  const lidas: AlternativaLida[] = [];
+  for (const a of lista) {
+    const chave = a.nome.trim().toLowerCase();
+    if (nomes.has(chave)) return { erro: `Há duas formas de pagamento com o nome "${a.nome}". Dê nomes diferentes.` };
+    nomes.add(chave);
+    const cron = lerCronograma(a.parcelas);
+    if ("erro" in cron) return { erro: `Forma "${a.nome}": ${cron.erro}` };
+    const livre = (a.textoLivre ?? "").trim();
+    if (cron.parcelas.length > 0 && livre) return { erro: `Forma "${a.nome}": uma condição com texto livre não tem parcelas.` };
+    if (cron.parcelas.length === 0 && !livre) return { erro: `Forma "${a.nome}": escolha as parcelas ou escreva o texto livre (ex.: a combinar).` };
+    let ajustePb = 0;
+    if (a.modoAjuste === "PERCENTUAL" && (a.ajuste ?? "") !== "") {
+      const pb = lerEscalado(a.ajuste as string, { casas: 2, negativo: true });
+      if (pb === null) return { erro: `Forma "${a.nome}": informe o ajuste em %, por exemplo -5 ou 7,5.` };
+      if (Math.abs(pb) > AJUSTE_MAXIMO_PB) return { erro: `Forma "${a.nome}": o ajuste pode ir de -50% a +50%.` };
+      ajustePb = pb;
+    }
+    const totais: { opcaoId: string; baseCentavos: number }[] = [];
+    if (a.modoAjuste === "TOTAL_DIGITADO") {
+      for (const t of a.totais) {
+        const c = valorParaCentavos(t.total);
+        if (c === null || c <= 0) return { erro: `Forma "${a.nome}": informe o total em reais maior que zero, por exemplo 16.200,00.` };
+        totais.push({ opcaoId: t.opcaoId, baseCentavos: c });
+      }
+    }
+    lidas.push({ nome: a.nome, condicaoId: a.condicaoId, textoLivre: livre || null, modoAjuste: a.modoAjuste, ajustePb, repasseCartao: a.repasseCartao, parcelas: cron.parcelas, totais });
+  }
+  return { alternativas: lidas };
 }
 
 export const idsSchema = z.array(campoIdObrigatorio()).min(1).max(50);

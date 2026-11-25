@@ -15,7 +15,10 @@ import { campoIdObrigatorio } from "@/lib/validadores/campos";
 import { mudarFaseDoProjeto } from "@/modules/projetos/servico";
 import { registrarInteracao } from "@/modules/interacoes/registrar";
 
-import { lerCronograma, propostaSchema, type EntradaProposta } from "../schemas";
+import { calcularAlternativa } from "@/lib/dominio/alternativas-pagamento";
+import { calcularTotais } from "@/lib/dominio/preco";
+
+import { lerAlternativas, lerCronograma, propostaSchema, type EntradaProposta } from "../schemas";
 import { calcularPrecoDoItem, exigirRascunho, reservarNumeroDeProposta } from "../servico";
 import { copiarProposta } from "../servico-ciclo";
 
@@ -150,6 +153,56 @@ export async function criarProposta(projetoIdBruto: string): Promise<ResultadoAc
   });
 }
 
+type TxAlt = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Troca inteira das formas de pagamento extras (exclusão lógica + recriação, como o cronograma principal).
+ * Confere cada forma contra os itens JÁ gravados: o total digitado precisa ficar a no máximo 50% da opção (decisão 141).
+ */
+async function salvarAlternativas(tx: TxAlt, d: { propostaId: string; alternativas: import("../schemas").AlternativaLida[]; comNotaFiscal: boolean; acrescimoNotaPb: number; usuarioId: string }) {
+  const agora = new Date();
+  const antigas = await tx.alternativaPagamento.findMany({ where: { propostaId: d.propostaId, deletadoEm: null }, select: { id: true } });
+  if (antigas.length > 0) {
+    const ids = antigas.map((a) => a.id);
+    const baixa = { deletadoEm: agora, atualizadoPorId: d.usuarioId };
+    await tx.propostaParcela.updateMany({ where: { alternativaId: { in: ids }, deletadoEm: null }, data: baixa });
+    await tx.alternativaPagamentoTotal.updateMany({ where: { alternativaId: { in: ids }, deletadoEm: null }, data: baixa });
+    await tx.alternativaPagamento.updateMany({ where: { id: { in: ids } }, data: baixa });
+  }
+  if (d.alternativas.length === 0) return;
+
+  const [opcoes, itens] = await Promise.all([
+    tx.opcaoProposta.findMany({ where: { propostaId: d.propostaId, deletadoEm: null }, orderBy: { ordem: "asc" }, select: { id: true, nome: true, descontoCentavos: true } }),
+    tx.itemProposta.findMany({ where: { propostaId: d.propostaId, deletadoEm: null }, select: { opcaoId: true, precoTotalCentavos: true } }),
+  ]);
+  const bases = calcularTotais(itens.map((i) => ({ ...i, medidas: [] })), opcoes, d.comNotaFiscal, d.acrescimoNotaPb);
+  const nomeDaOpcao = (id: string) => opcoes.find((o) => o.id === id)?.nome ?? "";
+  for (const a of d.alternativas) {
+    for (const t of a.totais) if (!opcoes.some((o) => o.id === t.opcaoId)) throw new ErroNegocio(`Forma "${a.nome}": uma das opções não existe mais. Recarregue a página.`);
+    for (const b of bases) {
+      if (b.baseCentavos <= 0) continue; // opção ainda sem itens: o envio já exige itens e valor
+      const total = a.totais.find((t) => t.opcaoId === b.opcaoId)?.baseCentavos;
+      const r = calcularAlternativa({ referenciaCentavos: b.baseCentavos, modo: a.modoAjuste, ajustePb: a.ajustePb, totalDigitadoCentavos: total, comNotaFiscal: d.comNotaFiscal, acrescimoNotaPb: d.acrescimoNotaPb });
+      if (!r.ok) throw new ErroNegocio(`Forma "${a.nome}"${opcoes.length > 1 ? `, opção "${nomeDaOpcao(b.opcaoId)}"` : ""}: ${r.erro}`);
+    }
+  }
+
+  for (const [i, a] of d.alternativas.entries()) {
+    const criada = await tx.alternativaPagamento.create({
+      data: { propostaId: d.propostaId, ordem: i + 1, nome: a.nome, condicaoId: a.condicaoId, textoLivre: a.textoLivre, modoAjuste: a.modoAjuste, ajustePb: a.ajustePb, repasseCartao: a.repasseCartao, criadoPorId: d.usuarioId, atualizadoPorId: d.usuarioId },
+      select: { id: true },
+    });
+    if (a.parcelas.length > 0) {
+      await tx.propostaParcela.createMany({
+        data: a.parcelas.map((p) => ({ propostaId: d.propostaId, alternativaId: criada.id, ordem: p.ordem, descricao: p.descricao, percentualPb: p.percentualPb, gatilho: p.gatilho, forma: p.forma, diasApos: p.diasApos ?? null, dataFixa: paraData(p.dataFixa ?? null), parcelasCartao: p.parcelasCartao ?? null, criadoPorId: d.usuarioId, atualizadoPorId: d.usuarioId })),
+      });
+    }
+    if (a.modoAjuste === "TOTAL_DIGITADO" && a.totais.length > 0) {
+      await tx.alternativaPagamentoTotal.createMany({ data: a.totais.map((t) => ({ alternativaId: criada.id, opcaoId: t.opcaoId, baseCentavos: t.baseCentavos, criadoPorId: d.usuarioId, atualizadoPorId: d.usuarioId })) });
+    }
+  }
+}
+
 /** Salva cabeçalho, condições comerciais e cronograma. Mudar o markup da proposta recalcula os itens por composição. */
 export async function salvarProposta(entrada: EntradaProposta): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
@@ -160,6 +213,9 @@ export async function salvarProposta(entrada: EntradaProposta): Promise<Resultad
   const cronograma = lerCronograma(v.parcelas);
   if ("erro" in cronograma) return falha(cronograma.erro);
   if (cronograma.parcelas.length > 0 && v.condicaoTextoLivre) return falha("Uma condição com texto livre não tem parcelas.");
+  const nomePrincipal = (v.nomePagamentoPrincipal ?? "").trim();
+  const extras = lerAlternativas(v.alternativas, nomePrincipal || "Forma A");
+  if ("erro" in extras) return falha(extras.erro);
   if (v.modoPrazo === "TOTAL" && v.prazoTotalMinDias && v.prazoTotalMaxDias && v.prazoTotalMinDias > v.prazoTotalMaxDias) {
     return falha("O prazo mínimo não pode ser maior que o máximo.", { prazoTotalMinDias: "Maior que o máximo." });
   }
@@ -171,6 +227,9 @@ export async function salvarProposta(entrada: EntradaProposta): Promise<Resultad
       if (v.condicaoId) {
         const existe = await tx.condicaoPagamento.count({ where: { id: v.condicaoId, deletadoEm: null } });
         if (!existe) throw new ErroNegocio("A condição de pagamento escolhida não foi encontrada.");
+      }
+      for (const a of extras.alternativas) {
+        if (a.condicaoId && !(await tx.condicaoPagamento.count({ where: { id: a.condicaoId, deletadoEm: null } }))) throw new ErroNegocio(`A condição de pagamento da forma "${a.nome}" não foi encontrada.`);
       }
       const antes = await tx.proposta.findUniqueOrThrow({ where: { id: v.id }, select: camposAuditados });
       const novoMarkup = v.markup;
@@ -204,6 +263,7 @@ export async function salvarProposta(entrada: EntradaProposta): Promise<Resultad
           condicaoId: v.condicaoId,
           condicaoTextoLivre: v.condicaoTextoLivre || null,
           dadosPagamento: v.dadosPagamento || null,
+          nomePagamentoPrincipal: nomePrincipal || null,
           notas: v.notas,
           exibirValorPorItem: v.exibirValorPorItem,
           descricoesMaiusculas: v.descricoesMaiusculas,
@@ -214,7 +274,7 @@ export async function salvarProposta(entrada: EntradaProposta): Promise<Resultad
       });
 
       // Cronograma: troca inteira (as linhas antigas vão para a exclusão lógica).
-      await tx.propostaParcela.updateMany({ where: { propostaId: v.id, deletadoEm: null }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
+      await tx.propostaParcela.updateMany({ where: { propostaId: v.id, deletadoEm: null, alternativaId: null }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
       if (cronograma.parcelas.length > 0) {
         await tx.propostaParcela.createMany({
           data: cronograma.parcelas.map((p) => ({
@@ -233,6 +293,8 @@ export async function salvarProposta(entrada: EntradaProposta): Promise<Resultad
         });
       }
 
+      await salvarAlternativas(tx, { propostaId: v.id, alternativas: extras.alternativas, comNotaFiscal: depois.comNotaFiscal, acrescimoNotaPb: depois.acrescimoNotaPb, usuarioId: sessao.id });
+
       // O markup da proposta muda o preço dos itens por composição que não têm markup próprio.
       let recalculados = 0;
       if (antes.markupPb !== depois.markupPb) {
@@ -248,7 +310,7 @@ export async function salvarProposta(entrada: EntradaProposta): Promise<Resultad
           }
         }
       }
-      await registrarAuditoria(tx, { usuario: sessao, entidade: "Proposta", entidadeId: v.id, acao: "ATUALIZAR", antes, depois: { ...depois, parcelas: cronograma.parcelas.length }, ip });
+      await registrarAuditoria(tx, { usuario: sessao, entidade: "Proposta", entidadeId: v.id, acao: "ATUALIZAR", antes, depois: { ...depois, parcelas: cronograma.parcelas.length, formasExtras: extras.alternativas.map((a) => ({ nome: a.nome, modo: a.modoAjuste, ajustePb: a.ajustePb, repasseCartao: a.repasseCartao, parcelas: a.parcelas.length })) }, ip });
       return { projetoId: atual.projetoId, recalculados };
     });
     revalidar(v.id, resultado.projetoId);

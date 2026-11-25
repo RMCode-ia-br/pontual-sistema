@@ -87,7 +87,8 @@ export async function obterPropostaParaEditor(id: string) {
       projeto: { select: { id: true, codigo: true, titulo: true, status: true, clienteId: true, cliente: { select: { id: true, nome: true } } } },
       opcoes: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
       grupos: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-      parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
+      parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } },
+      alternativasPagamento: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, include: { parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, totais: { where: { deletadoEm: null } } } },
       itens: {
         where: { deletadoEm: null },
         orderBy: [{ ordem: "asc" }, { id: "asc" }],
