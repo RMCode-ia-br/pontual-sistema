@@ -437,7 +437,7 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
           <div className="grid gap-3 border-t pt-3">
             <h3 className="text-sm font-semibold">Outras formas de pagamento</h3>
             <p className="text-muted-foreground text-xs">Ofereça mais de uma forma (à vista com desconto, cartão em vezes...). Na aprovação você escolhe a que o cliente fechou.</p>
-            <p role="status" className="text-xs text-amber-700 dark:text-amber-400">Em preparo: por enquanto as formas extras só ficam salvas aqui. Elas ainda não saem no PDF e a proposta com formas extras não pode ser enviada. Remova-as antes de enviar.</p>
+            <p role="status" className="text-xs text-amber-700 dark:text-amber-400">Em preparo: a proposta com formas extras já pode ser enviada e sai no PDF, mas a aprovação com escolha da forma ainda não está pronta. Por enquanto a aprovação fica bloqueada.</p>
             <FormasDePagamentoExtras alternativas={alternativas} aoMudar={mudarAlternativas} opcoesDaProposta={proposta.opcoes.map((o) => ({ id: o.id, nome: o.nome }))} referencias={referencias} condicoes={opcoes.condicoes} comNotaFiscal={f.comNotaFiscal} acrescimoNotaPb={pbNota} somenteLeitura={L} />
           </div>
           <label className="grid gap-1 text-sm">

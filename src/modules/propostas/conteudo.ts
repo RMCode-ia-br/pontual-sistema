@@ -1,3 +1,5 @@
+import type { FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
+
 /**
  * Conteúdo "de impressão" da proposta: é o que o PDF mostra e o que é CONGELADO (snapshot) ao enviar (R4).
  * Nunca inclui custo, markup, comissões nem observações internas.
@@ -55,4 +57,9 @@ export type ConteudoProposta = {
   validade: { texto: string | null; ate: string | null; encerradaPorReajuste: boolean };
   pagamento: { condicaoNome: string | null; textoLivre: string | null; dadosPagamento: string | null; parcelas: ParcelaConteudo[] };
   notas: string[];
+  /**
+   * Formas de pagamento (principal + extras) com o total de cada uma por opção. SÓ existe quando a proposta tem formas extras;
+   * sem elas o conteúdo (e o PDF) é o de antes, e snapshots antigos continuam sendo lidos como sempre.
+   */
+  formasPagamento?: FormaPagamentoConteudo[];
 };

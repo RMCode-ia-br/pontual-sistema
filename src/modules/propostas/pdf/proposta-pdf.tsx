@@ -1,6 +1,8 @@
 import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
+import { Fragment, type ReactNode } from "react";
 
-import { linhasDePagamento, linhasDePrazo, notasNumeradas, textoDoRodape } from "@/lib/dominio/texto-proposta";
+import type { FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
+import { linhasDaForma, linhasDePagamento, linhasDePrazo, notasNumeradas, textoDoRodape } from "@/lib/dominio/texto-proposta";
 import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { linhasDoTexto } from "@/lib/validadores/texto-multilinha";
 
@@ -26,6 +28,10 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
   const varias = c.opcoes.length > 1;
   const prazo = linhasDePrazo({ ...c.prazo, tipoDias: c.prazo.tipoDias ?? "UTEIS" });
   const nomeNoTotal = (nome: string) => (varias || !nomeGenerico(nome) ? `${nome.toUpperCase()} ` : "");
+  // Com formas de pagamento extras (Fase 3.6a) os termos mudam; sem elas o PDF é EXATAMENTE o de antes.
+  const formas = c.formasPagamento ?? [];
+  const comFormas = formas.length > 1;
+  const quebravel = comFormas ? { wrap: false as const } : {};
 
   return (
     <Document title={`Proposta ${c.numero}`} author={nomeEmpresa} subject="Proposta comercial">
@@ -137,10 +143,33 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         ) : null}
 
         {/* Termos comerciais */}
-        <View style={{ marginTop: 12 }} wrap={false}>
-          <CaixaTitulo texto="TERMOS COMERCIAIS" />
-          <Text style={{ ...NEGRITO, fontSize: 9.5, marginBottom: 4 }}>1.0 FORMA DE PAGAMENTO:</Text>
-          {c.opcoes.map((o) => (
+        <Termos plano={comFormas}>
+          {comFormas ? (
+            // Título + cabeçalho + 1º quadro formam um bloco só: nunca ficam sozinhos no pé da página.
+            <FormasDePagamento
+              c={c}
+              formas={formas}
+              cor={cor}
+              varias={varias}
+              cabecalho={
+                <>
+                  {/* Textos com minPresenceAhead (um View com a mesma propriedade não segura o título no react-pdf): o título dos termos só fica numa página se o 1º quadro de pagamento couber nela. */}
+                  <Text minPresenceAhead={200} style={{ backgroundColor: COR_PDF.fundoSuave, borderWidth: 1, borderColor: COR_PDF.texto, paddingVertical: 5, marginBottom: 8, fontSize: 9.5, ...NEGRITO, textAlign: "center" }}>
+                    TERMOS COMERCIAIS
+                  </Text>
+                  <Text minPresenceAhead={170} style={{ ...NEGRITO, fontSize: 9.5, marginBottom: 4 }}>
+                    1.0 FORMA DE PAGAMENTO:
+                  </Text>
+                </>
+              }
+            />
+          ) : (
+            <>
+              <CaixaTitulo texto="TERMOS COMERCIAIS" />
+              <Text style={{ ...NEGRITO, fontSize: 9.5, marginBottom: 4 }}>1.0 FORMA DE PAGAMENTO:</Text>
+            </>
+          )}
+          {comFormas ? null : c.opcoes.map((o) => (
             <View key={o.id} style={{ marginBottom: 4 }}>
               <Text style={{ ...NEGRITO }}>
                 • VALOR TOTAL {nomeNoTotal(o.nome)}
@@ -158,7 +187,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
             // Uma linha de texto por linha digitada (favorecido, banco, agência, conta, Pix). Linha em branco vira espaço.
             // Peso NORMAL, não negrito: no negrito (Geist SemiBold) o "c" minúsculo some do texto copiado do PDF (ver PENDENCIAS),
             // e quem copia a chave Pix não pode perder letra.
-            <View style={{ marginTop: 4 }}>
+            <View style={{ marginTop: 4 }} {...quebravel}>
               {linhasDoTexto(c.pagamento.dadosPagamento).map((l, i) => (
                 <Text key={i} style={{ fontFamily: FAMILIA_PDF, fontWeight: 400, fontSize: 8.5 }}>
                   {l === "" ? " " : l}
@@ -168,7 +197,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
           ) : null}
 
           {prazo.length > 0 ? (
-            <View style={{ marginTop: 8 }}>
+            <View style={{ marginTop: 8 }} {...quebravel}>
               <Text style={{ ...NEGRITO, fontSize: 9 }}>• PRAZO DE ENTREGA (APÓS MEDIÇÃO EXATA PARA PRODUÇÃO):</Text>
               {prazo.map((l, i) => (
                 <Text key={i} style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
@@ -178,13 +207,13 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
             </View>
           ) : null}
 
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 8 }} {...quebravel}>
             <Text style={{ ...NEGRITO, fontSize: 9 }}>• Validade da proposta:</Text>
             <Text style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
               {c.validade.encerradaPorReajuste ? "Encerrada por reajuste de fornecedor." : `${[c.validade.texto, c.validade.ate ? `até ${dataBr(c.validade.ate)}` : null].filter(Boolean).join(" — ") || "Até alteração dos fornecedores"}.`}
             </Text>
           </View>
-        </View>
+        </Termos>
 
         {c.consultor.nome ? (
           <View style={{ marginTop: 16 }} wrap={false}>
@@ -195,6 +224,68 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
         ) : null}
       </Page>
     </Document>
+  );
+}
+
+/**
+ * Formas de pagamento no estilo das propostas do Marcelo: por opção de produto, quadros VERTICAIS em no máximo DUAS colunas
+ * (nunca três). Cada quadro tem o nome da forma, o valor total e as parcelas ("03X R$ 5.400,00 CARTÃO"). Um quadro nunca se
+ * parte entre páginas; a linha de dois quadros também não. Títulos em negrito; as linhas de valores em peso normal.
+ */
+function FormasDePagamento({ c, formas, cor, varias, cabecalho }: { c: ConteudoProposta; formas: FormaPagamentoConteudo[]; cor: string; varias: boolean; cabecalho: ReactNode }) {
+  const linhas: FormaPagamentoConteudo[][] = [];
+  for (let i = 0; i < formas.length; i += 2) linhas.push(formas.slice(i, i + 2));
+  // Tudo irmão no mesmo nível (sem Views de agrupamento): `minPresenceAhead` mantém o título e o rótulo da opção junto do 1º quadro,
+  // e cada linha de quadros é indivisível. Agrupar tudo num wrap={false} aninhado desmonta o desenho no react-pdf.
+  return (
+    <>
+      {cabecalho}
+      {c.opcoes.map((o) => (
+        <Fragment key={o.id}>
+          {varias ? (
+            <Text minPresenceAhead={150} style={{ ...NEGRITO, fontSize: 9, marginTop: 4, marginBottom: 3, color: cor }}>
+              • {o.nome.toUpperCase()}:
+            </Text>
+          ) : null}
+          {linhas.map((par, k) => (
+            <View key={k} wrap={false} style={{ flexDirection: "row", marginBottom: 5 }}>
+              {par.map((f, j) => {
+                const total = f.porOpcao.find((x) => x.opcaoId === o.id)?.totalCentavos ?? o.totais.totalCentavos;
+                return (
+                  <View key={`${f.nome}-${j}`} style={{ flex: 1, borderWidth: 1, borderColor: COR_PDF.linha, padding: 6, marginRight: j === 0 && par.length > 1 ? 6 : 0 }}>
+                    <Text style={{ ...NEGRITO, fontSize: 9.5, color: cor }}>{f.nome.toUpperCase()}</Text>
+                    <Text style={{ ...NEGRITO, fontSize: 9, marginTop: 2, marginBottom: 3 }}>
+                      VALOR TOTAL {moeda(total)}
+                      {c.comNotaFiscal ? " (com nota fiscal)" : ""}
+                    </Text>
+                    {linhasDaForma(total, f.parcelas, f.textoLivre).map((l, i) => (
+                      <Text key={i} style={{ fontSize: 8.5, marginTop: 1 }}>
+                        {l.toUpperCase()};
+                      </Text>
+                    ))}
+                  </View>
+                );
+              })}
+              {par.length === 1 ? <View style={{ flex: 1, marginLeft: 6 }} /> : null}
+            </View>
+          ))}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Contêiner dos termos comerciais. Sem formas extras é o de sempre (um bloco indivisível). Com formas extras os filhos ficam
+ * soltos na página (sem View aninhada): assim a paginação e o `minPresenceAhead` do react-pdf enxergam os quadros de verdade.
+ */
+function Termos({ plano, children }: { plano: boolean; children: ReactNode }) {
+  if (!plano) return <View style={{ marginTop: 12 }} wrap={false}>{children}</View>;
+  return (
+    <>
+      <View style={{ height: 12 }} />
+      {children}
+    </>
   );
 }
 

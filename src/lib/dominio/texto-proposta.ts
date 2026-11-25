@@ -3,6 +3,7 @@
  * Puro e testável; o PDF só desenha o que sai daqui.
  */
 import { ROTULO_FORMA, ROTULO_GATILHO, type FormaPagamento, type Gatilho } from "./parcelas";
+import { parcelasDoCartao } from "./alternativas-pagamento";
 import { dividirArredondando, PONTOS_BASE_100 } from "./preco";
 
 export type ParcelaTexto = { descricao: string; percentualPb: number; gatilho: string; forma: string | null; diasApos: number | null; dataFixa: string | null; parcelasCartao: number | null };
@@ -37,6 +38,25 @@ export function linhasDePagamento(totalCentavos: number, parcelas: ParcelaTexto[
     // Quando há descrição, ela já diz o gatilho (entrega, sinal…); a data e os dias, não: entram sempre.
     const explicitaQuando = p.gatilho === "DATA_FIXA" || p.gatilho === "DIAS_APOS_APROVACAO" || descricao === "";
     return [`${percentual(p.percentualPb)} (${moeda(valores[i])})`, descricao, explicitaQuando ? quando : null, forma].filter(Boolean).join(" — ");
+  });
+}
+
+/**
+ * Linhas de uma forma de pagamento no estilo das propostas do Marcelo: cartão vira "03X R$ 5.400,00 CARTÃO" (total ÷ vezes, a última
+ * absorve a diferença de centavos); o resto segue a mesma redação de `linhasDePagamento`.
+ */
+export function linhasDaForma(totalCentavos: number, parcelas: ParcelaTexto[], textoLivre: string | null): string[] {
+  if (parcelas.length === 0) return textoLivre ? [textoLivre] : [];
+  const valores = valoresDasParcelas(totalCentavos, parcelas);
+  const padrao = linhasDePagamento(totalCentavos, parcelas, null);
+  return parcelas.map((p, i) => {
+    const n = p.forma === "CARTAO_CREDITO" ? p.parcelasCartao : null;
+    if (!n || n < 1 || n > 12 || valores[i] <= 0) return padrao[i];
+    const iguais = parcelasDoCartao(valores[i], n);
+    const ultima = iguais[n - 1] !== iguais[0] ? ` (última ${moeda(iguais[n - 1])})` : "";
+    const cartao = `${String(n).padStart(2, "0")}X ${moeda(iguais[0])} CARTÃO${ultima}`;
+    if (p.percentualPb === PONTOS_BASE_100) return cartao;
+    return [`${percentual(p.percentualPb)} (${moeda(valores[i])})`, p.descricao.trim(), cartao].filter(Boolean).join(" — ");
   });
 }
 

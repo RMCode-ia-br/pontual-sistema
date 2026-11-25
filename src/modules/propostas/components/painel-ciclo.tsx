@@ -32,6 +32,8 @@ type Props = {
   linkEmail: string | null;
   /** Existe revisão mais nova (rascunho ou enviada) do mesmo número: aprovar esta a descartaria (Fase 7A.1). */
   revisaoMaisNova?: { id: string; rotulo: string; aviso: string } | null;
+  /** Tem mais de uma forma de pagamento: a escolha no aceite está em preparo (Fase 3.6a, Bloco 4), então aprovar fica bloqueado. */
+  formasExtras?: boolean;
 };
 
 const FORMAS = [
@@ -163,6 +165,11 @@ export function PainelCiclo(p: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
+            {p.formasExtras ? (
+              <p role="status" className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                Em preparo: esta proposta tem mais de uma forma de pagamento e a escolha da forma no aceite ainda não está pronta. Por enquanto a aprovação fica bloqueada.
+              </p>
+            ) : null}
             {p.revisaoMaisNova ? (
               <div role="alert" className="flex flex-col gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
                 <p className="flex items-start gap-2">
@@ -220,7 +227,7 @@ export function PainelCiclo(p: Props) {
             </Button>
             <Button
               type="button"
-              disabled={pendente}
+              disabled={pendente || !!p.formasExtras}
               onClick={() =>
                 rodar(
                   () => aprovarPropostaAcao({ propostaId: p.propostaId, opcaoId, forma, aceitaEm, observacao }),

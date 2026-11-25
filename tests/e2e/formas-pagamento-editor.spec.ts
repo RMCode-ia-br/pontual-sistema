@@ -133,10 +133,41 @@ test("editor mostra o aviso de recurso em construção e cabe na tela (390 px se
   await page.getByRole("button", { name: "Salvar proposta" }).click();
   await expect(toast(page, "Proposta salva")).toBeVisible();
   await aguardarAvisosSumirem(page);
-  await expect(page.getByText(/Em preparo: por enquanto as formas extras só ficam salvas aqui/)).toBeVisible();
+  await expect(page.getByText(/Em preparo: a proposta com formas extras já pode ser enviada/)).toBeVisible();
   await semRolagemHorizontal(page);
   await capturar(page, "formas-pagamento-editor-claro");
   await page.emulateMedia({ colorScheme: "dark" });
   await capturar(page, "formas-pagamento-editor-escuro");
   await semRolagemHorizontal(page);
+});
+
+test("envia com formas extras: o PDF sai, a revisão copia tudo e a comparação não vê diferença; a aprovação fica em preparo", async ({ page }) => {
+  await abrirEditor(page);
+  await page.getByRole("button", { name: "Marcar como enviada" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Marcar como enviada" }).click();
+  await expect(toast(page, "marcada como enviada")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+  await expect(page.getByText("Conteúdo congelado")).toBeVisible();
+
+  const pdf = await page.request.get(`/api/propostas/${proposta.propostaId}/pdf`);
+  expect(pdf.status()).toBe(200);
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+
+  // Aprovar ainda não: a escolha da forma no aceite está em preparo (Bloco 4).
+  await page.getByRole("button", { name: "Aprovar", exact: true }).click();
+  const dialogo = page.getByRole("dialog");
+  await expect(dialogo.getByText(/Em preparo: esta proposta tem mais de uma forma de pagamento/)).toBeVisible();
+  await expect(dialogo.getByRole("button", { name: "Aprovar proposta" })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  // Nova revisão: as formas vêm copiadas e a comparação não aponta diferença.
+  await page.getByRole("button", { name: "Nova revisão" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Criar revisão" }).click();
+  await expect(page.getByText("Rev. 1").first()).toBeVisible();
+  await expect(page.getByLabel("Nome da forma principal")).toHaveValue("À vista");
+  await expect(page.getByLabel("Forma 2: nome")).toHaveValue("10x no cartão");
+  await expect(page.getByLabel("Forma 2 — Total desta forma")).toHaveValue("14.080,00");
+  await expect(page.getByLabel("Forma 3: nome")).toHaveValue("Pix com desconto");
+  await page.getByRole("link", { name: "Comparar com a revisão anterior" }).click();
+  await expect(page.getByText("Nenhuma diferença nos itens, nos totais, nas formas de pagamento nem na nota fiscal.")).toBeVisible();
 });

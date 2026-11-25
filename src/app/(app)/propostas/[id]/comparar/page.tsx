@@ -27,6 +27,7 @@ function paraComparavel(c: ConteudoProposta): ConteudoComparavel {
     numero: c.numero,
     revisao: c.revisao,
     comNotaFiscal: c.comNotaFiscal,
+    formas: (c.formasPagamento ?? []).map((f) => ({ nome: f.nome, totais: f.porOpcao.map((t) => ({ opcaoNome: c.opcoes.find((o) => o.id === t.opcaoId)?.nome ?? "", totalCentavos: t.totalCentavos })) })),
     opcoes: c.opcoes.map((o) => ({
       nome: o.nome,
       totalCentavos: o.totais.totalCentavos,
@@ -55,9 +56,35 @@ export default async function PaginaComparar({ params, searchParams }: { params:
         </Link>
       </p>
       <CabecalhoPagina titulo={`Comparar revisões da ${depois.numero}`} descricao={`${nome(antes)} → ${nome(depois)}`} />
-      {r.semMudancas ? <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">Nenhuma diferença nos itens, nos totais nem na nota fiscal.</p> : null}
+      {r.semMudancas ? <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">Nenhuma diferença nos itens, nos totais, nas formas de pagamento nem na nota fiscal.</p> : null}
       {r.notaFiscalMudou ? <p className="mb-4 text-sm">Nota fiscal: <strong>{antes.comNotaFiscal ? "com nota" : "sem nota"}</strong> → <strong>{depois.comNotaFiscal ? "com nota" : "sem nota"}</strong>.</p> : null}
       <div className="grid max-w-3xl gap-4">
+        {r.formas.some((f) => f.situacao !== "MANTIDA" || f.mudancas.length > 0) ? (
+          <section className="grid gap-2 rounded-xl border p-4" aria-label="Formas de pagamento">
+            <h2 className="font-medium">Formas de pagamento</h2>
+            <ul className="grid gap-1 text-sm">
+              {r.formas
+                .filter((f) => f.situacao !== "MANTIDA" || f.mudancas.length > 0)
+                .map((f) => (
+                  <li key={f.nome} className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-1 first:border-t-0 first:pt-0">
+                    <span>
+                      <Badge variant={f.situacao === "REMOVIDA" ? "destructive" : "secondary"}>{f.situacao === "NOVA" ? "Nova forma" : f.situacao === "REMOVIDA" ? "Forma removida" : "Total alterado"}</Badge> {f.nome}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {f.mudancas.map((m, k) => (
+                        <span key={k} className="ml-2">
+                          {r.opcoes.length > 1 && m.opcaoNome ? `${m.opcaoNome}: ` : ""}
+                          {m.antesCentavos === null ? "" : formatarMoeda(m.antesCentavos)}
+                          {m.antesCentavos !== null && m.depoisCentavos !== null ? " → " : ""}
+                          {m.depoisCentavos === null ? "" : formatarMoeda(m.depoisCentavos)}
+                        </span>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ) : null}
         {r.opcoes.map((o) => (
           <section key={o.nome} className="grid gap-2 rounded-xl border p-4" aria-label={`Opção ${o.nome}`}>
             <h2 className="flex flex-wrap items-center gap-2 font-medium">

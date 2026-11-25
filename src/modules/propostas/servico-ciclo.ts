@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { montarFormasDePagamento } from "@/lib/dominio/alternativas-pagamento";
 import { problemasParaEnviar } from "@/lib/dominio/ciclo-proposta";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
 import { gerarParcelas } from "@/lib/dominio/parcelas";
@@ -40,6 +41,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
         grupos: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
         parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } },
         condicao: { select: { nome: true } },
+        alternativasPagamento: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, include: { parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, totais: { where: { deletadoEm: null } } } },
         itens: {
           where: { deletadoEm: null },
           orderBy: [{ ordem: "asc" }, { id: "asc" }],
@@ -57,6 +59,20 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
     p.comNotaFiscal,
     p.acrescimoNotaPb,
   );
+
+  const parcelaDeConteudo = (x: { descricao: string; percentualPb: number; gatilho: string; forma: string | null; diasApos: number | null; dataFixa: Date | null; parcelasCartao: number | null }) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao });
+  const formas = montarFormasDePagamento({
+    nomePrincipal: p.nomePagamentoPrincipal,
+    principal: { textoLivre: p.condicaoTextoLivre, parcelas: p.parcelas.map(parcelaDeConteudo) },
+    extras: p.alternativasPagamento.map((a) => ({ nome: a.nome, modoAjuste: a.modoAjuste, ajustePb: a.ajustePb, repasseCartao: a.repasseCartao, textoLivre: a.textoLivre, parcelas: a.parcelas.map(parcelaDeConteudo), totais: a.totais.map((t) => ({ opcaoId: t.opcaoId, baseCentavos: t.baseCentavos })) })),
+    opcoes: p.opcoes.map((o) => {
+      const t = totais.find((x) => x.opcaoId === o.id)!;
+      return { id: o.id, nome: o.nome, baseCentavos: t.baseCentavos, acrescimoNotaCentavos: t.acrescimoNotaCentavos, totalCentavos: t.totalCentavos };
+    }),
+    comNotaFiscal: p.comNotaFiscal,
+    acrescimoNotaPb: p.acrescimoNotaPb,
+  });
+  if (!formas.ok) throw new ErroNegocio(formas.problemas.join(" "));
 
   return {
     versao: 1,
@@ -116,6 +132,8 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
       parcelas: p.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),
     },
     notas: p.notas,
+    // Só com formas extras: sem elas o conteúdo (e o snapshot) é exatamente o de antes da Fase 3.6a.
+    ...(formas.formas.length > 0 ? { formasPagamento: formas.formas } : {}),
   };
 }
 
@@ -132,13 +150,21 @@ export async function problemasDaProposta(tx: Tx, propostaId: string): Promise<s
     },
   });
   if (!p) throw new ErroNegocio("Proposta não encontrada.");
-  const extras = await tx.alternativaPagamento.count({ where: { propostaId, deletadoEm: null } });
-  const emConstrucao = extras > 0 ? ["As formas de pagamento extras ainda não saem na proposta enviada (recurso em construção). Remova-as para enviar."] : [];
-  return [...emConstrucao, ...problemasParaEnviar({
+  const problemas = problemasParaEnviar({
     clienteNome: p.clienteNome,
     condicao: { temParcelas: p.parcelas.length > 0, textoLivre: p.condicaoTextoLivre },
     opcoes: p.opcoes.map((o) => ({ nome: o.nome, itens: p.itens.filter((i) => i.opcaoId === o.id).map((i) => ({ descricao: i.descricao, precoTotalCentavos: i.precoTotalCentavos, medidas: i.medidas.length })) })),
-  })];
+  });
+  // Formas de pagamento extras: cada uma precisa valer algo em cada opção (ajuste e totais dentro do limite).
+  if ((await tx.alternativaPagamento.count({ where: { propostaId, deletadoEm: null } })) > 0) {
+    try {
+      await construirConteudo(tx, propostaId);
+    } catch (e) {
+      if (!(e instanceof ErroNegocio)) throw e;
+      problemas.push(e.message);
+    }
+  }
+  return problemas;
 }
 
 /** Congela o conteúdo (R4) e marca ENVIADA. Chamada dentro da transação de quem envia ou aprova. */
@@ -222,6 +248,15 @@ export type EntradaAprovacao = {
  * etapas da obra (R7, `gerarEtapasDaObra` em `@/modules/obras/servico`) e linha do tempo. Aprovar um rascunho
  * congela antes. Idempotente nas parcelas (única por proposta + ordem) e nas etapas (uma geração por projeto).
  */
+export const MENSAGEM_APROVACAO_EM_PREPARO = "Esta proposta tem mais de uma forma de pagamento. A escolha da forma no aceite ainda está em preparo, por isso a aprovação fica bloqueada por enquanto.";
+
+/** Tem formas de pagamento extras (no rascunho: nas linhas; enviada: no snapshot congelado). */
+export async function temFormasExtras(tx: Tx, propostaId: string, snapshot: unknown): Promise<boolean> {
+  const congeladas = (snapshot as ConteudoProposta | null)?.formasPagamento;
+  if (congeladas && congeladas.length > 1) return true;
+  return (await tx.alternativaPagamento.count({ where: { propostaId, deletadoEm: null } })) > 0;
+}
+
 export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const { usuario, propostaId, ip } = e;
   const agora = e.agora ?? new Date();
@@ -235,6 +270,8 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
     },
   });
   if (!p) throw new ErroNegocio("Proposta não encontrada.");
+  // Em preparo (Fase 3.6a, Bloco 4): a escolha da forma no aceite ainda não existe; não aprova proposta com formas extras.
+  if (await temFormasExtras(tx, propostaId, p.snapshot)) throw new ErroNegocio(MENSAGEM_APROVACAO_EM_PREPARO);
   if (p.status !== "RASCUNHO" && p.status !== "ENVIADA" && p.status !== "EXPIRADA") {
     throw new ErroNegocio(p.status === "APROVADA" ? "Esta proposta já foi aprovada." : "Só propostas em rascunho ou enviadas podem ser aprovadas. Se foi substituída, aprove a revisão vigente.");
   }
@@ -387,6 +424,7 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
       opcoes: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
       grupos: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
       parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } },
+      alternativasPagamento: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, include: { parcelas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, totais: { where: { deletadoEm: null } } } },
       itens: { where: { deletadoEm: null }, orderBy: { ordem: "asc" }, include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } } } },
     },
   });
@@ -443,6 +481,7 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
       condicaoId: o.condicaoId,
       condicaoTextoLivre: o.condicaoTextoLivre,
       dadosPagamento: o.dadosPagamento,
+      nomePagamentoPrincipal: o.nomePagamentoPrincipal,
       notas: o.notas,
       exibirValorPorItem: o.exibirValorPorItem,
       descricoesMaiusculas: o.descricoesMaiusculas,
@@ -502,6 +541,22 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
     await tx.propostaParcela.createMany({
       data: o.parcelas.map((p) => ({ propostaId: nova.id, ordem: p.ordem, descricao: p.descricao, percentualPb: p.percentualPb, gatilho: p.gatilho, forma: p.forma, diasApos: p.diasApos, dataFixa: p.dataFixa, parcelasCartao: p.parcelasCartao, ...autor })),
     });
+  }
+  // Formas de pagamento extras: nome, ajuste, marca de repasse, cronograma próprio e totais digitados (as opções ganham ids novos).
+  for (const a of o.alternativasPagamento) {
+    const c = await tx.alternativaPagamento.create({
+      data: { propostaId: nova.id, ordem: a.ordem, nome: a.nome, condicaoId: a.condicaoId, textoLivre: a.textoLivre, modoAjuste: a.modoAjuste, ajustePb: a.ajustePb, repasseCartao: a.repasseCartao, ...autor },
+      select: { id: true },
+    });
+    if (a.parcelas.length > 0) {
+      await tx.propostaParcela.createMany({
+        data: a.parcelas.map((p) => ({ propostaId: nova.id, alternativaId: c.id, ordem: p.ordem, descricao: p.descricao, percentualPb: p.percentualPb, gatilho: p.gatilho, forma: p.forma, diasApos: p.diasApos, dataFixa: p.dataFixa, parcelasCartao: p.parcelasCartao, ...autor })),
+      });
+    }
+    const totais = a.totais.filter((t) => mapaOpcao.has(t.opcaoId));
+    if (totais.length > 0) {
+      await tx.alternativaPagamentoTotal.createMany({ data: totais.map((t) => ({ alternativaId: c.id, opcaoId: mapaOpcao.get(t.opcaoId)!, baseCentavos: t.baseCentavos, ...autor })) });
+    }
   }
   return { id: nova.id, numero: nova.numero, revisao: nova.revisao, projetoId: o.projetoId, origemNumero: o.numero };
 }

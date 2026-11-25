@@ -118,6 +118,7 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
           validadeEncerrada={proposta.validadeEncerradaPorReajuste}
           vencida={!!vencida}
           opcoes={proposta.opcoes.map((o) => ({ id: o.id, nome: o.nome, totalFormatado: formatarMoeda(totais.find((t) => t.opcaoId === o.id)?.totalCentavos ?? 0) }))}
+          formasExtras={proposta.alternativasPagamento.length > 0 || (((proposta.snapshot as { formasPagamento?: unknown[] } | null)?.formasPagamento?.length ?? 0) > 1)}
           condicaoSemParcelas={proposta.parcelas.length === 0}
           qtdParcelas={proposta.parcelas.length}
           hoje={hojeCalendario().toISOString().slice(0, 10)}

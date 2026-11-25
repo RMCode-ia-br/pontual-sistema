@@ -1,0 +1,56 @@
+Rua de Teste, s/n, Macaé-RJ, 27940-050 — CNPJ 00.000.000/0001-00 — Tel: (22) 90000-0000 — E-mail: teste@exemplo.com
+Página 1 de 2
+Pontual Soluções em Esquadrias e Vidros
+Empresa de Teste
+Cliente: Cliente Fictício
+Contato: Contato Teste
+Telefone: (22) 98888-7777
+E-mail: cliente@exemplo.com
+Endereço da obra: Rua da Obra, 10 — Bairro — Macaé/RJ
+Nº DA PROPOSTA | 1157-26
+PARTE | Parte 02
+DATA DA PROPOSTA | 13/11/2026
+CONSULTOR RESPONSÁVEL | CONSULTOR TESTE
+E-MAIL | teste@exemplo.com
+TELEFONE | (22) 90000-0000
+ESCOPO DO SERVIÇO
+LINHA SUPREMA
+01 01 PORTA
+R$ 1.000,00
+Subtotal dos itens R$ 1.000,00
+Acréscimo da nota fiscal (5%) R$ 50,00
+TOTAL LINHA SUPREMA R$ 1.050,00
+LINHA GOLD
+01 01 PORTA
+R$ 1.000,00
+Subtotal dos itens R$ 1.000,00
+Desconto − R$ 50,00
+Acréscimo da nota fiscal (5%) R$ 47,50
+TOTAL LINHA GOLD R$ 997,50
+NOTAS IMPORTANTES
+1. Este serviço está sob os termos e condições da empresa.
+2. Não nos responsabilizamos por serviços de alvenaria ou de terceiros.
+Rua de Teste, s/n, Macaé-RJ, 27940-050 — CNPJ 00.000.000/0001-00 — Tel: (22) 90000-0000 — E-mail: teste@exemplo.com
+Página 2 de 2
+3. Confirmando o pedido, a contratante concorda com os termos desta proposta.
+TERMOS COMERCIAIS
+1.0 FORMA DE PAGAMENTO:
+• VALOR TOTAL LINHA SUPREMA R$ 1.050,00 ( om nota fis al);
+50% (R$ 525,00) — SINAL NA CONFIRMAÇÃO DO PEDIDO — PIX;
+25% (R$ 262,50) — ENTREGA DO MATERIAL;
+25% (R$ 262,50) — ENTREGA DOS VIDROS E INSTALAÇÃO;
+• VALOR TOTAL LINHA GOLD R$ 997,50 ( om nota fis al);
+50% (R$ 498,75) — SINAL NA CONFIRMAÇÃO DO PEDIDO — PIX;
+25% (R$ 249,38) — ENTREGA DO MATERIAL;
+25% (R$ 249,37) — ENTREGA DOS VIDROS E INSTALAÇÃO;
+PIX: dados de teste
+• PRAZO DE ENTREGA (APÓS MEDIÇÃO EXATA PARA PRODUÇÃO):
+Material: 30 dias úteis;
+Execução: 40 dias úteis;
+Vidros e finalização: 20 dias úteis;
+• Validade da proposta:
+Até alteração dos fornecedores.
+Att,
+CONSULTOR TESTE
+GERENTE COMERCIAL
+
