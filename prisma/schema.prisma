@@ -1418,8 +1418,9 @@ model CondicaoPagamento {
   ativo      Boolean @default(true)
   ordem      Int     @default(0)
 
-  parcelas  CondicaoParcela[]
-  propostas Proposta[]
+  parcelas              CondicaoParcela[]
+  propostas             Proposta[]
+  alternativasPagamento AlternativaPagamento[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1512,25 +1513,38 @@ model Proposta {
   observacoesInternas  String?
 
   // Ciclo de vida (R4/R5)
-  enviadaEm             DateTime?
+  enviadaEm                       DateTime?
   /// Conteúdo congelado ao marcar ENVIADA (PDF e comparação de revisões leem daqui).
-  snapshot              Json?
-  aceitaEm              DateTime?
-  formaAceite           FormaAceite?
-  aceiteObservacao      String?
-  aceiteAnexoId         String?
-  opcaoAprovadaId       String?
-  valorAprovadoCentavos Int?
-  recusadaEm            DateTime?
-  motivoPerdaId         String?
-  motivoPerda           MotivoPerda? @relation(fields: [motivoPerdaId], references: [id], onDelete: Restrict)
-  motivoRecusaDetalhe   String?
+  snapshot                        Json?
+  aceitaEm                        DateTime?
+  formaAceite                     FormaAceite?
+  aceiteObservacao                String?
+  aceiteAnexoId                   String?
+  opcaoAprovadaId                 String?
+  valorAprovadoCentavos           Int?
+  /// Forma de pagamento escolhida no aceite (nulo = a principal, ou proposta anterior às formas alternativas).
+  alternativaAprovadaId           String?
+  alternativaAprovada             AlternativaPagamento? @relation("AlternativaAprovada", fields: [alternativaAprovadaId], references: [id], onDelete: Restrict)
+  /// Itens − desconto da opção aprovada (sem nota), gravado no aceite: a "referência" do ajuste.
+  valorReferenciaAprovadoCentavos Int?
+  /// Valor aprovado sem a nota − referência (negativo = desconto). Zero na forma principal.
+  ajusteAprovadoCentavos          Int?
+  /// Acréscimo da nota fiscal do aceite ("repasse de imposto"): fonte única dos relatórios.
+  acrescimoNotaAprovadoCentavos   Int?
+  recusadaEm                      DateTime?
+  motivoPerdaId                   String?
+  motivoPerda                     MotivoPerda?          @relation(fields: [motivoPerdaId], references: [id], onDelete: Restrict)
+  motivoRecusaDetalhe             String?
 
-  opcoes        OpcaoProposta[]
-  grupos        GrupoProposta[]
-  itens         ItemProposta[]
-  parcelas      PropostaParcela[]
-  contasReceber ContaReceber[]
+  opcoes                 OpcaoProposta[]
+  grupos                 GrupoProposta[]
+  itens                  ItemProposta[]
+  parcelas               PropostaParcela[]
+  contasReceber          ContaReceber[]
+  /// Formas de pagamento além da principal (a condição acima). Máximo 4 extras = 5 no total.
+  alternativasPagamento  AlternativaPagamento[] @relation("AlternativasDaProposta")
+  /// Nome da forma principal quando há extras (ex.: "À vista"); vazio = "Forma A" na tela.
+  nomePagamentoPrincipal String?
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1546,15 +1560,16 @@ model Proposta {
 }
 
 model OpcaoProposta {
-  id               String         @id @default(cuid())
-  propostaId       String
-  proposta         Proposta       @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  id                String                      @id @default(cuid())
+  propostaId        String
+  proposta          Proposta                    @relation(fields: [propostaId], references: [id], onDelete: Restrict)
   /// Ex.: "LINHA SUPREMA", "LINHA GOLD". Com uma só opção o nome não aparece no PDF.
-  nome             String
-  ordem            Int            @default(0)
+  nome              String
+  ordem             Int                         @default(0)
   /// Desconto desta opção (centavos); vale antes do acréscimo da nota.
-  descontoCentavos Int            @default(0)
-  itens            ItemProposta[]
+  descontoCentavos  Int                         @default(0)
+  itens             ItemProposta[]
+  totaisAlternativa AlternativaPagamentoTotal[]
 
   /// Custo de material informado à mão (vindo do programa de corte do fornecedor), total da opção. SÓ interno: nunca entra no snapshot nem no PDF.
   custoMaterialInformadoCentavos Int?
@@ -1666,17 +1681,20 @@ model ItemPropostaMedida {
 
 /// Cronograma de pagamento desta proposta (cópia editável da condição escolhida).
 model PropostaParcela {
-  id             String           @id @default(cuid())
+  id             String                @id @default(cuid())
   propostaId     String
-  proposta       Proposta         @relation(fields: [propostaId], references: [id], onDelete: Restrict)
+  proposta       Proposta              @relation(fields: [propostaId], references: [id], onDelete: Restrict)
   ordem          Int
   descricao      String
   percentualPb   Int
   gatilho        GatilhoPagamento
   forma          FormaPagamento?
   diasApos       Int?
-  dataFixa       DateTime?        @db.Date
+  dataFixa       DateTime?             @db.Date
   parcelasCartao Int?
+  /// Nulo = cronograma da forma principal; preenchido = de uma forma alternativa.
+  alternativaId  String?
+  alternativa    AlternativaPagamento? @relation(fields: [alternativaId], references: [id], onDelete: Restrict)
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1685,6 +1703,59 @@ model PropostaParcela {
   deletadoEm      DateTime?
 
   @@index([propostaId, deletadoEm, ordem])
+  @@index([alternativaId])
+}
+
+enum ModoAjustePagamento {
+  PERCENTUAL
+  TOTAL_DIGITADO
+}
+
+/// Forma de pagamento extra da proposta (à vista com desconto, cartão em Nx...). A principal é a condição da própria proposta.
+/// Cada forma tem cronograma próprio (PropostaParcela.alternativaId) e um ajuste sobre o total da opção, antes da nota.
+model AlternativaPagamento {
+  id         String              @id @default(cuid())
+  propostaId String
+  proposta   Proposta            @relation("AlternativasDaProposta", fields: [propostaId], references: [id], onDelete: Restrict)
+  ordem      Int                 @default(0)
+  nome       String
+  condicaoId String?
+  condicao   CondicaoPagamento?  @relation(fields: [condicaoId], references: [id], onDelete: Restrict)
+  /// "A combinar": sem parcelas.
+  textoLivre String?
+  modoAjuste ModoAjustePagamento @default(PERCENTUAL)
+  /// Pontos-base (−5000..5000). Usado no modo PERCENTUAL.
+  ajustePb   Int                 @default(0)
+
+  parcelas   PropostaParcela[]
+  totais     AlternativaPagamentoTotal[]
+  aprovadaEm Proposta[]                  @relation("AlternativaAprovada")
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([propostaId, deletadoEm, ordem])
+}
+
+/// Modo TOTAL_DIGITADO: o total desejado (antes da nota) de UMA opção de produto nesta forma de pagamento.
+model AlternativaPagamentoTotal {
+  id            String               @id @default(cuid())
+  alternativaId String
+  alternativa   AlternativaPagamento @relation(fields: [alternativaId], references: [id], onDelete: Restrict)
+  opcaoId       String
+  opcao         OpcaoProposta        @relation(fields: [opcaoId], references: [id], onDelete: Restrict)
+  baseCentavos  Int
+
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  criadoPorId     String?
+  atualizadoPorId String?
+  deletadoEm      DateTime?
+
+  @@index([opcaoId])
 }
 
 /// Parcela a receber gerada na aprovação (R5/R6). As telas e os pagamentos entram na Fase 5.
