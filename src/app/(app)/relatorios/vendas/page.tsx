@@ -11,6 +11,8 @@ import { formatarData, formatarMoeda, dataLocalDoInstante } from "@/lib/formatad
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
 import { cancelamentosNoPeriodo, LIMITE_DE_CANCELAMENTOS, listarCancelamentos } from "@/modules/indicadores/cancelamentos";
+import { AvisoDeDadosIncompletos } from "@/components/relatorios/aviso-de-dados-incompletos";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { LIMITE_DE_LINHAS_DE_VENDAS, listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 
 import { VisaoAnoContraAno, VisaoOrigem, VisaoParceiros, VisaoTicket } from "./visoes";
@@ -94,7 +96,10 @@ export default async function PaginaDeVendas({ searchParams }: { searchParams: P
 
 /** A lista por proposta (a que explica o "Vendido" do painel) e o "cancelado depois de aprovado". */
 async function VisaoPorProposta({ periodo }: { periodo: Periodo }) {
-  const [v, lista, cancelados, listaDeCancelados] = await Promise.all([vendidoNoPeriodo(periodo), listarVendas(periodo), cancelamentosNoPeriodo(periodo), listarCancelamentos(periodo)]);
+  const [vendido, lista, cancelados, listaDeCancelados] = await Promise.all([ouAviso(() => vendidoNoPeriodo(periodo)), listarVendas(periodo), cancelamentosNoPeriodo(periodo), listarCancelamentos(periodo)]);
+  // Valor do aceite faltando em proposta aprovada: o resumo fica bloqueado com o aviso (nunca soma zero).
+  if (!vendido.ok) return <AvisoDeDadosIncompletos mensagem={vendido.mensagem} />;
+  const v = vendido.dado;
   return (
     <>
       <section aria-label="Resumo das vendas" className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-3">

@@ -52,6 +52,15 @@ describe("lerAlternativas", () => {
     for (const ruim of ["0,00", "abc", "-5"]) expect("erro" in ler([alt({ modoAjuste: "TOTAL_DIGITADO", totais: [{ opcaoId: "o1", total: ruim }] })]), ruim).toBe(true);
   });
 
+  it("o total digitado recusa a mesma opção duas vezes e valor acima do teto do sistema (nunca erro cru do banco)", () => {
+    const duas = ler([alt({ modoAjuste: "TOTAL_DIGITADO", totais: [{ opcaoId: "o1", total: "100,00" }, { opcaoId: "o1", total: "200,00" }] })]);
+    expect("erro" in duas && duas.erro).toMatch(/mais de uma vez/);
+    const alto = ler([alt({ modoAjuste: "TOTAL_DIGITADO", totais: [{ opcaoId: "o1", total: "30.000.000,00" }] })]);
+    expect("erro" in alto && alto.erro).toMatch(/passa do limite/);
+    expect("erro" in ler([alt({ modoAjuste: "TOTAL_DIGITADO", totais: [{ opcaoId: "o1", total: "21.474.836,47" }] })])).toBe(false); // exatamente o teto vale
+    expect("erro" in ler([alt({ modoAjuste: "TOTAL_DIGITADO", totais: [{ opcaoId: "o1", total: "21.474.836,48" }] })])).toBe(true);
+  });
+
   it("cartão de 1 a 12 parcelas", () => {
     expect("erro" in ler([alt({ parcelas: [parcela("100", { forma: "CARTAO_CREDITO", parcelasCartao: "12" })] })])).toBe(false);
     expect("erro" in ler([alt({ parcelas: [parcela("100", { forma: "CARTAO_CREDITO", parcelasCartao: "13" })] })])).toBe(true);

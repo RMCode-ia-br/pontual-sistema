@@ -66,6 +66,12 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
     agora,
   });
 
+  // Vendido bloqueado (valor do aceite faltando em proposta aprovada): o cartão mostra o aviso, nunca um zero.
+  const vend = vendido.ok ? vendido.dado : null;
+  const vendAnt = vendidoAnterior.ok ? vendidoAnterior.dado : null;
+  const vendAno = vendidoAnoPassado.ok ? vendidoAnoPassado.dado : null;
+  const avisoDoVendido = !vendido.ok ? vendido.mensagem : null;
+
   const mesInteiro = ehMesInteiro(periodo);
   const meta = fin.metaMensalCentavos > 0 ? fin.metaMensalCentavos : null;
   const nomeDoMes = (p: Periodo) => rotuloDoPeriodo(mesDaData(p.de));
@@ -95,19 +101,23 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <NumeroDoPainel
             titulo="Vendido"
-            valor={formatarMoeda(vendido.totalCentavos)}
+            valor={vend ? formatarMoeda(vend.totalCentavos) : "Bloqueado"}
             href={`/relatorios/vendas${consultaDoPeriodo}`}
             definicao="Soma do valor aprovado de cada proposta que o cliente aprovou no período, pela data da aprovação. Cada parte de uma obra entra no mês em que foi aprovada."
             detalhe={
+              !vend ? (
+                <span role="alert" className="text-destructive block">{avisoDoVendido}</span>
+              ) : (
               <>
-                <span className="block">{metaDetalhe(vendido.totalCentavos) ?? `${vendido.propostas} proposta(s) aprovada(s)`}</span>
-                <span className="block">Sem nota: {formatarMoeda(vendido.semNotaCentavos)}</span>
-                <span className="block">Com nota: {formatarMoeda(vendido.comNotaCentavos)}</span>
-                {vendido.repasseDeImpostoCentavos > 0 ? <span className="block">Repasse de imposto, fora da margem: {formatarMoeda(vendido.repasseDeImpostoCentavos)}</span> : null}
-                {vendido.repasseDeCartaoCentavos > 0 ? <span className="block">Repasse de taxa de cartão, fora da margem: {formatarMoeda(vendido.repasseDeCartaoCentavos)}</span> : null}
+                <span className="block">{metaDetalhe(vend.totalCentavos) ?? `${vend.propostas} proposta(s) aprovada(s)`}</span>
+                <span className="block">Sem nota: {formatarMoeda(vend.semNotaCentavos)}</span>
+                <span className="block">Com nota: {formatarMoeda(vend.comNotaCentavos)}</span>
+                {vend.repasseDeImpostoCentavos > 0 ? <span className="block">Repasse de imposto, fora da margem: {formatarMoeda(vend.repasseDeImpostoCentavos)}</span> : null}
+                {vend.repasseDeCartaoCentavos > 0 ? <span className="block">Repasse de taxa de cartão, fora da margem: {formatarMoeda(vend.repasseDeCartaoCentavos)}</span> : null}
               </>
+              )
             }
-            comparativos={comparar(vendido.totalCentavos, vendidoAnterior.totalCentavos, vendidoAnoPassado.totalCentavos)}
+            comparativos={vend && vendAnt && vendAno ? comparar(vend.totalCentavos, vendAnt.totalCentavos, vendAno.totalCentavos) : undefined}
           />
           <NumeroDoPainel
             titulo="Recebido"
@@ -257,10 +267,10 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
           />
           <NumeroDoPainel
             titulo="Valor médio por obra"
-            valor={vendido.ticketMedioCentavos === null ? "—" : formatarMoeda(vendido.ticketMedioCentavos)}
+            valor={!vend ? "Bloqueado" : vend.ticketMedioCentavos === null ? "—" : formatarMoeda(vend.ticketMedioCentavos)}
             href={`/relatorios/vendas${consultaDoPeriodo}`}
             definicao="Vendido dividido pelo número de projetos que tiveram aprovação no período."
-            detalhe={vendido.projetos === 0 ? "Sem projeto aprovado no período" : `${vendido.projetos} projeto(s) aprovado(s)`}
+            detalhe={!vend ? "Veja o aviso no cartão Vendido." : vend.projetos === 0 ? "Sem projeto aprovado no período" : `${vend.projetos} projeto(s) aprovado(s)`}
           />
           <NumeroDoPainel
             titulo="Da visita à proposta"

@@ -26,6 +26,8 @@ import { listarEquipesAtivas, listarMotivosDeBloqueio, obterObra, obterPedidoDeA
 import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
 import { listarChamados } from "@/modules/obras/queries-chamados";
 import { listarFotosDaObra } from "@/modules/obras/queries-fotos";
+import { AvisoDeDadosIncompletos } from "@/components/relatorios/aviso-de-dados-incompletos";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { carregarCustoDaObra } from "@/modules/obras/queries-custo";
 import { carregarMateriaisDaObra } from "@/modules/obras/queries-materiais";
 import { excluirInteracaoDoProjeto, registrarInteracaoDoProjeto } from "@/modules/projetos/actions/interacoes";
@@ -57,6 +59,8 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
     notFound();
   }
   const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "resumo";
+  // Aba de custo: valor do aceite faltando em proposta aprovada vira aviso (o número fica bloqueado), não erro da página.
+  const custoDaObra = aba === "custo" ? await ouAviso(() => carregarCustoDaObra(obra.id)) : null;
   const concluida = obra.status === "CONCLUIDO";
   const nomes = Object.fromEntries(obra.etapas.map((e) => [e.id, e.nome]));
   const atrasadas = obra.etapas.filter((e) => e.atrasada).length;
@@ -156,7 +160,7 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
 
       {aba === "materiais" ? <MateriaisDaObra projetoId={obra.id} m={await carregarMateriaisDaObra(obra.id)} /> : null}
 
-      {aba === "custo" ? <CustoDaObraAba c={await carregarCustoDaObra(obra.id)} /> : null}
+      {aba === "custo" ? (custoDaObra?.ok ? <CustoDaObraAba c={custoDaObra.dado} /> : custoDaObra ? <AvisoDeDadosIncompletos mensagem={custoDaObra.mensagem} /> : null) : null}
 
       {aba === "assistencia" ? (
         <div className="max-w-3xl">

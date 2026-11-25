@@ -17,6 +17,7 @@ import { listarRecebimentos, recebimentosParaCsv } from "@/modules/indicadores/l
 import { motivosDePerdaNoPeriodo, ondePerdidosNoPeriodo } from "@/modules/indicadores/perdas";
 import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
 import { listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { carregarCustoDaObra } from "@/modules/obras/queries-custo";
 import { listarObras } from "@/modules/obras/queries-lista";
 import { resumoDeObras } from "@/modules/obras/resumo";
@@ -400,6 +401,12 @@ describe("coluna do aceite nula em proposta aprovada: Vendido, faturamento e mar
       await expect(vendidoNoPeriodo(JUN), `vendido sem ${coluna}`).rejects.toThrow(esperado);
       await expect(faturamentoMensal("2020-06-30", 2), `faturamento sem ${coluna}`).rejects.toThrow(esperado);
       await expect(carregarCustoDaObra(obra.id), `margem sem ${coluna}`).rejects.toThrow(esperado);
+      // A tela mostra o AVISO no lugar do número (o erro genérico esconderia o que fazer); o número segue bloqueado.
+      for (const carregar of [() => vendidoNoPeriodo(JUN), () => faturamentoMensal("2020-06-30", 2), () => carregarCustoDaObra(obra.id)] as (() => Promise<unknown>)[]) {
+        const r = await ouAviso(carregar);
+        expect(r.ok, `aviso sem ${coluna}`).toBe(false);
+        expect(!r.ok && r.mensagem).toMatch(esperado);
+      }
       await prisma.proposta.update({ where: { id: pr.id }, data: { [coluna]: valorCerto } });
     }
     await expect(vendidoNoPeriodo(JUN)).resolves.toMatchObject({ totalCentavos: 500_000 });

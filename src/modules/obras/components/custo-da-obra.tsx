@@ -129,7 +129,7 @@ function Linha({ rotulo, valor, forte = false, suave = false }: { rotulo: string
   return (
     <div className={`flex items-baseline justify-between gap-2 ${forte ? "font-medium" : ""} ${suave ? "text-muted-foreground" : ""}`}>
       <dt>{rotulo}</dt>
-      <dd className="tabular-nums">{valor}</dd>
+      <dd className="whitespace-nowrap tabular-nums">{valor}</dd>
     </div>
   );
 }

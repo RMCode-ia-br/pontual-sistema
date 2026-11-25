@@ -7,6 +7,8 @@ import { exigirSessao } from "@/lib/auth/sessao";
 import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { rotuloDoPeriodo } from "@/lib/periodo";
+import { AvisoDeDadosIncompletos } from "@/components/relatorios/aviso-de-dados-incompletos";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { faturamentoMensal } from "@/modules/indicadores/faturamento-mensal";
 
 export const metadata: Metadata = { title: "Faturamento mensal" };
@@ -18,7 +20,9 @@ const emReais = (centavos: number) => centavos / 100;
 export default async function PaginaDoFaturamentoMensal() {
   await exigirSessao();
   const hoje = dataLocalDoInstante(new Date());
-  const { periodo, meses } = await faturamentoMensal(hoje, 12);
+  const lido = await ouAviso(() => faturamentoMensal(hoje, 12));
+  if (!lido.ok) return <AvisoDeDadosIncompletos mensagem={lido.mensagem} />; // valor do aceite faltando: bloqueado, nunca soma zero
+  const { periodo, meses } = lido.dado;
   const soma = (f: (m: (typeof meses)[number]) => number) => meses.reduce((s, m) => s + f(m), 0);
   const totais = {
     vendidoCom: soma((m) => m.vendidoComNotaCentavos),

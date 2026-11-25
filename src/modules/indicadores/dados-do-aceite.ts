@@ -11,6 +11,20 @@ export class DadosDoAceiteIncompletos extends Error {
   }
 }
 
+/**
+ * Roda o carregador e, se o número foi BLOQUEADO por falta dos valores do aceite, devolve a mensagem em vez de deixar o erro
+ * chegar ao limite de erro da página (que em produção mostra só um código genérico e esconderia o que fazer). O número continua
+ * sem ser calculado: quem chama mostra o aviso no lugar dele. Qualquer outro erro segue subindo.
+ */
+export async function ouAviso<T>(carregar: () => Promise<T>): Promise<{ ok: true; dado: T } | { ok: false; mensagem: string }> {
+  try {
+    return { ok: true, dado: await carregar() };
+  } catch (e) {
+    if (e instanceof DadosDoAceiteIncompletos) return { ok: false, mensagem: e.message };
+    throw e;
+  }
+}
+
 /** Lança `DadosDoAceiteIncompletos` se houver ao menos um número de proposta aprovada com valores do aceite faltando. */
 export function exigirDadosDoAceite(numeros: readonly string[]): void {
   if (numeros.length > 0) throw new DadosDoAceiteIncompletos([...numeros]);

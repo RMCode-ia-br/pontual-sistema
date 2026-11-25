@@ -17,6 +17,8 @@ import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
 import { can } from "@/lib/permissoes";
 import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
+import { AvisoDeDadosIncompletos } from "@/components/relatorios/aviso-de-dados-incompletos";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { carregarMargemDasObras, lerFiltroDeMargem } from "@/modules/relatorios/margem-obras";
 
 export const metadata: Metadata = { title: "Margem por obra" };
@@ -32,7 +34,9 @@ export default async function PaginaMargemPorObra({ searchParams }: { searchPara
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const filtro = lerFiltroDeMargem(brutos, hoje);
-  const r = await carregarMargemDasObras(filtro);
+  const lida = await ouAviso(() => carregarMargemDasObras(filtro));
+  if (!lida.ok) return <AvisoDeDadosIncompletos mensagem={lida.mensagem} />; // valor do aceite faltando: bloqueado, nunca soma zero
+  const r = lida.dado;
   const periodoLido = filtro.periodo ? lerPeriodo(brutos, hoje) : null;
   const consulta = montarConsulta({ situacao: filtro.situacao, ...(filtro.busca ? { busca: filtro.busca } : {}), ...(filtro.periodo ? parametrosDoPeriodo(filtro.periodo) : {}) });
   const doGrafico = r.linhas.filter((l) => l.margemCentavos !== null).slice(0, 12);

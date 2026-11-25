@@ -10,6 +10,8 @@ import { type Periodo, rotuloDoPeriodo } from "@/lib/periodo";
 import { variacaoEntre } from "@/lib/periodo/variacao";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 import { desempenhoPorParceiro, sazonalidade, ticketPorPorte, ticketPorTipoDeServico, vendasPorOrigem, type PapelDeParceiro } from "@/modules/indicadores/vendas-por-dimensao";
+import { AvisoDeDadosIncompletos } from "@/components/relatorios/aviso-de-dados-incompletos";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 import { ROTULO_PORTE, ROTULO_TIPO_SERVICO } from "@/modules/projetos/schemas";
 
@@ -140,7 +142,9 @@ export async function VisaoParceiros({ periodo, papel }: { periodo: Periodo; pap
 }
 
 export async function VisaoTicket({ periodo }: { periodo: Periodo }) {
-  const [geral, porTipo, porPorte] = await Promise.all([vendidoNoPeriodo(periodo), ticketPorTipoDeServico(periodo), ticketPorPorte(periodo)]);
+  const [vendidoGeral, porTipo, porPorte] = await Promise.all([ouAviso(() => vendidoNoPeriodo(periodo)), ticketPorTipoDeServico(periodo), ticketPorPorte(periodo)]);
+  if (!vendidoGeral.ok) return <AvisoDeDadosIncompletos mensagem={vendidoGeral.mensagem} />;
+  const geral = vendidoGeral.dado;
   const rotuloTipo = (c: string | null) => (c ? (ROTULO_TIPO_SERVICO[c as keyof typeof ROTULO_TIPO_SERVICO] ?? c) : "Não informado");
   const rotuloPorte = (c: string | null) => (c ? (ROTULO_PORTE[c as keyof typeof ROTULO_PORTE] ?? c) : "Não informado");
   const tabela = (legenda: string, titulo: string, linhas: typeof porTipo, rotulo: (c: string | null) => string) => (

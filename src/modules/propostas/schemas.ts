@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AJUSTE_MAXIMO_PB, MAXIMO_FORMAS_PAGAMENTO } from "@/lib/dominio/alternativas-pagamento";
 import { FORMAS_PAGAMENTO, GATILHOS, MAXIMO_PARCELAS_CARTAO, validarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { valorParaCentavos } from "@/lib/dominio/numeros";
-import { percentualParaPontosBase } from "@/lib/dominio/preco";
+import { MAXIMO_CENTAVOS, percentualParaPontosBase } from "@/lib/dominio/preco";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
 import { lerEscalado } from "@/lib/validadores/numero-br";
 import { normalizarQuebrasDeLinha } from "@/lib/validadores/texto-multilinha";
@@ -273,8 +273,12 @@ export function lerAlternativas(lista: z.output<typeof alternativaPropostaSchema
     }
     const totais: { opcaoId: string; baseCentavos: number }[] = [];
     if (a.modoAjuste === "TOTAL_DIGITADO") {
+      const vistas = new Set<string>();
       for (const t of a.totais) {
+        if (vistas.has(t.opcaoId)) return { erro: `Forma "${a.nome}": o total da mesma opção foi informado mais de uma vez.` };
+        vistas.add(t.opcaoId);
         const c = valorParaCentavos(t.total);
+        if (c !== null && c > MAXIMO_CENTAVOS) return { erro: `Forma "${a.nome}": o total passa do limite que o sistema aceita.` };
         if (c === null || c <= 0) return { erro: `Forma "${a.nome}": informe o total em reais maior que zero, por exemplo 16.200,00.` };
         totais.push({ opcaoId: t.opcaoId, baseCentavos: c });
       }

@@ -8,6 +8,7 @@ import { resumoFinanceiro } from "@/modules/financeiro/resumo";
 import { ocupacaoAtualDaFabrica } from "@/modules/indicadores/fabrica";
 import { fechamentoNaJanela, tempoVisitaAteProposta } from "@/modules/indicadores/fechamento";
 import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { vendidoNoPeriodo } from "@/modules/indicadores/vendas";
 import { resumoDeObras } from "@/modules/obras/resumo";
 import { resumoDePropostas } from "@/modules/propostas/resumo";
@@ -50,9 +51,10 @@ export async function rodarComLimite<T extends Record<string, () => Promise<unkn
 /** Os 18 carregadores do painel (só leitura), na ordem em que são iniciados. */
 export function carregadoresDoPainel(e: EntradaDoPainel) {
   return {
-    vendido: () => vendidoNoPeriodo(e.periodo),
-    vendidoAnterior: () => vendidoNoPeriodo(e.anterior),
-    vendidoAnoPassado: () => vendidoNoPeriodo(e.anoPassado),
+    // Número bloqueado por valor do aceite faltando vira aviso no cartão (ouAviso), não erro da página inteira.
+    vendido: () => ouAviso(() => vendidoNoPeriodo(e.periodo)),
+    vendidoAnterior: () => ouAviso(() => vendidoNoPeriodo(e.anterior)),
+    vendidoAnoPassado: () => ouAviso(() => vendidoNoPeriodo(e.anoPassado)),
     recebido: () => recebidoNoPeriodo(e.periodo),
     recebidoAnterior: () => recebidoNoPeriodo(e.anterior),
     recebidoAnoPassado: () => recebidoNoPeriodo(e.anoPassado),

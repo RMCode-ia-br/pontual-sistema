@@ -6,6 +6,7 @@ import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
 import { dataLocalDoInstante } from "@/lib/formatadores";
+import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { faturamentoMensal, type MesDoFaturamento } from "@/modules/indicadores/faturamento-mensal";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,9 @@ export async function GET() {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
 
-  const { meses } = await faturamentoMensal(dataLocalDoInstante(new Date()), 12);
+  const lido = await ouAviso(() => faturamentoMensal(dataLocalDoInstante(new Date()), 12));
+  if (!lido.ok) return NextResponse.json({ erro: lido.mensagem }, { status: 409 });
+  const { meses } = lido.dado;
   const csv = csvDoRelatorio(COLUNAS, meses, { podeVerInterno: false });
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "faturamento-mensal", acao: "EXPORTAR", depois: { meses: meses.length } });
   return respostaDeCsv(csv, "faturamento-mensal.csv");
