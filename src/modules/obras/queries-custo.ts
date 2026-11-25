@@ -5,6 +5,7 @@ import { numeroDaCompra } from "@/lib/dominio/compras";
 import { calcularCustoDaObra, custoEstimadoDeMaterialDaOpcao, type EntradaDoCustoDaObra, type ResultadoDoCustoDaObra } from "@/lib/dominio/custo-obra";
 import { ROTULO_TIPO_DE_MOVIMENTO, formatarQuantidade, type TipoDeMovimento } from "@/lib/dominio/estoque";
 import { formatarDataCalendario } from "@/lib/formatadores";
+import { exigirDadosDoAceite, temDadosDoAceite } from "@/modules/indicadores/dados-do-aceite";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
 
 const comoTexto = (d: Date): string => d.toISOString().slice(0, 10);
@@ -35,7 +36,7 @@ const buscar = {
     prisma.proposta.findMany({
       where: { projetoId: { in: ids }, status: "APROVADA", deletadoEm: null },
       orderBy: [{ aceitaEm: "asc" }, { id: "asc" }],
-      select: { id: true, projetoId: true, numero: true, revisao: true, snapshot: true, opcaoAprovadaId: true, valorAprovadoCentavos: true, acrescimoNotaAprovadoCentavos: true, repasseCartaoAprovadoCentavos: true },
+      select: { id: true, projetoId: true, numero: true, revisao: true, snapshot: true, opcaoAprovadaId: true, valorAprovadoCentavos: true, valorReferenciaAprovadoCentavos: true, ajusteAprovadoCentavos: true, acrescimoNotaAprovadoCentavos: true, repasseCartaoAprovadoCentavos: true },
     }),
   opcoes: (ids: string[]) => prisma.opcaoProposta.findMany({ where: { id: { in: ids } }, select: { id: true, custoMaterialInformadoCentavos: true } }),
   itens: (propostaIds: string[], opcaoIds: string[]) =>
@@ -153,6 +154,8 @@ async function lerDadosEmLote(ids: string[]): Promise<{ porObra: Map<string, Dad
 function montarCustoDaObra(d: DadosDaObra, custoPorM2Centavos: number | null): CustoDaObra {
   // Repasses (nota e taxa de cartão) vêm das COLUNAS gravadas no aceite (fonte única, igual aos relatórios); a área, do conteúdo
   // congelado da opção aprovada (o que o cliente aprovou).
+  // Coluna do aceite nula em proposta aprovada: recusa com erro claro (a margem ficaria maior do que é se isso virasse zero).
+  exigirDadosDoAceite(d.propostas.filter((p) => p.valorAprovadoCentavos !== null && !temDadosDoAceite(p)).map((p) => p.numero));
   let acrescimoNota = 0;
   let repasseCartao = 0;
   let areaM2 = 0;
@@ -161,7 +164,7 @@ function montarCustoDaObra(d: DadosDaObra, custoPorM2Centavos: number | null): C
   for (const p of d.propostas) {
     const snap = p.snapshot as unknown as ConteudoProposta | null;
     const opcao = snap?.opcoes.find((o) => o.id === p.opcaoAprovadaId);
-    acrescimoNota += p.acrescimoNotaAprovadoCentavos ?? 0;
+    acrescimoNota += p.acrescimoNotaAprovadoCentavos ?? 0; // sem valor aprovado não há acréscimo: o caso de coluna nula COM valor já foi recusado acima
     repasseCartao += p.repasseCartaoAprovadoCentavos ?? 0;
     if (opcao) {
       areaM2 += opcao.totais.areaM2;

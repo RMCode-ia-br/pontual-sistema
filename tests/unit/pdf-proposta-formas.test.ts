@@ -204,3 +204,40 @@ describe.skipIf(pdftotext === undefined)("PDF com 5 formas de pagamento e 2 opç
     expect(palavras).toContain("Favorecido:");
   }, 60_000);
 });
+
+// ----- Casos reais do Marcelo: o PDF do sistema diz o que o PDF dele diz, sem diferença de centavo -----
+
+describe.skipIf(pdftotext === undefined)("PDF das propostas 1260-26 e 1261-26: os mesmos valores do PDF do Marcelo", () => {
+  const sinal = (percentualPb: number, gatilho: string) => ({ descricao: gatilho === "CONFIRMACAO" ? "Sinal na confirmação" : "Restante na instalação", percentualPb, gatilho, forma: null, diasApos: null, dataFixa: null, parcelasCartao: null });
+  const cartao = (n: number) => [{ descricao: "No cartão", percentualPb: 10000, gatilho: "CONFIRMACAO", forma: "CARTAO_CREDITO", diasApos: null, dataFixa: null, parcelasCartao: n }];
+
+  async function pdfDoCaso(itens: number[], cartoes: { n: number; total: number }[]) {
+    const c = conteudoDeExemplo(itens.map((valorCentavos, i) => ({ descricao: `ITEM ${i + 1}`, valorCentavos, grupo: null })));
+    const op = c.opcoes[0];
+    const r = montarFormasDePagamento({
+      nomePrincipal: "À vista",
+      principal: { textoLivre: null, parcelas: [sinal(5000, "CONFIRMACAO"), sinal(5000, "ENTREGA_E_INSTALACAO")] },
+      extras: cartoes.map((k) => ({ nome: `Cartão ${k.n}x`, modoAjuste: "TOTAL_DIGITADO" as const, ajustePb: 0, repasseCartao: true, textoLivre: null, parcelas: cartao(k.n), totais: [{ opcaoId: op.id, baseCentavos: k.total }] })),
+      opcoes: [{ id: op.id, nome: op.nome, baseCentavos: op.totais.itensCentavos - op.totais.descontoCentavos, acrescimoNotaCentavos: 0, totalCentavos: op.totais.totalCentavos }],
+      comNotaFiscal: false,
+      acrescimoNotaPb: 500,
+    });
+    if (!r.ok) throw new Error(r.problemas.join(" "));
+    c.formasPagamento = r.formas;
+    return (await textoDoPdf(c)).replace(/\s/g, " ");
+  }
+
+  it("1260-26: valor total R$ 16.200,00 em 3x de 5.400,00, 6x de 2.775,00, 10x de 1.735,00 e à vista R$ 15.360,00 com sinal de 50%", async () => {
+    const t = await pdfDoCaso([12 * 98_000, 255_000, 105_000], [{ n: 3, total: 1_620_000 }, { n: 6, total: 1_665_000 }, { n: 10, total: 1_735_000 }]);
+    for (const esperado of ["VALOR TOTAL R$ 16.200,00", "03X R$ 5.400,00 CARTÃO", "06X R$ 2.775,00 CARTÃO", "10X R$ 1.735,00 CARTÃO", "VALOR TOTAL R$ 15.360,00", "50% (R$ 7.680,00)"]) expect(t, esperado).toContain(esperado);
+    expect(t).not.toContain("(última"); // as parcelas do Marcelo são exatas: nenhuma diferença de centavo para a última
+    expect(t.match(/50% \(R\$ 7\.680,00\)/g)).toHaveLength(2); // sinal e restante
+  }, 60_000);
+
+  it("1261-26: valor total R$ 10.620,00 em 3x de 3.540,00, 6x de 1.815,00, 10x de 1.135,00 e à vista R$ 10.050,00 com sinal de 50%", async () => {
+    const t = await pdfDoCaso([465_000, 430_000, 110_000], [{ n: 3, total: 1_062_000 }, { n: 6, total: 1_089_000 }, { n: 10, total: 1_135_000 }]);
+    for (const esperado of ["VALOR TOTAL R$ 10.620,00", "03X R$ 3.540,00 CARTÃO", "06X R$ 1.815,00 CARTÃO", "10X R$ 1.135,00 CARTÃO", "VALOR TOTAL R$ 10.050,00", "50% (R$ 5.025,00)"]) expect(t, esperado).toContain(esperado);
+    expect(t).not.toContain("(última");
+    expect(t.match(/50% \(R\$ 5\.025,00\)/g)).toHaveLength(2);
+  }, 60_000);
+});

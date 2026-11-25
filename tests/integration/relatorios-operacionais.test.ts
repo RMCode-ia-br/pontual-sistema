@@ -47,7 +47,7 @@ const etapa = (projetoId: string, tipo: "FABRICACAO" | "ENTREGA" | "MEDICAO_EXAT
   prisma.etapaProjeto.create({ data: { projetoId, tipo, nome: `${PREFIXO} ${tipo}`, ordem, status, ...extra } });
 const aprovada = async (projetoId: string, areaM2: number) => {
   const p = await prisma.proposta.create({
-    data: { projetoId, numero: `INT-ROP-${String(++seq).padStart(4, "0")}`, numeroSequencial: 7_500_000 + seq, ano: 2018, data: new Date("2018-03-02T00:00:00Z"), clienteNome: `${PREFIXO} C`, status: "APROVADA", aceitaEm: new Date("2018-03-10T15:00:00Z"), valorAprovadoCentavos: 100_000, snapshot: { opcoes: [{ id: "opx", nome: "Op", totais: { areaM2 } }] } },
+    data: { projetoId, numero: `INT-ROP-${String(++seq).padStart(4, "0")}`, numeroSequencial: 7_500_000 + seq, ano: 2018, data: new Date("2018-03-02T00:00:00Z"), clienteNome: `${PREFIXO} C`, status: "APROVADA", aceitaEm: new Date("2018-03-10T15:00:00Z"), valorAprovadoCentavos: 100_000, valorReferenciaAprovadoCentavos: 100_000, ajusteAprovadoCentavos: 0, acrescimoNotaAprovadoCentavos: 0, repasseCartaoAprovadoCentavos: 0, snapshot: { opcoes: [{ id: "opx", nome: "Op", totais: { areaM2 } }] } },
   });
   return prisma.proposta.update({ where: { id: p.id }, data: { opcaoAprovadaId: "opx" } });
 };

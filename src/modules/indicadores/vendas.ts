@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { ticketMedio } from "@/lib/dominio/indicadores";
 import { limitesEmInstantes, type Periodo } from "@/lib/periodo";
 
+import { exigirDadosDoAceite } from "./dados-do-aceite";
+
 /**
  * Vendido (decisão 116): soma do valor aprovado de cada PROPOSTA aprovada, pela data do aceite. Cada parte de uma obra
  * entra no mês em que foi aprovada. O acréscimo da nota (do conteúdo congelado da opção aprovada) é o "repasse de
@@ -34,15 +36,17 @@ export type Vendido = {
   ticketMedioCentavos: number | null;
 };
 
-type LinhaDoSql = { comNota: boolean; propostas: number; total: bigint; repasse: bigint; repasseCartao: bigint; projetos: number };
+type LinhaDoSql = { comNota: boolean; propostas: number; total: bigint; repasse: bigint; repasseCartao: bigint; projetos: number; numerosIncompletos: string | null };
 
 export async function vendidoNoPeriodo(p: Periodo): Promise<Vendido> {
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
   const linhas = await prisma.$queryRaw<LinhaDoSql[]>`
     WITH v AS (
-      SELECT pr."comNotaFiscal", pr."projetoId", pr."valorAprovadoCentavos" AS valor,
-             COALESCE(pr."acrescimoNotaAprovadoCentavos", 0)::bigint AS repasse,
-             COALESCE(pr."repasseCartaoAprovadoCentavos", 0)::bigint AS "repasseCartao"
+      SELECT pr."numero", pr."comNotaFiscal", pr."projetoId", pr."valorAprovadoCentavos" AS valor,
+             pr."acrescimoNotaAprovadoCentavos"::bigint AS repasse,
+             pr."repasseCartaoAprovadoCentavos"::bigint AS "repasseCartao",
+             (pr."valorAprovadoCentavos" IS NOT NULL AND (pr."valorReferenciaAprovadoCentavos" IS NULL OR pr."ajusteAprovadoCentavos" IS NULL
+              OR pr."acrescimoNotaAprovadoCentavos" IS NULL OR pr."repasseCartaoAprovadoCentavos" IS NULL)) AS incompleta
         FROM "Proposta" pr
         JOIN "Projeto" j ON j.id = pr."projetoId"
        WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL
@@ -50,8 +54,11 @@ export async function vendidoNoPeriodo(p: Periodo): Promise<Vendido> {
     )
     SELECT "comNotaFiscal" AS "comNota", count(*)::int AS propostas,
            COALESCE(sum(valor), 0)::bigint AS total, COALESCE(sum(repasse), 0)::bigint AS repasse, COALESCE(sum("repasseCartao"), 0)::bigint AS "repasseCartao",
-           (SELECT count(DISTINCT "projetoId") FROM v)::int AS projetos
+           (SELECT count(DISTINCT "projetoId") FROM v)::int AS projetos,
+           string_agg("numero", ', ') FILTER (WHERE incompleta) AS "numerosIncompletos"
       FROM v GROUP BY "comNotaFiscal"`;
+  // Coluna do aceite nula: recusa com erro claro, nunca soma zero em silêncio.
+  exigirDadosDoAceite(linhas.flatMap((l) => (l.numerosIncompletos ? l.numerosIncompletos.split(", ") : [])));
   const com = linhas.find((l) => l.comNota);
   const sem = linhas.find((l) => !l.comNota);
   const comNotaCentavos = Number(com?.total ?? 0);

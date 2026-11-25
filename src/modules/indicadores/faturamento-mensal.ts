@@ -3,6 +3,8 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { limitesDeCalendario, limitesEmInstantes, ultimosMeses, type Periodo } from "@/lib/periodo";
 
+import { exigirDadosDoAceite } from "./dados-do-aceite";
+
 /**
  * Faturamento mensal dos últimos 12 meses, com nota e sem nota separados (sem RBT12, sem imposto calculado).
  * Vendido = valor aprovado das propostas pela data do aceite; Recebido = pagamentos pela data do pagamento. Os dois usam
@@ -23,7 +25,7 @@ export type MesDoFaturamento = {
   recebidoSemNotaCentavos: number;
 };
 
-type LinhaVendas = { mes: string; comNota: boolean; total: bigint; repasse: bigint; repasseCartao: bigint };
+type LinhaVendas = { mes: string; comNota: boolean; total: bigint; repasse: bigint; repasseCartao: bigint; numerosIncompletos: string | null };
 type LinhaRecebido = { mes: string; comNota: boolean; total: bigint };
 
 export async function faturamentoMensal(hoje: string, meses = 12): Promise<{ periodo: Periodo; meses: MesDoFaturamento[] }> {
@@ -37,7 +39,8 @@ export async function faturamentoMensal(hoje: string, meses = 12): Promise<{ per
       SELECT to_char((pr."aceitaEm" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS mes, pr."comNotaFiscal" AS "comNota",
              COALESCE(sum(pr."valorAprovadoCentavos"), 0)::bigint AS total,
              COALESCE(sum(pr."acrescimoNotaAprovadoCentavos"), 0)::bigint AS repasse,
-             COALESCE(sum(pr."repasseCartaoAprovadoCentavos"), 0)::bigint AS "repasseCartao"
+             COALESCE(sum(pr."repasseCartaoAprovadoCentavos"), 0)::bigint AS "repasseCartao",
+             string_agg(pr."numero", ', ') FILTER (WHERE pr."valorAprovadoCentavos" IS NOT NULL AND (pr."valorReferenciaAprovadoCentavos" IS NULL OR pr."ajusteAprovadoCentavos" IS NULL OR pr."acrescimoNotaAprovadoCentavos" IS NULL OR pr."repasseCartaoAprovadoCentavos" IS NULL)) AS "numerosIncompletos"
         FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId"
        WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL
          AND pr."aceitaEm" >= ${inicio} AND pr."aceitaEm" < ${fimExclusivo}
@@ -50,6 +53,8 @@ export async function faturamentoMensal(hoje: string, meses = 12): Promise<{ per
        GROUP BY 1, 2`,
   ]);
 
+  // Coluna do aceite nula: recusa com erro claro, nunca soma zero em silêncio.
+  exigirDadosDoAceite(vendas.flatMap((l) => (l.numerosIncompletos ? l.numerosIncompletos.split(", ") : [])));
   const v = (mes: string, nota: boolean) => vendas.find((x) => x.mes === mes && x.comNota === nota);
   const r = (mes: string, nota: boolean) => Number(recebidos.find((x) => x.mes === mes && x.comNota === nota)?.total ?? 0);
   return {

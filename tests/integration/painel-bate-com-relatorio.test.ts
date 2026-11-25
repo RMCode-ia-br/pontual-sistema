@@ -17,6 +17,7 @@ import { listarRecebimentos, recebimentosParaCsv } from "@/modules/indicadores/l
 import { motivosDePerdaNoPeriodo, ondePerdidosNoPeriodo } from "@/modules/indicadores/perdas";
 import { faturamentoComNota, recebidoNoPeriodo } from "@/modules/indicadores/recebimentos";
 import { listarVendas, vendidoNoPeriodo } from "@/modules/indicadores/vendas";
+import { carregarCustoDaObra } from "@/modules/obras/queries-custo";
 import { listarObras } from "@/modules/obras/queries-lista";
 import { resumoDeObras } from "@/modules/obras/resumo";
 import { carregarRelatorioDoFunil } from "@/modules/relatorios/funil";
@@ -376,6 +377,40 @@ describe("preparo: janeiro e março de 2020 não têm dado real", () => {
     const { inicio, fimExclusivo } = limitesEmInstantes(JAN);
     expect(inicio.toISOString()).toBe("2020-01-01T03:00:00.000Z");
     expect(fimExclusivo.toISOString()).toBe("2020-02-01T03:00:00.000Z");
+  });
+});
+
+describe("coluna do aceite nula em proposta aprovada: Vendido, faturamento e margem RECUSAM (nunca somam zero em silêncio)", () => {
+  const JUN: Periodo = { de: "2020-06-01", ate: "2020-06-30" };
+  const COLUNAS = [
+    ["valorReferenciaAprovadoCentavos", 500_000],
+    ["ajusteAprovadoCentavos", 0],
+    ["acrescimoNotaAprovadoCentavos", 0],
+    ["repasseCartaoAprovadoCentavos", 0],
+  ] as const;
+
+  it("cada uma das quatro colunas, se vier nula, trava os três relatórios com o número da proposta; completa de novo, volta a calcular", async () => {
+    const obra = await projeto("Aceite incompleto", { valorFechadoCentavos: 500_000 });
+    const pr = await proposta(obra.id, { aceitaEm: "2020-06-10T15:00:00Z", valor: 500_000 });
+    await expect(vendidoNoPeriodo(JUN)).resolves.toMatchObject({ totalCentavos: 500_000, repasseDeCartaoCentavos: 0, repasseDeImpostoCentavos: 0 });
+
+    for (const [coluna, valorCerto] of COLUNAS) {
+      await prisma.proposta.update({ where: { id: pr.id }, data: { [coluna]: null } });
+      const esperado = new RegExp(`sem os valores gravados no aceite.*${pr.numero}`);
+      await expect(vendidoNoPeriodo(JUN), `vendido sem ${coluna}`).rejects.toThrow(esperado);
+      await expect(faturamentoMensal("2020-06-30", 2), `faturamento sem ${coluna}`).rejects.toThrow(esperado);
+      await expect(carregarCustoDaObra(obra.id), `margem sem ${coluna}`).rejects.toThrow(esperado);
+      await prisma.proposta.update({ where: { id: pr.id }, data: { [coluna]: valorCerto } });
+    }
+    await expect(vendidoNoPeriodo(JUN)).resolves.toMatchObject({ totalCentavos: 500_000 });
+    await expect(carregarCustoDaObra(obra.id)).resolves.toMatchObject({ receitaFechadaCentavos: 500_000 });
+  });
+
+  it("proposta aprovada SEM valor aprovado não soma nada e não trava (só a que tem valor entra na conta)", async () => {
+    const obra = await projeto("Aprovada sem valor");
+    const pr = await proposta(obra.id, { aceitaEm: "2020-06-15T15:00:00Z", valor: 0 });
+    await prisma.proposta.update({ where: { id: pr.id }, data: { valorAprovadoCentavos: null, valorReferenciaAprovadoCentavos: null, ajusteAprovadoCentavos: null, acrescimoNotaAprovadoCentavos: null, repasseCartaoAprovadoCentavos: null } });
+    await expect(vendidoNoPeriodo(JUN)).resolves.toBeDefined();
   });
 });
 

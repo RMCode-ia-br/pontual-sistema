@@ -57,6 +57,10 @@ async function proposta(projetoId: string, o: OpcoesDeProposta = {}) {
       aceitaEm: o.aceitaEm ? new Date(o.aceitaEm) : null,
       enviadaEm: status === "ENVIADA" ? new Date("2021-06-01T15:00:00Z") : null,
       valorAprovadoCentavos: status === "APROVADA" ? (o.valor ?? 0) : null,
+      valorReferenciaAprovadoCentavos: status === "APROVADA" ? (o.valor ?? 0) : null,
+      ajusteAprovadoCentavos: status === "APROVADA" ? 0 : null,
+      acrescimoNotaAprovadoCentavos: status === "APROVADA" ? 0 : null,
+      repasseCartaoAprovadoCentavos: status === "APROVADA" ? 0 : null,
     },
   });
 }

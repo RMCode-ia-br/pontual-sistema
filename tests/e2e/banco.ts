@@ -874,8 +874,8 @@ export async function criarVendaDeTeste(nome: string, opcoes: { valorCentavos: n
   const numero = `E2E-${randomUUID().slice(0, 6)}`;
   await comConexao(async (c) => {
     await c.query(
-      `INSERT INTO "Proposta" (id, "projetoId", numero, "numeroSequencial", ano, revisao, status, data, "clienteNome", "comNotaFiscal", "aceitaEm", "valorAprovadoCentavos", "atualizadoEm")
-       VALUES ($1, $2, $3, 1, 20, 0, 'APROVADA'::"StatusProposta", $4::date, $5, $6, $7::timestamptz, $8, now())`,
+      `INSERT INTO "Proposta" (id, "projetoId", numero, "numeroSequencial", ano, revisao, status, data, "clienteNome", "comNotaFiscal", "aceitaEm", "valorAprovadoCentavos", "valorReferenciaAprovadoCentavos", "ajusteAprovadoCentavos", "acrescimoNotaAprovadoCentavos", "repasseCartaoAprovadoCentavos", "atualizadoEm")
+       VALUES ($1, $2, $3, 1, 20, 0, 'APROVADA'::"StatusProposta", $4::date, $5, $6, $7::timestamptz, $8, $8, 0, 0, 0, now())`,
       [randomUUID(), projetoId, numero, opcoes.aceitaEm.slice(0, 10), `E2E Cliente ${nome}`, opcoes.comNota, opcoes.aceitaEm, opcoes.valorCentavos],
     );
   });
