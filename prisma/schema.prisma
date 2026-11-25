@@ -1531,6 +1531,8 @@ model Proposta {
   ajusteAprovadoCentavos          Int?
   /// Acréscimo da nota fiscal do aceite ("repasse de imposto"): fonte única dos relatórios.
   acrescimoNotaAprovadoCentavos   Int?
+  /// Acréscimo de cartão repassado (forma com a marca e ajuste positivo), gravado no aceite; zero nas propostas anteriores.
+  repasseCartaoAprovadoCentavos   Int?
   recusadaEm                      DateTime?
   motivoPerdaId                   String?
   motivoPerda                     MotivoPerda?          @relation(fields: [motivoPerdaId], references: [id], onDelete: Restrict)
@@ -1714,18 +1716,20 @@ enum ModoAjustePagamento {
 /// Forma de pagamento extra da proposta (à vista com desconto, cartão em Nx...). A principal é a condição da própria proposta.
 /// Cada forma tem cronograma próprio (PropostaParcela.alternativaId) e um ajuste sobre o total da opção, antes da nota.
 model AlternativaPagamento {
-  id         String              @id @default(cuid())
-  propostaId String
-  proposta   Proposta            @relation("AlternativasDaProposta", fields: [propostaId], references: [id], onDelete: Restrict)
-  ordem      Int                 @default(0)
-  nome       String
-  condicaoId String?
-  condicao   CondicaoPagamento?  @relation(fields: [condicaoId], references: [id], onDelete: Restrict)
+  id            String              @id @default(cuid())
+  propostaId    String
+  proposta      Proposta            @relation("AlternativasDaProposta", fields: [propostaId], references: [id], onDelete: Restrict)
+  ordem         Int                 @default(0)
+  nome          String
+  condicaoId    String?
+  condicao      CondicaoPagamento?  @relation(fields: [condicaoId], references: [id], onDelete: Restrict)
   /// "A combinar": sem parcelas.
-  textoLivre String?
-  modoAjuste ModoAjustePagamento @default(PERCENTUAL)
+  textoLivre    String?
+  modoAjuste    ModoAjustePagamento @default(PERCENTUAL)
   /// Pontos-base (−5000..5000). Usado no modo PERCENTUAL.
-  ajustePb   Int                 @default(0)
+  ajustePb      Int                 @default(0)
+  /// O acréscimo desta forma é taxa da maquininha repassada ao cliente: entra no Vendido, sai da margem (decisão 144).
+  repasseCartao Boolean             @default(false)
 
   parcelas   PropostaParcela[]
   totais     AlternativaPagamentoTotal[]

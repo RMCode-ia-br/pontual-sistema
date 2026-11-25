@@ -43,5 +43,19 @@ DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261124000000_altern
 COMMIT;
 ```
 
+### Migração `20261124120000_repasse_cartao` (início do Bloco 2; decisão 144)
+
+Aditiva: `AlternativaPagamento.repasseCartao BOOLEAN NOT NULL DEFAULT false` e `Proposta.repasseCartaoAprovadoCentavos INTEGER` (zero nas 4 propostas aprovadas). Validação em transação com ROLLBACK: aprovadas 4 → 4, Vendido R$ 33.399,97 → R$ 33.399,97, repasse da nota R$ 0 → R$ 0, 4 linhas zeradas, 0 diferentes de zero, 0 fora do alvo, 10 propostas, coluna existe só dentro da transação.
+
+SQL de volta:
+
+```sql
+BEGIN;
+ALTER TABLE "Proposta" DROP COLUMN "repasseCartaoAprovadoCentavos";
+ALTER TABLE "AlternativaPagamento" DROP COLUMN "repasseCartao";
+DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261124120000_repasse_cartao';
+COMMIT;
+```
+
 ### O que os PDFs reais mostraram
-Em 1260-26 e 1261-26 a soma dos itens é o valor **à vista** (15.360 e 10.050). Os cartões é que têm acréscimo (3x +5,5%, 6x +8,4%, 10x +13%, na 1260-26). A forma principal (ajuste zero) pode ser o à vista e os cartões usam "total digitado". Ver a pendência do Marcelo em `docs/PENDENCIAS.md`.
+Em 1260-26 e 1261-26 a soma dos itens é o valor **à vista** (15.360 e 10.050). Os cartões é que têm acréscimo (3x +5,5%, 6x +8,4%, 10x +13%, na 1260-26). A forma principal (ajuste zero) pode ser o à vista e os cartões usam "total digitado". O Marcelo confirmou que o acréscimo do cartão é a taxa da maquininha repassada (decisão 144).
