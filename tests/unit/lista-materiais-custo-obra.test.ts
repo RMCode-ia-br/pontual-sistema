@@ -93,6 +93,7 @@ describe("custo real e margem por obra (R15)", () => {
   const base: EntradaDoCustoDaObra = {
     receitaFechadaCentavos: 1_050_000,
     acrescimoNotaCentavos: 50_000,
+    repasseCartaoCentavos: 0,
     comprasDaObra: [{ id: "c1", descricao: "Vidro temperado", origem: "Compra C-0001", valorCentavos: 300_000 }],
     movimentosDeEstoque: [
       { id: "m1", produto: "Perfil A", origem: "Saída de 10 un", quantidadeMilesimos: -10_000, custoUnitarioCentavos: 5_000 }, // R$ 500
@@ -205,5 +206,36 @@ describe("custo estimado de material da opção (margem estimada interna)", () =
   it("item sem nenhum custo deixa a estimativa incompleta (null), nunca soma parcial", () => {
     expect(custoEstimadoDeMaterialDaOpcao(null, [{ custoInformadoCentavos: 50_000, custoCalculadoCentavos: null }, { custoInformadoCentavos: null, custoCalculadoCentavos: null }])).toEqual({ custoCentavos: null, origem: "INCOMPLETO", itensSemCusto: 1 });
     expect(custoEstimadoDeMaterialDaOpcao(null, [])).toMatchObject({ custoCentavos: null, origem: "INCOMPLETO" });
+  });
+});
+
+describe("margem com repasse de taxa de cartão (decisão 144)", () => {
+  const sem = { comprasDaObra: [], movimentosDeEstoque: [], retalhosUsados: [], outrasDespesas: [], maoDeObra: { areaM2: 10, custoPorM2Centavos: 10_000 }, estimadoCentavos: null };
+
+  it("o acréscimo do cartão sai da receita da margem como o repasse da nota; o desconto à vista não é repasse", () => {
+    // Fechado 17.350,00 = 15.360,00 (itens) + 1.990,00 de cartão repassado: a margem parte de 15.360,00.
+    const cartao = calcularCustoDaObra({ ...sem, receitaFechadaCentavos: 1_735_000, acrescimoNotaCentavos: 0, repasseCartaoCentavos: 199_000 });
+    expect(cartao.receitaDaMargemCentavos).toBe(1_536_000);
+    expect(cartao.repasseDeCartaoCentavos).toBe(199_000);
+    expect(cartao.repasseDeImpostoCentavos).toBe(0);
+    // Pix com 5% de desconto: fechado 14.592,00, nenhum repasse: a margem parte de 14.592,00 (menor).
+    const pix = calcularCustoDaObra({ ...sem, receitaFechadaCentavos: 1_459_200, acrescimoNotaCentavos: 0, repasseCartaoCentavos: 0 });
+    expect(pix.receitaDaMargemCentavos).toBe(1_459_200);
+    expect(pix.receitaDaMargemCentavos!).toBeLessThan(cartao.receitaDaMargemCentavos!);
+  });
+
+  it("nota e cartão juntos: os dois repasses saem; a margem é calculada sobre o resto (custo de R$ 1.000,00 de mão de obra)", () => {
+    const r = calcularCustoDaObra({ ...sem, receitaFechadaCentavos: 1_155_000, acrescimoNotaCentavos: 55_000, repasseCartaoCentavos: 100_000 });
+    expect(r.receitaDaMargemCentavos).toBe(1_000_000);
+    expect(r.repasseDeImpostoCentavos).toBe(55_000);
+    expect(r.repasseDeCartaoCentavos).toBe(100_000);
+    expect(r.custoConhecidoCentavos).toBe(100_000); // 10 m² × R$ 100,00 = R$ 1.000,00
+    expect(r.margemCentavos).toBe(900_000); // 10.000,00 − 1.000,00
+  });
+
+  it("sem proposta aprovada continua sem receita (nunca zero inventado)", () => {
+    const r = calcularCustoDaObra({ ...sem, receitaFechadaCentavos: null, acrescimoNotaCentavos: 0, repasseCartaoCentavos: 0 });
+    expect(r.receitaDaMargemCentavos).toBeNull();
+    expect(r.margemCentavos).toBeNull();
   });
 });

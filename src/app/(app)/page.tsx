@@ -104,6 +104,7 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
                 <span className="block">Sem nota: {formatarMoeda(vendido.semNotaCentavos)}</span>
                 <span className="block">Com nota: {formatarMoeda(vendido.comNotaCentavos)}</span>
                 {vendido.repasseDeImpostoCentavos > 0 ? <span className="block">Repasse de imposto, fora da margem: {formatarMoeda(vendido.repasseDeImpostoCentavos)}</span> : null}
+                {vendido.repasseDeCartaoCentavos > 0 ? <span className="block">Repasse de taxa de cartão, fora da margem: {formatarMoeda(vendido.repasseDeCartaoCentavos)}</span> : null}
               </>
             }
             comparativos={comparar(vendido.totalCentavos, vendidoAnterior.totalCentavos, vendidoAnoPassado.totalCentavos)}

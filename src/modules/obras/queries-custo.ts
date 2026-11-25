@@ -35,7 +35,7 @@ const buscar = {
     prisma.proposta.findMany({
       where: { projetoId: { in: ids }, status: "APROVADA", deletadoEm: null },
       orderBy: [{ aceitaEm: "asc" }, { id: "asc" }],
-      select: { id: true, projetoId: true, numero: true, revisao: true, snapshot: true, opcaoAprovadaId: true, valorAprovadoCentavos: true },
+      select: { id: true, projetoId: true, numero: true, revisao: true, snapshot: true, opcaoAprovadaId: true, valorAprovadoCentavos: true, acrescimoNotaAprovadoCentavos: true, repasseCartaoAprovadoCentavos: true },
     }),
   opcoes: (ids: string[]) => prisma.opcaoProposta.findMany({ where: { id: { in: ids } }, select: { id: true, custoMaterialInformadoCentavos: true } }),
   itens: (propostaIds: string[], opcaoIds: string[]) =>
@@ -151,16 +151,19 @@ async function lerDadosEmLote(ids: string[]): Promise<{ porObra: Map<string, Dad
 }
 
 function montarCustoDaObra(d: DadosDaObra, custoPorM2Centavos: number | null): CustoDaObra {
-  // Acréscimo de nota e área da opção aprovada (do conteúdo congelado: o que o cliente aprovou).
+  // Repasses (nota e taxa de cartão) vêm das COLUNAS gravadas no aceite (fonte única, igual aos relatórios); a área, do conteúdo
+  // congelado da opção aprovada (o que o cliente aprovou).
   let acrescimoNota = 0;
+  let repasseCartao = 0;
   let areaM2 = 0;
   let temArea = false;
   const estimativas: (number | null)[] = [];
   for (const p of d.propostas) {
     const snap = p.snapshot as unknown as ConteudoProposta | null;
     const opcao = snap?.opcoes.find((o) => o.id === p.opcaoAprovadaId);
+    acrescimoNota += p.acrescimoNotaAprovadoCentavos ?? 0;
+    repasseCartao += p.repasseCartaoAprovadoCentavos ?? 0;
     if (opcao) {
-      acrescimoNota += opcao.totais.acrescimoNotaCentavos;
       areaM2 += opcao.totais.areaM2;
       temArea = true;
     }
@@ -175,6 +178,7 @@ function montarCustoDaObra(d: DadosDaObra, custoPorM2Centavos: number | null): C
   const entrada: EntradaDoCustoDaObra = {
     receitaFechadaCentavos: d.propostas.length > 0 ? (d.valorFechadoCentavos ?? d.propostas.reduce((s, p) => s + (p.valorAprovadoCentavos ?? 0), 0)) : null,
     acrescimoNotaCentavos: acrescimoNota,
+    repasseCartaoCentavos: repasseCartao,
     comprasDaObra: d.recebimentos.map((r) => {
       const id = `rec-${r.id}`;
       links.set(id, `/compras/${r.itemCompra.compra.id}`);

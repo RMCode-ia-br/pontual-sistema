@@ -38,6 +38,7 @@ const AGORA = new Date();
 const HOJE = dataLocalDoInstante(AGORA);
 const JAN: Periodo = { de: "2020-01-01", ate: "2020-01-31" };
 const MAR: Periodo = { de: "2020-03-01", ate: "2020-03-31" };
+const MAI: Periodo = { de: "2020-05-01", ate: "2020-05-31" };
 
 let clienteId: string;
 let contaFinanceiraId: string;
@@ -84,6 +85,9 @@ type OpcoesDeProposta = {
   valor?: number | null;
   comNota?: boolean;
   acrescimo?: number;
+  /** Fase 3.6a: ajuste da forma de pagamento escolhida (negativo = desconto à vista) e o acréscimo de cartão repassado. */
+  ajuste?: number;
+  repasseCartao?: number;
   areaM2?: number;
   enviadaEm?: string | null;
   deletada?: boolean;
@@ -107,6 +111,11 @@ async function proposta(projetoId: string, o: OpcoesDeProposta = {}): Promise<{ 
       aceitaEm: o.aceitaEm ? instante(o.aceitaEm) : null,
       enviadaEm: o.enviadaEm ? instante(o.enviadaEm) : null,
       valorAprovadoCentavos: aprovada ? (o.valor ?? 0) : null,
+      // Colunas gravadas no aceite (fonte única dos relatórios): referência, ajuste, nota e repasse de cartão.
+      valorReferenciaAprovadoCentavos: aprovada ? (o.valor ?? 0) - (o.acrescimo ?? 0) - (o.ajuste ?? 0) : null,
+      ajusteAprovadoCentavos: aprovada ? (o.ajuste ?? 0) : null,
+      acrescimoNotaAprovadoCentavos: aprovada ? (o.acrescimo ?? 0) : null,
+      repasseCartaoAprovadoCentavos: aprovada ? (o.repasseCartao ?? 0) : null,
       opcaoAprovadaId: aprovada ? opcaoId : null,
       snapshot: aprovada ? { opcoes: [{ id: opcaoId, nome: "Opção 1", totais: { itensCentavos: (o.valor ?? 0) - (o.acrescimo ?? 0), descontoCentavos: 0, acrescimoNotaCentavos: o.acrescimo ?? 0, totalCentavos: o.valor ?? 0, areaM2: o.areaM2 ?? 0 } }] } : undefined,
       deletadoEm: o.deletada ? AGORA : null,
@@ -143,17 +152,18 @@ const lancamento = (o: OpcoesDeLancamento) => {
 const EM_SP = (coluna: string) => `((${coluna} AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::date`;
 
 async function vendasSql(de: string, ate: string) {
-  const [r] = await q<{ com: string; sem: string; repasse: string; propostas: number; projetos: number }>(
+  const [r] = await q<{ com: string; sem: string; repasse: string; cartao: string; propostas: number; projetos: number }>(
     `SELECT COALESCE(sum(pr."valorAprovadoCentavos") FILTER (WHERE pr."comNotaFiscal"), 0)::text AS com,
             COALESCE(sum(pr."valorAprovadoCentavos") FILTER (WHERE NOT pr."comNotaFiscal"), 0)::text AS sem,
-            COALESCE(sum((SELECT (o->'totais'->>'acrescimoNotaCentavos')::bigint FROM jsonb_array_elements(pr.snapshot->'opcoes') o WHERE o->>'id' = pr."opcaoAprovadaId")) FILTER (WHERE pr."comNotaFiscal"), 0)::text AS repasse,
+            COALESCE(sum(pr."acrescimoNotaAprovadoCentavos") FILTER (WHERE pr."comNotaFiscal"), 0)::text AS repasse,
+            COALESCE(sum(pr."repasseCartaoAprovadoCentavos"), 0)::text AS cartao,
             count(*)::int AS propostas, count(DISTINCT pr."projetoId")::int AS projetos
        FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId"
       WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL
         AND ${EM_SP(`pr."aceitaEm"`)} BETWEEN $1::date AND $2::date`,
     [de, ate],
   );
-  return { com: n(r.com), sem: n(r.sem), repasse: n(r.repasse), propostas: r.propostas, projetos: r.projetos };
+  return { com: n(r.com), sem: n(r.sem), repasse: n(r.repasse), cartao: n(r.cartao), propostas: r.propostas, projetos: r.projetos };
 }
 
 async function recebidoSql(de: string, ate: string) {
@@ -214,6 +224,16 @@ beforeAll(async () => {
   await venda(p1.id, { aceitaEm: "2020-01-12T12:00:00Z", valor: 888_800, deletada: true }, false); // proposta excluída
   await venda(excluido.id, { aceitaEm: "2020-01-12T12:00:00Z", valor: 999_900 }, false); // projeto excluído
   await venda(p2.id, { status: "RECUSADA", aceitaEm: "2020-01-14T12:00:00Z", valor: 555_500 }, false); // recusada
+
+  // ----- Vendido com forma de pagamento (Fase 3.6a): maio de 2020, sem outros dados -----
+  // (1) cartão 10x sem nota: referência 15.360,00 + acréscimo de cartão 1.990,00 (repasse); (2) com nota, Pix com 5% de desconto:
+  // 14.592,00 + nota 729,60 (desconto NÃO é repasse); (3) com nota, cartão: 10.000,00 + 1.000,00 de cartão + nota 550,00.
+  const m1 = await projeto("Forma cartao");
+  const m2 = await projeto("Forma pix");
+  const m3 = await projeto("Forma cartao com nota");
+  await venda(m1.id, { aceitaEm: "2020-05-10T15:00:00Z", valor: 1_735_000, ajuste: 199_000, repasseCartao: 199_000 }, false);
+  await venda(m2.id, { aceitaEm: "2020-05-12T15:00:00Z", valor: 1_532_160, comNota: true, acrescimo: 72_960, ajuste: -76_800, repasseCartao: 0 }, false);
+  await venda(m3.id, { aceitaEm: "2020-05-20T15:00:00Z", valor: 1_155_000, comNota: true, acrescimo: 55_000, ajuste: 100_000, repasseCartao: 100_000 }, false);
 
   // ----- Recebido -----
   const cr = await prisma.contaReceber.create({ data: { projetoId: p1.id, clienteId, ordem: 1, descricao: `${PREFIXO} Parcela`, valorCentavos: 100_000_000, vencimento: dia("2020-01-05"), status: "ABERTA" } });
@@ -359,6 +379,35 @@ describe("preparo: janeiro e março de 2020 não têm dado real", () => {
   });
 });
 
+describe("Vendido com forma de pagamento: ajuste, repasse de nota e repasse de cartão (maio de 2020)", () => {
+  it("o painel, a lista e a SQL independente concordam; o repasse de cartão só conta o ACRÉSCIMO (desconto à vista não é repasse)", async () => {
+    const painel = await vendidoNoPeriodo(MAI);
+    const sql = await vendasSql(MAI.de, MAI.ate);
+    expect(painel.totalCentavos).toBe(4_422_160); // 1.735.000 + 1.532.160 + 1.155.000: o que o cliente paga
+    expect(painel.semNotaCentavos).toBe(1_735_000);
+    expect(painel.comNotaCentavos).toBe(2_687_160);
+    expect(painel.repasseDeImpostoCentavos).toBe(127_960); // 72.960 + 55.000
+    expect(painel.repasseDeCartaoCentavos).toBe(299_000); // 199.000 + 0 (Pix com desconto) + 100.000
+    expect(painel.propostas).toBe(3);
+    expect(painel.projetos).toBe(3);
+    expect(sql).toEqual({ com: 2_687_160, sem: 1_735_000, repasse: 127_960, cartao: 299_000, propostas: 3, projetos: 3 });
+    expect({ com: painel.comNotaCentavos, sem: painel.semNotaCentavos, repasse: painel.repasseDeImpostoCentavos, cartao: painel.repasseDeCartaoCentavos, propostas: painel.propostas, projetos: painel.projetos }).toEqual(sql);
+
+    const lista = await listarVendas(MAI);
+    expect(lista.linhas).toHaveLength(3);
+    expect(lista.linhas.reduce((s, l) => s + l.valorCentavos, 0)).toBe(painel.totalCentavos);
+  });
+
+  it("o faturamento mensal tem o mesmo repasse de nota e de cartão de maio", async () => {
+    const f = await faturamentoMensal("2020-05-31", 3);
+    const mai = f.meses.find((m) => m.mes === "2020-05")!;
+    expect(mai.vendidoSemNotaCentavos).toBe(1_735_000);
+    expect(mai.vendidoComNotaCentavos).toBe(2_687_160);
+    expect(mai.repasseDeImpostoCentavos).toBe(127_960);
+    expect(mai.repasseDeCartaoCentavos).toBe(299_000);
+  });
+});
+
 describe("Vendido: painel × relatório de vendas × SQL independente", () => {
   it("com nota R$ 12.600,00, sem nota R$ 17.000,00, total R$ 29.600,00, repasse R$ 600,00, 5 propostas em 4 projetos, ticket R$ 7.400,00", async () => {
     const painel = await vendidoNoPeriodo(JAN);
@@ -374,8 +423,8 @@ describe("Vendido: painel × relatório de vendas × SQL independente", () => {
     expect(painel.projetos).toBe(4); // a 2ª aprovação do mesmo projeto não conta de novo
     expect(painel.ticketMedioCentavos).toBe(740_000); // 2.960.000 ÷ 4
 
-    expect(sql).toEqual({ com: 1_260_000, sem: 1_700_000, repasse: 60_000, propostas: 5, projetos: 4 });
-    expect({ com: painel.comNotaCentavos, sem: painel.semNotaCentavos, repasse: painel.repasseDeImpostoCentavos, propostas: painel.propostas, projetos: painel.projetos }).toEqual(sql);
+    expect(sql).toEqual({ com: 1_260_000, sem: 1_700_000, repasse: 60_000, cartao: 0, propostas: 5, projetos: 4 });
+    expect({ com: painel.comNotaCentavos, sem: painel.semNotaCentavos, repasse: painel.repasseDeImpostoCentavos, cartao: painel.repasseDeCartaoCentavos, propostas: painel.propostas, projetos: painel.projetos }).toEqual(sql);
   });
 
   it("a lista de destino (listarVendas) tem exatamente as mesmas propostas e a mesma soma", async () => {

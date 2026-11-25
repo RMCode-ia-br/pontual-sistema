@@ -5,7 +5,7 @@ import { compararRevisoes, type ConteudoComparavel } from "@/lib/dominio/ciclo-p
 import { proximoCodigoDoProjeto } from "@/modules/projetos/servico";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
 import { reservarNumeroDeProposta } from "@/modules/propostas/servico";
-import { aprovarProposta, construirConteudo, copiarProposta, enviarProposta, MENSAGEM_APROVACAO_EM_PREPARO, problemasDaProposta } from "@/modules/propostas/servico-ciclo";
+import { construirConteudo, copiarProposta, enviarProposta, problemasDaProposta } from "@/modules/propostas/servico-ciclo";
 
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
 
@@ -154,22 +154,6 @@ describe("snapshot e envio", () => {
     const problemas = await prisma.$transaction((tx) => problemasDaProposta(tx, p.propostaId));
     expect(problemas.join(" ")).toMatch(/Cartão 3x.*Linha Gold.*50%/);
     await expect(enviar(p.propostaId)).rejects.toThrow(/ainda não está pronta/);
-  });
-});
-
-describe("aprovação fica bloqueada até o Bloco 4", () => {
-  it("proposta com formas extras (rascunho ou enviada) não é aprovada, e nada é gravado", async () => {
-    const p = await montar("bloqueio");
-    await adicionarFormas(p);
-    const tentar = () => prisma.$transaction((tx) => aprovarProposta(tx, { usuario, propostaId: p.propostaId, opcaoId: p.opcaoA, forma: "WHATSAPP", aceitaEm: "2026-11-13" }));
-    await expect(tentar()).rejects.toThrow(MENSAGEM_APROVACAO_EM_PREPARO);
-    expect((await prisma.proposta.findUniqueOrThrow({ where: { id: p.propostaId } })).status).toBe("RASCUNHO");
-    await enviar(p.propostaId);
-    await expect(tentar()).rejects.toThrow(MENSAGEM_APROVACAO_EM_PREPARO);
-    const depois = await prisma.proposta.findUniqueOrThrow({ where: { id: p.propostaId } });
-    expect(depois.status).toBe("ENVIADA");
-    expect(depois.valorAprovadoCentavos).toBeNull();
-    expect(await prisma.contaReceber.count({ where: { propostaId: p.propostaId } })).toBe(0);
   });
 });
 

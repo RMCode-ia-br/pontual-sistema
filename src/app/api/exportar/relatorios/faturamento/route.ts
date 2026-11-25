@@ -15,6 +15,7 @@ const COLUNAS: ColunaDeCsv<MesDoFaturamento>[] = [
   { titulo: "Vendido sem nota (R$)", tipo: "dinheiro", valor: (m) => m.vendidoSemNotaCentavos },
   { titulo: "Vendido com nota (R$)", tipo: "dinheiro", valor: (m) => m.vendidoComNotaCentavos },
   { titulo: "Repasse de imposto, fora da margem (R$)", tipo: "dinheiro", valor: (m) => m.repasseDeImpostoCentavos },
+  { titulo: "Repasse de taxa de cartão, fora da margem (R$)", tipo: "dinheiro", valor: (m) => m.repasseDeCartaoCentavos },
   { titulo: "Recebido sem nota (R$)", tipo: "dinheiro", valor: (m) => m.recebidoSemNotaCentavos },
   { titulo: "Recebido com nota (R$)", tipo: "dinheiro", valor: (m) => m.recebidoComNotaCentavos },
 ];

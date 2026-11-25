@@ -90,7 +90,7 @@ async function VisaoMix({ periodo }: { periodo: Periodo }) {
       <section aria-label="Resumo" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <NumeroDoPainel titulo="Vendido" valor={formatarMoeda(mix.vendidoCentavos)} definicao="O mesmo “Vendido” do relatório de vendas: valor aprovado das propostas aprovadas no período." detalhe={`${mix.propostas} proposta(s)`} grande />
         <NumeroDoPainel titulo="Área vendida" valor={m2Br(totalM2)} definicao="Soma de largura × altura × quantidade de todas as medidas dos itens aprovados. Item sem medida não entra." detalhe={mix.itensSemMedida > 0 ? `${mix.itensSemMedida} item(ns) sem medida ficaram fora` : "Todos os itens têm medida"} />
-        <NumeroDoPainel titulo="Propostas com ajuste" valor={String(mix.propostasComDiferenca)} definicao="Propostas em que a soma dos itens é diferente do valor aprovado (desconto na opção ou acréscimo da nota fiscal). A diferença aparece na linha “Outros e ajustes”." detalhe={`de ${mix.propostas} aprovada(s)`} />
+        <NumeroDoPainel titulo="Propostas com ajuste" valor={String(mix.propostasComDiferenca)} definicao="Propostas em que a soma dos itens é diferente do valor aprovado (desconto na opção, acréscimo da nota fiscal ou ajuste da forma de pagamento escolhida: desconto à vista ou acréscimo do cartão). A diferença aparece na linha “Outros e ajustes”." detalhe={`de ${mix.propostas} aprovada(s)`} />
       </section>
       {mix.propostasSoPelaTabela > 0 ? (
         <p role="status" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
@@ -145,7 +145,7 @@ async function VisaoMix({ periodo }: { periodo: Periodo }) {
           </TabelaDeRelatorio>
         </>
       )}
-      <ComoECalculado className="mt-3" texto="Para cada proposta aprovada no período (pela data da aprovação), somam-se os itens da OPÇÃO APROVADA, agrupados por tipologia. Depois da aprovação os itens não podem ser editados (para mudar, desfaz-se a aprovação e se faz uma revisão), então a soma dos itens só difere do valor aprovado pelo desconto da opção e pelo acréscimo da nota fiscal: essa diferença vai na linha “Outros e ajustes”, para o total fechar com o Vendido." />
+      <ComoECalculado className="mt-3" texto="Para cada proposta aprovada no período (pela data da aprovação), somam-se os itens da OPÇÃO APROVADA, agrupados por tipologia. Depois da aprovação os itens não podem ser editados (para mudar, desfaz-se a aprovação e se faz uma revisão), então a soma dos itens só difere do valor aprovado pelo desconto da opção, pelo acréscimo da nota fiscal e pelo ajuste da forma de pagamento escolhida (desconto à vista ou acréscimo do cartão): essa diferença vai na linha “Outros e ajustes”, para o total fechar com o Vendido." />
     </>
   );
 }

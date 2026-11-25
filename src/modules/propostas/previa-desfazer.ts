@@ -11,7 +11,7 @@ import {
   textoDoPrazo,
   type Bloqueio,
 } from "@/lib/dominio/desfazer-aprovacao";
-import { gerarParcelas } from "@/lib/dominio/parcelas";
+import { gerarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { prazoDaProposta } from "@/lib/dominio/prazo-obra";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 
@@ -97,6 +97,10 @@ export type PreviaDaTroca = {
   problemasDaRevisao: string[];
   opcoes: { id: string; nome: string; totalCentavos: number }[];
   opcaoPadraoId: string | null;
+  /** Formas de pagamento da revisão escolhida (vazio = só a forma de sempre). */
+  formas: { nome: string; principal: boolean; totais: { opcaoId: string; totalCentavos: number }[] }[];
+  /** Forma que a prévia usou: a pedida, ou a de mesmo NOME da aprovação atual. null = escolha pendente. */
+  formaEscolhida: string | null;
   /** Pré-preenchido com a aprovação atual; o usuário pode mudar. */
   aceite: { aceitaEm: string; forma: string; observacao: string | null };
   valorFechado: { antesCentavos: number | null; depoisCentavos: number | null };
@@ -107,11 +111,11 @@ export type PreviaDaTroca = {
 };
 
 /** O que trocar a aprovação vai mudar (parcelas, etapas, tarefas, valor fechado), sem mudar nada. */
-export async function previaDaTroca(db: Db, e: { deId: string; paraId: string; opcaoId?: string | null }, agora: Date = new Date()): Promise<PreviaDaTroca> {
+export async function previaDaTroca(db: Db, e: { deId: string; paraId: string; opcaoId?: string | null; formaPagamento?: string | null }, agora: Date = new Date()): Promise<PreviaDaTroca> {
   const buscar = (id: string) =>
     db.proposta.findFirst({
       where: { id, deletadoEm: null, projeto: { deletadoEm: null } },
-      select: { id: true, numero: true, revisao: true, status: true, projetoId: true, snapshot: true, aceitaEm: true, formaAceite: true, aceiteObservacao: true, opcaoAprovadaId: true, valorAprovadoCentavos: true, parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } } },
+      select: { id: true, numero: true, revisao: true, status: true, projetoId: true, snapshot: true, aceitaEm: true, formaAceite: true, aceiteObservacao: true, opcaoAprovadaId: true, alternativaAprovadaId: true, valorAprovadoCentavos: true, parcelas: { where: { deletadoEm: null, alternativaId: null }, orderBy: { ordem: "asc" } } },
     });
   const de = await buscar(e.deId);
   const para = await buscar(e.paraId);
@@ -132,12 +136,24 @@ export async function previaDaTroca(db: Db, e: { deId: string; paraId: string; o
   const opcaoPadraoId = (e.opcaoId && opcoes.some((o) => o.id === e.opcaoId) ? e.opcaoId : opcoes.find((o) => o.nome === nomeAprovado)?.id ?? opcoes[0]?.id) ?? null;
   const escolhida = opcoes.find((o) => o.id === opcaoPadraoId) ?? null;
 
+  // Forma de pagamento: casa pelo NOME com a que está aprovada hoje; se não casar, a pessoa escolhe (null = pendente).
+  const formasDoConteudo = conteudo.formasPagamento ?? [];
+  let nomeFormaAprovada: string | null = null;
+  if (de.alternativaAprovadaId) nomeFormaAprovada = (await db.alternativaPagamento.findUnique({ where: { id: de.alternativaAprovadaId }, select: { nome: true } }))?.nome ?? null;
+  else nomeFormaAprovada = (de.snapshot as unknown as ConteudoProposta | null)?.formasPagamento?.find((x) => x.principal)?.nome ?? null;
+  const formaPadrao = formasDoConteudo.find((f) => f.nome === nomeFormaAprovada)?.nome ?? null;
+  const formaEscolhida = formasDoConteudo.length < 2 ? null : e.formaPagamento === undefined || e.formaPagamento === null ? formaPadrao : (formasDoConteudo.find((f) => f.nome === e.formaPagamento)?.nome ?? null);
+  const formaObj = formasDoConteudo.find((f) => f.nome === formaEscolhida) ?? null;
+  const pendenteDeForma = formasDoConteudo.length > 1 && !formaObj;
+  const totalEscolhido = escolhida ? (formaObj?.porOpcao.find((x) => x.opcaoId === escolhida.id)?.totalCentavos ?? (pendenteDeForma ? null : escolhida.totalCentavos)) : null;
+
   const aceitaEm = dia(de.aceitaEm) ?? dataLocalDoInstante(agora);
+  const cronograma = formaObj ? formaObj.parcelas : (conteudo.pagamento?.parcelas ?? para.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })));
   const depoisParcelas: LinhaDeParcela[] =
-    escolhida && para.parcelas.length > 0
+    totalEscolhido !== null && cronograma.length > 0 && !pendenteDeForma
       ? gerarParcelas(
-          escolhida.totalCentavos,
-          para.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),
+          totalEscolhido,
+          cronograma.map((x): ParcelaPlanejada => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho as ParcelaPlanejada["gatilho"], forma: x.forma as ParcelaPlanejada["forma"], diasApos: x.diasApos, dataFixa: x.dataFixa, parcelasCartao: x.parcelasCartao })),
           aceitaEm,
         ).map((g) => ({ ordem: g.ordem, descricao: g.descricao, valorCentavos: g.valorCentavos, vencimento: g.vencimento }))
       : [];
@@ -161,8 +177,10 @@ export async function previaDaTroca(db: Db, e: { deId: string; paraId: string; o
     problemasDaRevisao: para.status === "SUBSTITUIDA" && !para.snapshot ? await problemasDaProposta(db as Prisma.TransactionClient, para.id) : [],
     opcoes,
     opcaoPadraoId,
+    formas: formasDoConteudo.map((f) => ({ nome: f.nome, principal: f.principal, totais: f.porOpcao.map((t) => ({ opcaoId: t.opcaoId, totalCentavos: t.totalCentavos })) })),
+    formaEscolhida,
     aceite: { aceitaEm, forma: de.formaAceite ?? "WHATSAPP", observacao: de.aceiteObservacao },
-    valorFechado: { antesCentavos: projeto.valorFechadoCentavos, depoisCentavos: escolhida ? outrasValor + escolhida.totalCentavos : null },
+    valorFechado: { antesCentavos: projeto.valorFechadoCentavos, depoisCentavos: totalEscolhido !== null ? outrasValor + totalEscolhido : null },
     parcelas: { antes: antesParcelas, depois: depoisParcelas },
     etapas: {
       removidas: antes.efeitos.etapasRemovidas,

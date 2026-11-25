@@ -172,7 +172,7 @@ export async function desfazerAprovacao(tx: Tx, e: EntradaDesfazer): Promise<Res
   // 1. A proposta volta (ENVIADA, ou SUBSTITUIDA se a revisão escolhida já tinha sido enviada). Mantém snapshot e enviadaEm.
   const voltou = await tx.proposta.updateMany({
     where: { id: propostaId, status: "APROVADA", deletadoEm: null },
-    data: { status: daDesfeita.para, aceitaEm: null, formaAceite: null, aceiteObservacao: null, opcaoAprovadaId: null, valorAprovadoCentavos: null, atualizadoPorId: usuario.id },
+    data: { status: daDesfeita.para, aceitaEm: null, formaAceite: null, aceiteObservacao: null, opcaoAprovadaId: null, valorAprovadoCentavos: null, alternativaAprovadaId: null, valorReferenciaAprovadoCentavos: null, ajusteAprovadoCentavos: null, acrescimoNotaAprovadoCentavos: null, repasseCartaoAprovadoCentavos: null, atualizadoPorId: usuario.id },
   });
   if (voltou.count === 0) throw new ErroNegocio("Esta aprovação já foi desfeita. Atualize a página.");
 
@@ -328,6 +328,8 @@ export type EntradaTroca = {
   /** A revisão substituída que passa a ser a aprovada. */
   paraId: string;
   opcaoId: string;
+  /** NOME da forma de pagamento fechada na revisão escolhida (obrigatória quando ela tem mais de uma). */
+  formaPagamento?: string | null;
   forma: "WHATSAPP" | "EMAIL" | "ASSINATURA" | "VERBAL";
   /** Data do aceite, "aaaa-mm-dd" (a tela já vem com a da aprovação anterior). */
   aceitaEm: string;
@@ -359,7 +361,7 @@ export async function trocarAprovacao(tx: Tx, e: EntradaTroca): Promise<Resultad
   if (para.status !== "SUBSTITUIDA") throw new ErroNegocio(`A ${rotuloDaRevisao(para.revisao)} não ficou de lado; só dá para trocar por uma revisão substituída.`);
 
   const desfeita = await desfazerAprovacao(tx, { usuario, propostaId: deId, motivo: e.motivo, reabrirId: paraId, emTroca: true, ip, agora });
-  const r = await aprovarProposta(tx, { usuario, propostaId: paraId, opcaoId: e.opcaoId, forma: e.forma, aceitaEm: e.aceitaEm, observacao: e.observacao, ip, agora });
+  const r = await aprovarProposta(tx, { usuario, propostaId: paraId, opcaoId: e.opcaoId, formaPagamento: e.formaPagamento, forma: e.forma, aceitaEm: e.aceitaEm, observacao: e.observacao, ip, agora });
 
   // A data de fechamento é a do primeiro aceite entre as propostas aprovadas (a aprovação, com o projeto já em "Aprovado", só soma o valor).
   const aprovadas = await tx.proposta.findMany({ where: { projetoId: de.projetoId, status: "APROVADA", deletadoEm: null }, select: { aceitaEm: true } });
@@ -379,7 +381,7 @@ export async function trocarAprovacao(tx: Tx, e: EntradaTroca): Promise<Resultad
     entidadeId: paraId,
     acao: "TROCAR_APROVACAO",
     antes: { aprovadaId: deId, revisao: de.revisao },
-    depois: { aprovadaId: paraId, revisao: para.revisao, valorAprovadoCentavos: r.valorAprovadoCentavos, parcelas: r.parcelasGeradas, etapas: r.etapasGeradas, motivo: e.motivo.trim() },
+    depois: { aprovadaId: paraId, revisao: para.revisao, valorAprovadoCentavos: r.valorAprovadoCentavos, formaPagamento: r.formaPagamento, parcelas: r.parcelasGeradas, etapas: r.etapasGeradas, motivo: e.motivo.trim() },
     ip,
   });
   return { numero: de.numero, projetoId: de.projetoId, valorAprovadoCentavos: r.valorAprovadoCentavos, parcelasGeradas: r.parcelasGeradas, etapasGeradas: r.etapasGeradas, valorFechadoCentavos: r.valorFechadoCentavos, desfeita };

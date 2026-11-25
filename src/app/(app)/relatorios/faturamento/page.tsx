@@ -24,6 +24,7 @@ export default async function PaginaDoFaturamentoMensal() {
     vendidoCom: soma((m) => m.vendidoComNotaCentavos),
     vendidoSem: soma((m) => m.vendidoSemNotaCentavos),
     repasse: soma((m) => m.repasseDeImpostoCentavos),
+    repasseCartao: soma((m) => m.repasseDeCartaoCentavos),
     recebidoCom: soma((m) => m.recebidoComNotaCentavos),
     recebidoSem: soma((m) => m.recebidoSemNotaCentavos),
   };
@@ -99,6 +100,7 @@ export default async function PaginaDoFaturamentoMensal() {
                 <th scope="col" className="px-3 py-2 text-right">Vendido sem nota</th>
                 <th scope="col" className="px-3 py-2 text-right">Vendido com nota</th>
                 <th scope="col" className="px-3 py-2 text-right">Repasse de imposto (fora da margem)</th>
+                <th scope="col" className="px-3 py-2 text-right">Repasse de taxa de cartão (fora da margem)</th>
                 <th scope="col" className="px-3 py-2 text-right">Recebido sem nota</th>
                 <th scope="col" className="px-3 py-2 text-right">Recebido com nota</th>
               </tr>
@@ -114,6 +116,7 @@ export default async function PaginaDoFaturamentoMensal() {
                   <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(m.vendidoSemNotaCentavos)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(m.vendidoComNotaCentavos)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(m.repasseDeImpostoCentavos)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(m.repasseDeCartaoCentavos)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(m.recebidoSemNotaCentavos)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     <Link href={`/financeiro/recebimentos${montarConsulta({ mes: m.mes, nota: "com" })}`} className="hover:underline">
@@ -129,6 +132,7 @@ export default async function PaginaDoFaturamentoMensal() {
                 <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(totais.vendidoSem)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(totais.vendidoCom)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(totais.repasse)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(totais.repasseCartao)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(totais.recebidoSem)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(totais.recebidoCom)}</td>
               </tr>

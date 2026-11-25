@@ -89,7 +89,7 @@ export default async function PaginaMargemPorObra({ searchParams }: { searchPara
         </div>
         <div className="rounded-xl border p-4 sm:col-span-1">
           <p className="text-muted-foreground text-sm">Margem</p>
-          <ComoECalculado texto="Receita da margem = valor fechado menos o acréscimo de nota (repasse de imposto, fora da margem). Custo = recebimentos das compras para a obra + saídas do estoque (ao custo da época) + contas e lançamentos da obra sem compra + mão de obra × m². A conta a pagar de uma compra não entra: a compra já conta. Faltou algum custo: a margem fica “Incompleta”, nunca zero." />
+          <ComoECalculado texto="Receita da margem = valor fechado menos o acréscimo de nota (repasse de imposto, fora da margem) e menos o acréscimo do cartão (repasse de taxa de cartão, fora da margem). O desconto à vista não é repasse: reduz a margem. Custo = recebimentos das compras para a obra + saídas do estoque (ao custo da época) + contas e lançamentos da obra sem compra + mão de obra × m². A conta a pagar de uma compra não entra: a compra já conta. Faltou algum custo: a margem fica “Incompleta”, nunca zero." />
         </div>
       </section>
 
@@ -124,6 +124,7 @@ export default async function PaginaMargemPorObra({ searchParams }: { searchPara
                 <p className="text-muted-foreground text-xs">
                   {l.cliente} · receita da margem {l.receitaDaMargemCentavos !== null ? formatarMoeda(l.receitaDaMargemCentavos) : "—"} · custo conhecido {formatarMoeda(l.custoConhecidoCentavos)}
                   {l.repasseDeImpostoCentavos > 0 ? ` · repasse de imposto ${formatarMoeda(l.repasseDeImpostoCentavos)}` : ""}
+                  {l.repasseDeCartaoCentavos > 0 ? ` · repasse de taxa de cartão ${formatarMoeda(l.repasseDeCartaoCentavos)}` : ""}
                 </p>
                 {l.incompleto ? <p className="text-xs text-amber-700 dark:text-amber-400">Falta: {l.faltando.slice(0, 3).join("; ")}{l.faltando.length > 3 ? `; e mais ${l.faltando.length - 3}` : ""}</p> : null}
               </div>

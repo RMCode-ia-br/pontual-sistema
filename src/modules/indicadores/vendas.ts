@@ -8,7 +8,10 @@ import { limitesEmInstantes, type Periodo } from "@/lib/periodo";
 /**
  * Vendido (decisão 116): soma do valor aprovado de cada PROPOSTA aprovada, pela data do aceite. Cada parte de uma obra
  * entra no mês em que foi aprovada. O acréscimo da nota (do conteúdo congelado da opção aprovada) é o "repasse de
- * imposto, fora da margem", mostrado em linha própria; o valor aprovado já o inclui nas propostas com nota.
+ * imposto, fora da margem", mostrado em linha própria; o valor aprovado já o inclui nas propostas com nota. O acréscimo de uma forma
+ * de pagamento marcada como taxa da maquininha é o "repasse de taxa de cartão, fora da margem" (decisão 144). Os dois repasses são
+ * LIDOS DAS COLUNAS gravadas no aceite (`acrescimoNotaAprovadoCentavos`, `repasseCartaoAprovadoCentavos`): fonte única, igual para o
+ * painel, os relatórios e a margem por obra.
  */
 
 /** A MESMA cláusula do painel, do relatório de vendas e da lista: propostas aprovadas no período. */
@@ -23,29 +26,30 @@ export type Vendido = {
   semNotaCentavos: number;
   /** Parte das vendas COM nota que é o acréscimo da nota (repasse de imposto, fora da margem). */
   repasseDeImpostoCentavos: number;
+  /** Parte das vendas (com ou sem nota) que é acréscimo de cartão repassado: taxa da maquininha, fora da margem. */
+  repasseDeCartaoCentavos: number;
   propostas: number;
   /** Projetos distintos com aprovação no período (uma obra com duas partes aprovadas conta uma vez). */
   projetos: number;
   ticketMedioCentavos: number | null;
 };
 
-type LinhaDoSql = { comNota: boolean; propostas: number; total: bigint; repasse: bigint; projetos: number };
+type LinhaDoSql = { comNota: boolean; propostas: number; total: bigint; repasse: bigint; repasseCartao: bigint; projetos: number };
 
 export async function vendidoNoPeriodo(p: Periodo): Promise<Vendido> {
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
   const linhas = await prisma.$queryRaw<LinhaDoSql[]>`
     WITH v AS (
       SELECT pr."comNotaFiscal", pr."projetoId", pr."valorAprovadoCentavos" AS valor,
-             COALESCE((SELECT (o->'totais'->>'acrescimoNotaCentavos')::bigint
-                         FROM jsonb_array_elements(pr.snapshot->'opcoes') o
-                        WHERE o->>'id' = pr."opcaoAprovadaId"), 0) AS repasse
+             COALESCE(pr."acrescimoNotaAprovadoCentavos", 0)::bigint AS repasse,
+             COALESCE(pr."repasseCartaoAprovadoCentavos", 0)::bigint AS "repasseCartao"
         FROM "Proposta" pr
         JOIN "Projeto" j ON j.id = pr."projetoId"
        WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL
          AND pr."aceitaEm" >= ${inicio} AND pr."aceitaEm" < ${fimExclusivo}
     )
     SELECT "comNotaFiscal" AS "comNota", count(*)::int AS propostas,
-           COALESCE(sum(valor), 0)::bigint AS total, COALESCE(sum(repasse), 0)::bigint AS repasse,
+           COALESCE(sum(valor), 0)::bigint AS total, COALESCE(sum(repasse), 0)::bigint AS repasse, COALESCE(sum("repasseCartao"), 0)::bigint AS "repasseCartao",
            (SELECT count(DISTINCT "projetoId") FROM v)::int AS projetos
       FROM v GROUP BY "comNotaFiscal"`;
   const com = linhas.find((l) => l.comNota);
@@ -59,6 +63,7 @@ export async function vendidoNoPeriodo(p: Periodo): Promise<Vendido> {
     comNotaCentavos,
     semNotaCentavos,
     repasseDeImpostoCentavos: Number(com?.repasse ?? 0),
+    repasseDeCartaoCentavos: linhas.reduce((s, l) => s + Number(l.repasseCartao ?? 0), 0),
     propostas: (com?.propostas ?? 0) + (sem?.propostas ?? 0),
     projetos,
     ticketMedioCentavos: ticketMedio(totalCentavos, projetos),

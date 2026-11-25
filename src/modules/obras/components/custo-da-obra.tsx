@@ -45,6 +45,7 @@ export function CustoDaObraAba({ c }: { c: CustoDaObra }) {
           <dl className="grid gap-2 text-sm">
             <Linha rotulo={`Valor fechado (${c.propostas.join(", ")})`} valor={c.receitaFechadaCentavos !== null ? formatarMoeda(c.receitaFechadaCentavos) : "—"} />
             {r.repasseDeImpostoCentavos > 0 ? <Linha rotulo="(−) Repasse de imposto: acréscimo de nota, fora da margem" valor={`− ${formatarMoeda(r.repasseDeImpostoCentavos)}`} suave /> : null}
+            {r.repasseDeCartaoCentavos > 0 ? <Linha rotulo="(−) Repasse de taxa de cartão, fora da margem" valor={`− ${formatarMoeda(r.repasseDeCartaoCentavos)}`} suave /> : null}
             <Linha rotulo="Receita da margem" valor={r.receitaDaMargemCentavos !== null ? formatarMoeda(r.receitaDaMargemCentavos) : "—"} forte />
             <Linha rotulo={r.incompleto ? "(−) Custo conhecido até agora" : "(−) Custo real"} valor={`− ${formatarMoeda(r.custoConhecidoCentavos)}`} />
             <div className="flex items-baseline justify-between gap-2 border-t pt-2 text-base font-semibold">
@@ -69,7 +70,7 @@ export function CustoDaObraAba({ c }: { c: CustoDaObra }) {
             ) : null}
           </dl>
         )}
-        <p className="text-muted-foreground text-xs">Nenhuma alíquota entra aqui: o acréscimo de nota é repasse de imposto e sai da receita da margem. O imposto pago (DAS) é despesa da empresa, no financeiro.</p>
+        <p className="text-muted-foreground text-xs">Nenhuma alíquota entra aqui: o acréscimo de nota é repasse de imposto e o acréscimo do cartão é repasse de taxa de cartão: os dois saem da receita da margem. O desconto à vista não é repasse e reduz a margem. O imposto pago (DAS) é despesa da empresa, no financeiro.</p>
       </section>
 
       <section aria-labelledby="titulo-origem" className="grid gap-4">

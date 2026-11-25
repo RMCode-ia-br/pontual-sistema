@@ -17,11 +17,13 @@ export type MesDoFaturamento = {
   vendidoSemNotaCentavos: number;
   /** Parte do vendido com nota que é o acréscimo da nota (repasse de imposto, fora da margem). */
   repasseDeImpostoCentavos: number;
+  /** Acréscimo de cartão repassado (taxa da maquininha, fora da margem), com ou sem nota. */
+  repasseDeCartaoCentavos: number;
   recebidoComNotaCentavos: number;
   recebidoSemNotaCentavos: number;
 };
 
-type LinhaVendas = { mes: string; comNota: boolean; total: bigint; repasse: bigint };
+type LinhaVendas = { mes: string; comNota: boolean; total: bigint; repasse: bigint; repasseCartao: bigint };
 type LinhaRecebido = { mes: string; comNota: boolean; total: bigint };
 
 export async function faturamentoMensal(hoje: string, meses = 12): Promise<{ periodo: Periodo; meses: MesDoFaturamento[] }> {
@@ -34,7 +36,8 @@ export async function faturamentoMensal(hoje: string, meses = 12): Promise<{ per
     prisma.$queryRaw<LinhaVendas[]>`
       SELECT to_char((pr."aceitaEm" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS mes, pr."comNotaFiscal" AS "comNota",
              COALESCE(sum(pr."valorAprovadoCentavos"), 0)::bigint AS total,
-             COALESCE(sum((SELECT (o->'totais'->>'acrescimoNotaCentavos')::bigint FROM jsonb_array_elements(pr.snapshot->'opcoes') o WHERE o->>'id' = pr."opcaoAprovadaId")), 0)::bigint AS repasse
+             COALESCE(sum(pr."acrescimoNotaAprovadoCentavos"), 0)::bigint AS repasse,
+             COALESCE(sum(pr."repasseCartaoAprovadoCentavos"), 0)::bigint AS "repasseCartao"
         FROM "Proposta" pr JOIN "Projeto" j ON j.id = pr."projetoId"
        WHERE pr.status = 'APROVADA' AND pr."deletadoEm" IS NULL AND j."deletadoEm" IS NULL
          AND pr."aceitaEm" >= ${inicio} AND pr."aceitaEm" < ${fimExclusivo}
@@ -58,6 +61,7 @@ export async function faturamentoMensal(hoje: string, meses = 12): Promise<{ per
       vendidoComNotaCentavos: Number(v(m.mes, true)?.total ?? 0),
       vendidoSemNotaCentavos: Number(v(m.mes, false)?.total ?? 0),
       repasseDeImpostoCentavos: Number(v(m.mes, true)?.repasse ?? 0),
+      repasseDeCartaoCentavos: Number(v(m.mes, true)?.repasseCartao ?? 0) + Number(v(m.mes, false)?.repasseCartao ?? 0),
       recebidoComNotaCentavos: r(m.mes, true),
       recebidoSemNotaCentavos: r(m.mes, false),
     })),

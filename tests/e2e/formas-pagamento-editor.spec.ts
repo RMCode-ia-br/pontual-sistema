@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { aguardarAvisosSumirem, capturar, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { criarPropostaRascunhoDeTeste, prepararUsuarioE2E, type PropostaDeTeste } from "./banco";
+import { contasDaProposta, criarPropostaRascunhoDeTeste, prepararUsuarioE2E, type PropostaDeTeste } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 // Fase 3.6a, Bloco 2: editor das formas de pagamento. A proposta de teste vale R$ 12.800,00 (um valor só, sem nota).
@@ -127,13 +127,13 @@ test("ajuste zero vale; duplicar, subir e remover funcionam; o limite é de 5 fo
   await expect(page.getByRole("button", { name: "Adicionar forma de pagamento" })).toBeEnabled();
 });
 
-test("editor mostra o aviso de recurso em construção e cabe na tela (390 px sem rolagem lateral)", async ({ page }) => {
+test("o editor com formas extras cabe na tela (390 px sem rolagem lateral), claro e escuro", async ({ page }) => {
   await abrirEditor(page);
   await page.getByLabel("Forma 3 — Ajuste em porcentagem").fill("-6");
   await page.getByRole("button", { name: "Salvar proposta" }).click();
   await expect(toast(page, "Proposta salva")).toBeVisible();
   await aguardarAvisosSumirem(page);
-  await expect(page.getByText(/Em preparo: a proposta com formas extras já pode ser enviada/)).toBeVisible();
+  await expect(page.getByLabel("Forma 3 — Ajuste em porcentagem")).toHaveValue("-6");
   await semRolagemHorizontal(page);
   await capturar(page, "formas-pagamento-editor-claro");
   await page.emulateMedia({ colorScheme: "dark" });
@@ -141,7 +141,7 @@ test("editor mostra o aviso de recurso em construção e cabe na tela (390 px se
   await semRolagemHorizontal(page);
 });
 
-test("envia com formas extras: o PDF sai, a revisão copia tudo e a comparação não vê diferença; a aprovação fica em preparo", async ({ page }) => {
+test("envia com formas extras: o PDF sai, a revisão copia tudo e a comparação não vê diferença; o aceite pede a forma escolhida e gera as parcelas dela", async ({ page }) => {
   await abrirEditor(page);
   await page.getByRole("button", { name: "Marcar como enviada" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Marcar como enviada" }).click();
@@ -153,13 +153,6 @@ test("envia com formas extras: o PDF sai, a revisão copia tudo e a comparação
   expect(pdf.status()).toBe(200);
   expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
 
-  // Aprovar ainda não: a escolha da forma no aceite está em preparo (Bloco 4).
-  await page.getByRole("button", { name: "Aprovar", exact: true }).click();
-  const dialogo = page.getByRole("dialog");
-  await expect(dialogo.getByText(/Em preparo: esta proposta tem mais de uma forma de pagamento/)).toBeVisible();
-  await expect(dialogo.getByRole("button", { name: "Aprovar proposta" })).toBeDisabled();
-  await page.keyboard.press("Escape");
-
   // Nova revisão: as formas vêm copiadas e a comparação não aponta diferença.
   await page.getByRole("button", { name: "Nova revisão" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Criar revisão" }).click();
@@ -170,4 +163,25 @@ test("envia com formas extras: o PDF sai, a revisão copia tudo e a comparação
   await expect(page.getByLabel("Forma 3: nome")).toHaveValue("Pix com desconto");
   await page.getByRole("link", { name: "Comparar com a revisão anterior" }).click();
   await expect(page.getByText("Nenhuma diferença nos itens, nos totais, nas formas de pagamento nem na nota fiscal.")).toBeVisible();
+
+  // Aceite da original: a forma de pagamento é obrigatória, vem em branco e mostra o total e as parcelas antes de aprovar.
+  await page.goto(`/propostas/${proposta.propostaId}`);
+  await page.getByRole("button", { name: "Aprovar", exact: true }).click();
+  const dialogo = page.getByRole("dialog");
+  await expect(dialogo.getByLabel("Forma de pagamento escolhida")).toHaveValue("");
+  await expect(dialogo.getByRole("button", { name: "Aprovar proposta" })).toBeDisabled();
+  await expect(dialogo.getByText("Para mudar a forma de pagamento depois de aprovada, desfaça a aprovação e aprove de novo (só se ainda não houve recebimento).")).toBeVisible();
+  await dialogo.getByLabel("Forma de pagamento escolhida").selectOption("Pix com desconto");
+  const previa = dialogo.getByRole("group", { name: "Prévia da forma de pagamento" });
+  await expect(previa.getByText("R$ 12.032,00")).toBeVisible(); // 12.800,00 com 6% de desconto
+  await expect(dialogo.getByRole("button", { name: "Aprovar proposta" })).toBeEnabled();
+  await capturar(page, "aceite-com-formas");
+  await dialogo.getByRole("button", { name: "Aprovar proposta" }).click();
+  await expect(toast(page, "aprovada")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+
+  // As parcelas a receber saem da forma escolhida (50% + 50% do total com desconto), não do cronograma da forma principal.
+  const contas = await contasDaProposta(proposta.numero);
+  expect(contas.reduce((soma, c) => soma + c.valorCentavos, 0)).toBe(1_203_200);
+  expect(contas.map((c) => c.valorCentavos)).toEqual([601_600, 601_600]); // sinal e instalação do "Pix com desconto"
 });

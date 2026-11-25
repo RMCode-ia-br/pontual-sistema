@@ -104,6 +104,8 @@ export function AcoesDeAprovacao(p: Props) {
   const [previaT, setPreviaT] = useState<PreviaDaTroca | null>(null);
   const [paraId, setParaId] = useState("");
   const [opcaoId, setOpcaoId] = useState("");
+  // Forma de pagamento da revisão escolhida: vem pelo NOME da forma aprovada hoje; se não casar, fica vazia e a pessoa escolhe.
+  const [formaPag, setFormaPag] = useState("");
   const [aceitaEm, setAceitaEm] = useState("");
   const [forma, setForma] = useState<Forma>("WHATSAPP");
   const [observacao, setObservacao] = useState("");
@@ -147,10 +149,10 @@ export function AcoesDeAprovacao(p: Props) {
     });
   }
 
-  function carregarTroca(alvo: string, opcao: string | undefined, preencher: boolean) {
+  function carregarTroca(alvo: string, opcao: string | undefined, preencher: boolean, formaPedida?: string) {
     const meu = ++pedido.current;
     carregar(async () => {
-      const r = await previaTrocaAcao({ deId: p.propostaId, paraId: alvo, opcaoId: opcao });
+      const r = await previaTrocaAcao({ deId: p.propostaId, paraId: alvo, opcaoId: opcao, formaPagamento: formaPedida });
       if (meu !== pedido.current) return;
       if (!r.ok || !r.dados) {
         // Falhou: não deixa a prévia da revisão ou opção anterior na tela com botão de confirmar.
@@ -160,6 +162,7 @@ export function AcoesDeAprovacao(p: Props) {
       setErro(null);
       setPreviaT(r.dados);
       setOpcaoId(r.dados.opcaoPadraoId ?? "");
+      setFormaPag(r.dados.formaEscolhida ?? "");
       if (preencher) {
         setAceitaEm(r.dados.aceite.aceitaEm);
         setForma((FORMAS.find((f) => f.v === r.dados!.aceite.forma)?.v ?? "WHATSAPP") as Forma);
@@ -347,7 +350,7 @@ export function AcoesDeAprovacao(p: Props) {
                       aria-label="Opção aprovada"
                       onChange={(e) => {
                         setOpcaoId(e.target.value);
-                        carregarTroca(paraId, e.target.value, false);
+                        carregarTroca(paraId, e.target.value, false, formaPag);
                       }}
                     >
                       {previaT.opcoes.map((o) => (
@@ -357,6 +360,29 @@ export function AcoesDeAprovacao(p: Props) {
                       ))}
                     </Selecao>
                   </label>
+                ) : null}
+                {previaT.formas.length > 1 ? (
+                  <div className="grid gap-1">
+                    <label className="grid gap-1 text-sm">
+                      Forma de pagamento escolhida
+                      <Selecao
+                        value={formaPag}
+                        aria-label="Forma de pagamento escolhida"
+                        onChange={(e) => {
+                          setFormaPag(e.target.value);
+                          carregarTroca(paraId, opcaoId, false, e.target.value);
+                        }}
+                      >
+                        <option value="">Escolha a forma…</option>
+                        {previaT.formas.map((f) => (
+                          <option key={f.nome} value={f.nome}>
+                            {f.nome}
+                          </option>
+                        ))}
+                      </Selecao>
+                    </label>
+                    {formaPag === "" ? <p role="status" className="text-xs text-amber-700 dark:text-amber-400">A forma de pagamento da aprovação de hoje não existe na {previaT.paraRotulo}: escolha a forma que o cliente fechou.</p> : null}
+                  </div>
                 ) : null}
                 <div className="rounded-lg border p-3 text-sm">
                   <p className="mb-2 font-medium">
@@ -415,8 +441,8 @@ export function AcoesDeAprovacao(p: Props) {
             </Button>
             <Button
               type="button"
-              disabled={pendente || carregando || !previaT || !!previaT.erro || previaT.bloqueios.length > 0 || previaT.problemasDaRevisao.length > 0 || !motivoOk || !opcaoId || !aceitaEm}
-              onClick={() => rodar(() => trocarAprovacaoAcao({ deId: p.propostaId, paraId, opcaoId, forma, aceitaEm, observacao, motivo }))}
+              disabled={pendente || carregando || !previaT || !!previaT.erro || previaT.bloqueios.length > 0 || previaT.problemasDaRevisao.length > 0 || !motivoOk || !opcaoId || !aceitaEm || (previaT.formas.length > 1 && formaPag === "")}
+              onClick={() => rodar(() => trocarAprovacaoAcao({ deId: p.propostaId, paraId, opcaoId, formaPagamento: previaT && previaT.formas.length > 1 ? formaPag : undefined, forma, aceitaEm, observacao, motivo }))}
             >
               {pendente ? <Loader2 className="animate-spin" aria-hidden /> : null} Trocar aprovação
             </Button>

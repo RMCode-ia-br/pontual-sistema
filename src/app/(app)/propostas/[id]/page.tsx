@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db";
 import { formatarRevisao } from "@/lib/dominio/numeracao-proposta";
 import { linkWhatsApp, preencherModelo, primeiroNome } from "@/lib/dominio/modelos-texto";
 import { calcularTotais } from "@/lib/dominio/preco";
+import { linhasDaForma } from "@/lib/dominio/texto-proposta";
 import { formatarData, formatarMoeda, formatarDataHora, hojeCalendario } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
@@ -17,7 +18,9 @@ import { revisaoMaisNovaEmAberto, rotuloDaRevisao, situacaoDasRevisoes, textoDoA
 import { AcoesDaProposta } from "@/modules/propostas/components/acoes-da-proposta";
 import { AcoesDeAprovacao } from "@/modules/propostas/components/acoes-de-aprovacao";
 import { EditorProposta } from "@/modules/propostas/components/editor-proposta";
-import { PainelCiclo } from "@/modules/propostas/components/painel-ciclo";
+import { PainelCiclo, type FormaParaAceite } from "@/modules/propostas/components/painel-ciclo";
+import type { ConteudoProposta } from "@/modules/propostas/conteudo";
+import { construirConteudo } from "@/modules/propostas/servico-ciclo";
 import { itensComCustoDesatualizado, listarMotivosDeRecusa, listarOpcoesDoEditor, listarRevisoes, obterMensagemDeEnvio, obterPropostaParaEditor } from "@/modules/propostas/queries";
 import { ROTULO_STATUS_PROPOSTA } from "@/modules/propostas/schemas";
 import { serializarProposta } from "@/modules/propostas/tipos";
@@ -49,6 +52,19 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
     proposta.comNotaFiscal,
     proposta.acrescimoNotaPb,
   );
+
+  // O que o aceite mostra e usa: o conteúdo CONGELADO (enviada) ou, no rascunho, o de agora (que será congelado ao aprovar).
+  // Se as formas de pagamento de um rascunho estão com problema, o conteúdo não monta e o servidor explica ao aprovar.
+  const aprovavel = status === "RASCUNHO" || status === "ENVIADA" || status === "EXPIRADA";
+  const conteudoAceite: ConteudoProposta | null = !aprovavel ? null : status !== "RASCUNHO" && proposta.snapshot ? (proposta.snapshot as unknown as ConteudoProposta) : await construirConteudo(prisma, proposta.id).catch(() => null);
+  const formasParaAceite: FormaParaAceite[] =
+    (conteudoAceite?.formasPagamento?.length ?? 0) > 1
+      ? conteudoAceite!.formasPagamento!.map((f) => ({
+          nome: f.nome,
+          principal: f.principal,
+          porOpcao: f.porOpcao.map((t) => ({ opcaoId: t.opcaoId, totalFormatado: formatarMoeda(t.totalCentavos), linhas: linhasDaForma(t.totalCentavos, f.parcelas, f.textoLivre) })),
+        }))
+      : [];
 
   // Mensagem de envio (modelo editável) para WhatsApp e e-mail.
   const mensagem = preencherModelo(modeloEnvio?.conteudo ?? "Olá, {{cliente}}! Segue a proposta {{numeroProposta}} da {{nomeFantasia}}.", {
@@ -117,8 +133,8 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
           revisaoAnteriorId={proposta.revisaoDeId}
           validadeEncerrada={proposta.validadeEncerradaPorReajuste}
           vencida={!!vencida}
-          opcoes={proposta.opcoes.map((o) => ({ id: o.id, nome: o.nome, totalFormatado: formatarMoeda(totais.find((t) => t.opcaoId === o.id)?.totalCentavos ?? 0) }))}
-          formasExtras={proposta.alternativasPagamento.length > 0 || (((proposta.snapshot as { formasPagamento?: unknown[] } | null)?.formasPagamento?.length ?? 0) > 1)}
+          opcoes={proposta.opcoes.map((o) => ({ id: o.id, nome: o.nome, totalFormatado: formatarMoeda(conteudoAceite?.opcoes.find((x) => x.id === o.id)?.totais.totalCentavos ?? totais.find((t) => t.opcaoId === o.id)?.totalCentavos ?? 0) }))}
+          formas={formasParaAceite}
           condicaoSemParcelas={proposta.parcelas.length === 0}
           qtdParcelas={proposta.parcelas.length}
           hoje={hojeCalendario().toISOString().slice(0, 10)}

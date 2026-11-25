@@ -3,10 +3,10 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { montarFormasDePagamento } from "@/lib/dominio/alternativas-pagamento";
+import { montarFormasDePagamento, type FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
 import { problemasParaEnviar } from "@/lib/dominio/ciclo-proposta";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
-import { gerarParcelas } from "@/lib/dominio/parcelas";
+import { gerarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { calcularTotais, MAXIMO_CENTAVOS, quantidadeTotal } from "@/lib/dominio/preco";
 import { chaveFollowUp, vencimentoAcompanharProposta } from "@/lib/dominio/followup";
 import { formatarMoeda, hojeCalendario } from "@/lib/formatadores";
@@ -239,6 +239,8 @@ export type EntradaAprovacao = {
   /** Data do aceite (AAAA-MM-DD, calendário de São Paulo). */
   aceitaEm: string;
   observacao?: string | null;
+  /** NOME da forma de pagamento fechada. Obrigatória quando a proposta tem mais de uma forma; sem formas extras fica de fora. */
+  formaPagamento?: string | null;
   ip?: string | null;
   agora?: Date;
 };
@@ -248,15 +250,6 @@ export type EntradaAprovacao = {
  * etapas da obra (R7, `gerarEtapasDaObra` em `@/modules/obras/servico`) e linha do tempo. Aprovar um rascunho
  * congela antes. Idempotente nas parcelas (única por proposta + ordem) e nas etapas (uma geração por projeto).
  */
-export const MENSAGEM_APROVACAO_EM_PREPARO = "Esta proposta tem mais de uma forma de pagamento. A escolha da forma no aceite ainda está em preparo, por isso a aprovação fica bloqueada por enquanto.";
-
-/** Tem formas de pagamento extras (no rascunho: nas linhas; enviada: no snapshot congelado). */
-export async function temFormasExtras(tx: Tx, propostaId: string, snapshot: unknown): Promise<boolean> {
-  const congeladas = (snapshot as ConteudoProposta | null)?.formasPagamento;
-  if (congeladas && congeladas.length > 1) return true;
-  return (await tx.alternativaPagamento.count({ where: { propostaId, deletadoEm: null } })) > 0;
-}
-
 export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const { usuario, propostaId, ip } = e;
   const agora = e.agora ?? new Date();
@@ -270,8 +263,6 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
     },
   });
   if (!p) throw new ErroNegocio("Proposta não encontrada.");
-  // Em preparo (Fase 3.6a, Bloco 4): a escolha da forma no aceite ainda não existe; não aprova proposta com formas extras.
-  if (await temFormasExtras(tx, propostaId, p.snapshot)) throw new ErroNegocio(MENSAGEM_APROVACAO_EM_PREPARO);
   if (p.status !== "RASCUNHO" && p.status !== "ENVIADA" && p.status !== "EXPIRADA") {
     throw new ErroNegocio(p.status === "APROVADA" ? "Esta proposta já foi aprovada." : "Só propostas em rascunho ou enviadas podem ser aprovadas. Se foi substituída, aprove a revisão vigente.");
   }
@@ -293,7 +284,31 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   const conteudo = p.status !== "RASCUNHO" && p.snapshot ? (p.snapshot as unknown as ConteudoProposta) : await construirConteudo(tx, propostaId);
   const opcao = conteudo.opcoes.find((o) => o.id === e.opcaoId);
   if (!opcao) throw new ErroNegocio("A opção aprovada não pertence a esta proposta.");
-  const valorAprovado = opcao.totais.totalCentavos;
+
+  // Forma de pagamento fechada (Fase 3.6a): obrigatória quando há mais de uma. O valor, o ajuste e as parcelas saem do conteúdo
+  // CONGELADO (o que o cliente recebeu), nunca de linhas que mudaram depois.
+  const formasDoConteudo = conteudo.formasPagamento ?? [];
+  let escolhida: FormaPagamentoConteudo | null = null;
+  if (formasDoConteudo.length > 1) {
+    const nomeEscolhido = (e.formaPagamento ?? "").trim();
+    if (nomeEscolhido === "") throw new ErroNegocio("Escolha a forma de pagamento que o cliente fechou.");
+    escolhida = formasDoConteudo.find((f) => f.nome === nomeEscolhido) ?? null;
+    if (!escolhida) throw new ErroNegocio("A forma de pagamento escolhida não existe nesta proposta. Atualize a página.");
+  }
+  const daForma = escolhida ? escolhida.porOpcao.find((x) => x.opcaoId === e.opcaoId) : undefined;
+  if (escolhida && !daForma) throw new ErroNegocio("A forma de pagamento escolhida não tem valor para esta opção.");
+  const valorAprovado = daForma ? daForma.totalCentavos : opcao.totais.totalCentavos;
+  const referenciaCentavos = daForma ? daForma.referenciaCentavos : opcao.totais.itensCentavos - opcao.totais.descontoCentavos;
+  const ajusteCentavos = daForma ? daForma.ajusteCentavos : 0;
+  const acrescimoNotaCentavos = daForma ? daForma.acrescimoNotaCentavos : opcao.totais.acrescimoNotaCentavos;
+  // Só o ACRÉSCIMO de uma forma marcada como taxa da maquininha é repasse (decisão 144); desconto à vista não é: reduz a margem.
+  const repasseCartaoCentavos = escolhida && escolhida.repasseCartao && ajusteCentavos > 0 ? ajusteCentavos : 0;
+  let alternativaAprovadaId: string | null = null;
+  if (escolhida && !escolhida.principal) {
+    const linha = await tx.alternativaPagamento.findFirst({ where: { propostaId, nome: escolhida.nome, deletadoEm: null }, select: { id: true } });
+    if (!linha) throw new ErroNegocio("A forma de pagamento escolhida não foi encontrada nesta proposta. Atualize a página.");
+    alternativaAprovadaId = linha.id;
+  }
   if (valorAprovado <= 0) throw new ErroNegocio("A opção escolhida está sem valor.");
   if (valorAprovado > MAXIMO_CENTAVOS) throw new ErroNegocio("O valor da proposta passa do máximo aceito (R$ 21.474.836,47).");
 
@@ -306,6 +321,11 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
       aceiteObservacao: e.observacao || null,
       opcaoAprovadaId: e.opcaoId,
       valorAprovadoCentavos: valorAprovado,
+      alternativaAprovadaId,
+      valorReferenciaAprovadoCentavos: referenciaCentavos,
+      ajusteAprovadoCentavos: ajusteCentavos,
+      acrescimoNotaAprovadoCentavos: acrescimoNotaCentavos,
+      repasseCartaoAprovadoCentavos: repasseCartaoCentavos,
       atualizadoPorId: usuario.id,
     },
   });
@@ -333,11 +353,13 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
   await tx.tarefa.updateMany({ where: { projetoId: p.projeto.id, tipo: "FOLLOW_UP_PROPOSTA", status: "ABERTA", deletadoEm: null }, data: { status: "CANCELADA", atualizadoPorId: usuario.id } });
 
   // Parcelas a receber (R6): total da opção aprovada (com a nota, se houver) dividido pelo cronograma.
+  // Cronograma: o da forma escolhida; sem formas extras, o do conteúdo congelado (linhas vivas só se o snapshot não o tiver).
+  const cronograma = escolhida ? escolhida.parcelas : (conteudo.pagamento?.parcelas ?? p.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })));
   let parcelasGeradas = 0;
-  if (p.parcelas.length > 0) {
+  if (cronograma.length > 0) {
     const geradas = gerarParcelas(
       valorAprovado,
-      p.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),
+      cronograma.map((x): ParcelaPlanejada => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho as ParcelaPlanejada["gatilho"], forma: x.forma as ParcelaPlanejada["forma"], diasApos: x.diasApos, dataFixa: x.dataFixa, parcelasCartao: x.parcelasCartao })),
       e.aceitaEm,
     );
     const r = await tx.contaReceber.createMany({
@@ -346,7 +368,7 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
         propostaId,
         clienteId: p.projeto.clienteId,
         ordem: g.ordem,
-        descricao: `${p.numero} — ${g.descricao}`,
+        descricao: escolhida ? `${p.numero} — ${escolhida.nome} — ${g.descricao}` : `${p.numero} — ${g.descricao}`,
         valorCentavos: g.valorCentavos,
         percentualPb: g.percentualPb,
         vencimento: g.vencimento ? new Date(`${g.vencimento}T00:00:00.000Z`) : null,
@@ -401,15 +423,15 @@ export async function aprovarProposta(tx: Tx, e: EntradaAprovacao) {
 
   await registrarInteracao(tx, {
     tipo: "SISTEMA",
-    texto: `Proposta ${p.numero} aprovada${conteudo.opcoes.length > 1 ? ` (opção "${opcao.nome}")` : ""}: ${formatarMoeda(valorAprovado)}, aceite por ${e.forma.toLowerCase()}.${p.parcelas.length === 0 ? " Condição a combinar: nenhuma parcela foi gerada." : ` ${parcelasGeradas} parcela(s) a receber geradas.`}${textoEtapas}`,
+    texto: `Proposta ${p.numero} aprovada${conteudo.opcoes.length > 1 ? ` (opção "${opcao.nome}")` : ""}: ${formatarMoeda(valorAprovado)}, aceite por ${e.forma.toLowerCase()}.${escolhida ? ` Forma de pagamento: "${escolhida.nome}".` : ""}${cronograma.length === 0 ? " Condição a combinar: nenhuma parcela foi gerada." : ` ${parcelasGeradas} parcela(s) a receber geradas.`}${textoEtapas}`,
     clienteId: p.projeto.clienteId,
     projetoId: p.projeto.id,
     usuarioId: usuario.id,
   });
-  await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "APROVAR", antes: { status: p.status, projeto: antesProjeto }, depois: { status: "APROVADA", opcaoAprovadaId: e.opcaoId, valorAprovadoCentavos: valorAprovado, parcelas: parcelasGeradas, valorFechadoCentavos: valorFechado, etapas: etapas.criadas, etapasDispensadas: etapas.dispensadas, parcelasLiberadasPorEtapaDispensada: etapas.parcelasLiberadas, substituidas: substituidas.map((s) => ({ id: s.id, revisao: s.revisao, de: s.status })) }, ip });
+  await registrarAuditoria(tx, { usuario, entidade: "Proposta", entidadeId: propostaId, acao: "APROVAR", antes: { status: p.status, projeto: antesProjeto }, depois: { status: "APROVADA", opcaoAprovadaId: e.opcaoId, valorAprovadoCentavos: valorAprovado, formaPagamento: escolhida ? { nome: escolhida.nome, principal: escolhida.principal, alternativaAprovadaId, referenciaCentavos, ajusteCentavos, acrescimoNotaCentavos, repasseCartaoCentavos } : null, parcelas: parcelasGeradas, valorFechadoCentavos: valorFechado, etapas: etapas.criadas, etapasDispensadas: etapas.dispensadas, parcelasLiberadasPorEtapaDispensada: etapas.parcelasLiberadas, substituidas: substituidas.map((s) => ({ id: s.id, revisao: s.revisao, de: s.status })) }, ip });
 
   const outras = await tx.proposta.count({ where: { projetoId: p.projeto.id, id: { not: propostaId }, status: { in: ["RASCUNHO", "ENVIADA"] }, deletadoEm: null } });
-  return { numero: p.numero, projetoId: p.projeto.id, valorAprovadoCentavos: valorAprovado, parcelasGeradas, semParcelas: p.parcelas.length === 0, outrasEmAberto: outras, valorFechadoCentavos: valorFechado, etapasGeradas: etapas.criadas };
+  return { numero: p.numero, projetoId: p.projeto.id, valorAprovadoCentavos: valorAprovado, parcelasGeradas, semParcelas: cronograma.length === 0, formaPagamento: escolhida?.nome ?? null, outrasEmAberto: outras, valorFechadoCentavos: valorFechado, etapasGeradas: etapas.criadas };
 }
 
 /**

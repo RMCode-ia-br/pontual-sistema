@@ -32,9 +32,12 @@ type Props = {
   linkEmail: string | null;
   /** Existe revisão mais nova (rascunho ou enviada) do mesmo número: aprovar esta a descartaria (Fase 7A.1). */
   revisaoMaisNova?: { id: string; rotulo: string; aviso: string } | null;
-  /** Tem mais de uma forma de pagamento: a escolha no aceite está em preparo (Fase 3.6a, Bloco 4), então aprovar fica bloqueado. */
-  formasExtras?: boolean;
+  /** Formas de pagamento (principal + extras) do conteúdo que vale: quando há mais de uma, o aceite pede a escolha (Fase 3.6a). */
+  formas?: FormaParaAceite[];
 };
+
+/** Uma forma de pagamento para a tela de aceite: o total e as parcelas dela em cada opção de produto (textos prontos). */
+export type FormaParaAceite = { nome: string; principal: boolean; porOpcao: { opcaoId: string; totalFormatado: string; linhas: string[] }[] };
 
 const FORMAS = [
   { v: "WHATSAPP", r: "WhatsApp" },
@@ -52,12 +55,17 @@ export function PainelCiclo(p: Props) {
   const [forma, setForma] = useState<(typeof FORMAS)[number]["v"]>("WHATSAPP");
   const [aceitaEm, setAceitaEm] = useState(p.hoje);
   const [observacao, setObservacao] = useState("");
+  // Nenhuma forma vem pré-selecionada: quem aprova escolhe a que o cliente fechou.
+  const [formaNome, setFormaNome] = useState("");
   const [motivoId, setMotivoId] = useState("");
   const [detalhe, setDetalhe] = useState("");
 
   const rascunho = p.status === "RASCUNHO";
   const enviada = p.status === "ENVIADA";
   const aprovavel = rascunho || enviada || p.status === "EXPIRADA";
+  const formas = p.formas ?? [];
+  const temFormas = formas.length > 1;
+  const previaDaForma = temFormas && formaNome !== "" ? formas.find((f) => f.nome === formaNome)?.porOpcao.find((x) => x.opcaoId === opcaoId) : undefined;
 
   function fechar() {
     setDialogo(null);
@@ -160,16 +168,11 @@ export function PainelCiclo(p: Props) {
           <DialogHeader>
             <DialogTitle>Aprovar a proposta {p.numero}</DialogTitle>
             <DialogDescription>
-              Registra o aceite, leva o projeto para “Aprovado”, {p.condicaoSemParcelas ? "não gera parcelas (condição a combinar)" : `gera as ${p.qtdParcelas} parcela(s) a receber`} e cria as tarefas “Agendar medição exata” (e a do condomínio, se for prédio).
+              Registra o aceite, leva o projeto para “Aprovado”, {temFormas ? "gera as parcelas a receber da forma de pagamento escolhida" : p.condicaoSemParcelas ? "não gera parcelas (condição a combinar)" : `gera as ${p.qtdParcelas} parcela(s) a receber`} e cria as tarefas “Agendar medição exata” (e a do condomínio, se for prédio).
               {rascunho ? " Como ainda é rascunho, o conteúdo é congelado agora." : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
-            {p.formasExtras ? (
-              <p role="status" className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-                Em preparo: esta proposta tem mais de uma forma de pagamento e a escolha da forma no aceite ainda não está pronta. Por enquanto a aprovação fica bloqueada.
-              </p>
-            ) : null}
             {p.revisaoMaisNova ? (
               <div role="alert" className="flex flex-col gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
                 <p className="flex items-start gap-2">
@@ -194,11 +197,43 @@ export function PainelCiclo(p: Props) {
                   ))}
                 </Selecao>
               </label>
-            ) : (
+            ) : temFormas ? null : (
               <p className="text-sm">
                 Valor aprovado: <strong>{p.opcoes[0]?.totalFormatado}</strong>
               </p>
             )}
+            {temFormas ? (
+              <div className="grid gap-2">
+                <label className="grid gap-1 text-sm">
+                  Forma de pagamento escolhida
+                  <Selecao value={formaNome} onChange={(e) => setFormaNome(e.target.value)} aria-label="Forma de pagamento escolhida">
+                    <option value="">Escolha a forma…</option>
+                    {formas.map((f) => (
+                      <option key={f.nome} value={f.nome}>
+                        {f.nome}
+                      </option>
+                    ))}
+                  </Selecao>
+                </label>
+                {previaDaForma ? (
+                  <div className="rounded-lg border p-3 text-sm" role="group" aria-label="Prévia da forma de pagamento">
+                    <p>
+                      Total desta forma: <strong>{previaDaForma.totalFormatado}</strong>
+                    </p>
+                    {previaDaForma.linhas.length > 0 ? (
+                      <ul className="text-muted-foreground mt-1 list-inside list-disc text-xs">
+                        {previaDaForma.linhas.map((l, i) => (
+                          <li key={i}>{l}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-muted-foreground mt-1 text-xs">Sem parcelas: condição a combinar.</p>
+                    )}
+                  </div>
+                ) : null}
+                <p className="text-muted-foreground text-xs">Para mudar a forma de pagamento depois de aprovada, desfaça a aprovação e aprove de novo (só se ainda não houve recebimento).</p>
+              </div>
+            ) : null}
             <label className="grid gap-1 text-sm">
               Como o cliente aceitou
               <Selecao value={forma} onChange={(e) => setForma(e.target.value as typeof forma)} aria-label="Forma do aceite">
@@ -227,10 +262,10 @@ export function PainelCiclo(p: Props) {
             </Button>
             <Button
               type="button"
-              disabled={pendente || !!p.formasExtras}
+              disabled={pendente || (temFormas && formaNome === "")}
               onClick={() =>
                 rodar(
-                  () => aprovarPropostaAcao({ propostaId: p.propostaId, opcaoId, forma, aceitaEm, observacao }),
+                  () => aprovarPropostaAcao({ propostaId: p.propostaId, opcaoId, formaPagamento: temFormas ? formaNome : undefined, forma, aceitaEm, observacao }),
                   (d) => {
                     const r = d as { outrasEmAberto: number } | undefined;
                     if (r && r.outrasEmAberto > 0) toast.info(`O projeto tem mais ${r.outrasEmAberto} proposta(s) em aberto. Recuse ou cancele as que não valem mais.`);

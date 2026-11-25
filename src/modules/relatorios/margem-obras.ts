@@ -29,6 +29,8 @@ export type LinhaDeMargem = {
   status: string;
   receitaDaMargemCentavos: number | null;
   repasseDeImpostoCentavos: number;
+  /** Repasse de taxa de cartão, fora da margem. */
+  repasseDeCartaoCentavos: number;
   custoConhecidoCentavos: number;
   /** null quando incompleta: "Incompleta", nunca zero. */
   margemCentavos: number | null;
@@ -80,6 +82,7 @@ export async function carregarMargemDasObras(f: FiltroDeMargem): Promise<Relator
       status: o.status,
       receitaDaMargemCentavos: c.receitaDaMargemCentavos,
       repasseDeImpostoCentavos: c.repasseDeImpostoCentavos,
+      repasseDeCartaoCentavos: c.repasseDeCartaoCentavos,
       custoConhecidoCentavos: c.custoConhecidoCentavos,
       margemCentavos: c.margemCentavos,
       margemPb: c.margemPb,

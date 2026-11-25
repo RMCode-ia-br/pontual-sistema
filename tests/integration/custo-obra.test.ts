@@ -116,7 +116,7 @@ beforeAll(async () => {
   const opcaoId = proposta.opcoes[0].id;
   await prisma.proposta.update({
     where: { id: proposta.id },
-    data: { opcaoAprovadaId: opcaoId, snapshot: { opcoes: [{ id: opcaoId, nome: "Opção 1", totais: { itensCentavos: 1_000_000, descontoCentavos: 0, acrescimoNotaCentavos: 50_000, totalCentavos: 1_050_000, areaM2: 10 } }] } },
+    data: { opcaoAprovadaId: opcaoId, acrescimoNotaAprovadoCentavos: 50_000, repasseCartaoAprovadoCentavos: 0, snapshot: { opcoes: [{ id: opcaoId, nome: "Opção 1", totais: { itensCentavos: 1_000_000, descontoCentavos: 0, acrescimoNotaCentavos: 50_000, totalCentavos: 1_050_000, areaM2: 10 } }] } },
   });
 });
 

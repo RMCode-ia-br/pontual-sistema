@@ -36,6 +36,8 @@ export type EntradaDoCustoDaObra = {
   receitaFechadaCentavos: number | null;
   /** Soma do acréscimo de nota das propostas aprovadas (repasse de imposto). */
   acrescimoNotaCentavos: number;
+  /** Soma do acréscimo de cartão repassado das propostas aprovadas (taxa da maquininha). Desconto à vista NÃO entra: reduz a margem. */
+  repasseCartaoCentavos: number;
   /** Itens recebidos de compras com destino OBRA. */
   comprasDaObra: { id: string; descricao: string; origem: string; valorCentavos: number | null }[];
   /** Movimentos de estoque da obra: saída tem quantidade NEGATIVA, devolução POSITIVA. */
@@ -53,9 +55,11 @@ export type ResultadoDoCustoDaObra = {
   custoConhecidoCentavos: number;
   incompleto: boolean;
   faltando: string[];
-  /** Fechado − acréscimo de nota. null sem proposta aprovada. */
+  /** Fechado − acréscimo de nota − repasse de cartão. null sem proposta aprovada. */
   receitaDaMargemCentavos: number | null;
   repasseDeImpostoCentavos: number;
+  /** Repasse de taxa de cartão, fora da margem. */
+  repasseDeCartaoCentavos: number;
   /** null quando incompleta: "Incompleta", nunca zero. */
   margemCentavos: number | null;
   margemPb: number | null;
@@ -102,7 +106,7 @@ export function calcularCustoDaObra(e: EntradaDoCustoDaObra): ResultadoDoCustoDa
 
   let receitaDaMargem: number | null = null;
   if (e.receitaFechadaCentavos === null) faltando.push("valor fechado (a obra não tem proposta aprovada)");
-  else receitaDaMargem = e.receitaFechadaCentavos - e.acrescimoNotaCentavos;
+  else receitaDaMargem = e.receitaFechadaCentavos - e.acrescimoNotaCentavos - e.repasseCartaoCentavos;
 
   const custoConhecido = linhas.filter((l) => !l.informativo).reduce((s, l) => s + (l.valorCentavos ?? 0), 0);
   const incompleto = faltando.length > 0;
@@ -119,6 +123,7 @@ export function calcularCustoDaObra(e: EntradaDoCustoDaObra): ResultadoDoCustoDa
     faltando,
     receitaDaMargemCentavos: receitaDaMargem,
     repasseDeImpostoCentavos: e.acrescimoNotaCentavos,
+    repasseDeCartaoCentavos: e.repasseCartaoCentavos,
     margemCentavos,
     margemPb,
     margemComOQueSeSabeCentavos: margemComOQueSeSabe,

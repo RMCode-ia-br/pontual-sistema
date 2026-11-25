@@ -19,6 +19,7 @@ const COLUNAS: ColunaDeCsv<LinhaDeMargem>[] = [
   { titulo: "Situação", tipo: "texto", valor: (l) => ROTULO_STATUS_PROJETO[l.status as StatusProjeto] },
   { titulo: "Receita da margem (R$)", tipo: "dinheiro", valor: (l) => l.receitaDaMargemCentavos, interna: true },
   { titulo: "Repasse de imposto, fora da margem (R$)", tipo: "dinheiro", valor: (l) => l.repasseDeImpostoCentavos, interna: true },
+  { titulo: "Repasse de taxa de cartão, fora da margem (R$)", tipo: "dinheiro", valor: (l) => l.repasseDeCartaoCentavos, interna: true },
   { titulo: "Custo conhecido (R$)", tipo: "dinheiro", valor: (l) => l.custoConhecidoCentavos, interna: true },
   // Margem incompleta sai como texto "Incompleta" (nunca zero).
   { titulo: "Margem (R$)", tipo: "dinheiro", valor: (l) => (l.incompleto ? "Incompleta" : l.margemCentavos), interna: true },

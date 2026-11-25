@@ -47,6 +47,7 @@ const trocarSchema = z.object({
   deId: idSchema,
   paraId: idSchema,
   opcaoId: campoIdObrigatorio("Escolha a opção aprovada."),
+  formaPagamento: z.string().trim().max(60).optional(),
   forma: z.enum(["WHATSAPP", "EMAIL", "ASSINATURA", "VERBAL"], { message: "Informe como o cliente aceitou." }),
   aceitaEm: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do aceite."),
   observacao: z.string().trim().max(1000, "Use no máximo 1.000 caracteres.").optional(),
@@ -62,7 +63,7 @@ export async function trocarAprovacaoAcao(entrada: z.input<typeof trocarSchema>)
   const v = lido.data;
   return executar("propostas.trocarAprovacao", async () => {
     const ip = extrairIp(await headers());
-    const r = await tentarDeNovoEmDeadlock(() => prisma.$transaction((tx) => trocarAprovacao(tx, { usuario: sessao, deId: v.deId, paraId: v.paraId, opcaoId: v.opcaoId, forma: v.forma, aceitaEm: v.aceitaEm, observacao: v.observacao, motivo: v.motivo, ip }), { timeout: 30_000 }));
+    const r = await tentarDeNovoEmDeadlock(() => prisma.$transaction((tx) => trocarAprovacao(tx, { usuario: sessao, deId: v.deId, paraId: v.paraId, opcaoId: v.opcaoId, formaPagamento: v.formaPagamento, forma: v.forma, aceitaEm: v.aceitaEm, observacao: v.observacao, motivo: v.motivo, ip }), { timeout: 30_000 }));
     revalidar([v.deId, v.paraId], r.projetoId);
     return sucesso(r, `Aprovação trocada: a proposta ${r.numero} agora está aprovada pela revisão escolhida.`);
   });
@@ -91,7 +92,7 @@ export async function previaDesfazerAcao(propostaIdBruto: string): Promise<Resul
   return executar("propostas.previaDesfazer", async () => sucesso(await previaDoDesfazer(prisma, id.data)));
 }
 
-const previaTrocaSchema = z.object({ deId: idSchema, paraId: idSchema, opcaoId: z.string().trim().max(64).optional() });
+const previaTrocaSchema = z.object({ deId: idSchema, paraId: idSchema, opcaoId: z.string().trim().max(64).optional(), formaPagamento: z.string().trim().max(60).optional() });
 
 /** Prévia (só leitura) do que trocar a aprovação muda: parcelas, valor fechado, etapas, prazo e tarefas. */
 export async function previaTrocaAcao(entrada: z.input<typeof previaTrocaSchema>): Promise<ResultadoAcao<PreviaDaTroca>> {
@@ -99,5 +100,5 @@ export async function previaTrocaAcao(entrada: z.input<typeof previaTrocaSchema>
   if (!can(sessao, "desfazer", "aprovacao")) return falha("Sem permissão.");
   const lido = previaTrocaSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
-  return executar("propostas.previaTroca", async () => sucesso(await previaDaTroca(prisma, { deId: lido.data.deId, paraId: lido.data.paraId, opcaoId: lido.data.opcaoId || null })));
+  return executar("propostas.previaTroca", async () => sucesso(await previaDaTroca(prisma, { deId: lido.data.deId, paraId: lido.data.paraId, opcaoId: lido.data.opcaoId || null, formaPagamento: lido.data.formaPagamento })));
 }
