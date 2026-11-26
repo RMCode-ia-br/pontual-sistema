@@ -968,3 +968,19 @@ export async function estadoDaObraDeTeste(projetoId: string): Promise<{ etapasVi
     return { etapasVivas: etapas.rows[0].n, parcelasVivas: parcelas.rows[0].n, valorFechadoCentavos: p.rows[0].valorFechadoCentavos, status: p.rows[0].status, prazoDias: p.rows[0].prazoDias };
   });
 }
+
+/** Caminho no Storage do desenho personalizado (o primeiro encontrado) dos itens de uma proposta; null se nenhum item tem. */
+export async function caminhoDoDesenhoDoItem(propostaId: string): Promise<string | null> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ caminho: string }>(
+      `SELECT a.caminho FROM "ItemProposta" i JOIN "Anexo" a ON a.id = i."desenhoAnexoId" WHERE i."propostaId" = $1 AND i."deletadoEm" IS NULL ORDER BY i.ordem LIMIT 1`,
+      [propostaId],
+    );
+    return r.rows[0]?.caminho ?? null;
+  });
+}
+
+/** Apaga UM objeto do bucket (para simular o arquivo que sumiu do Storage); o registro no banco fica. */
+export async function removerObjetoDoStorage(caminho: string): Promise<void> {
+  await removerObjetos([caminho]);
+}

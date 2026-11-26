@@ -75,3 +75,32 @@ describe("compararRevisoes", () => {
     expect(compararRevisoes(a, d).opcoes[0].itens.map((i) => i.tipo)).toEqual(["REMOVIDO"]);
   });
 });
+
+describe("compararRevisoes: desenho personalizado do item (Fase 3.6b-1)", () => {
+  const item = (extra: Partial<{ descricao: string; medidas: string; precoTotalCentavos: number; desenho: string }> = {}) => ({ descricao: "JANELA", medidas: "2000 X 1200", precoTotalCentavos: 100_000, ...extra });
+  const conteudo = (itens: ReturnType<typeof item>[], revisao = 0): ConteudoComparavel => ({ numero: "1157-26", revisao, comNotaFiscal: false, opcoes: [{ nome: "Opção 1", totalCentavos: 100_000, itens }] });
+
+  it("sem imagem nos dois lados (inclusive snapshots antigos, sem o campo) NÃO aparece como alterado: sem regressão", () => {
+    expect(compararRevisoes(conteudo([item()]), conteudo([item({ desenho: "automatico" })], 1)).semMudancas).toBe(true);
+    expect(compararRevisoes(conteudo([item({ desenho: "automatico" })]), conteudo([item()], 1)).semMudancas).toBe(true);
+  });
+  it("a MESMA imagem nas duas revisões não é mudança", () => {
+    expect(compararRevisoes(conteudo([item({ desenho: "personalizado:abc" })]), conteudo([item({ desenho: "personalizado:abc" })], 1)).semMudancas).toBe(true);
+  });
+  it("desenho adicionado, trocado e removido são mudanças do item, com o motivo", () => {
+    const adicionado = compararRevisoes(conteudo([item()]), conteudo([item({ desenho: "personalizado:abc" })], 1));
+    expect(adicionado.semMudancas).toBe(false);
+    expect(adicionado.opcoes[0].itens).toEqual([{ tipo: "ALTERADO", descricao: "JANELA", medidas: "2000 X 1200", antesCentavos: 100_000, depoisCentavos: 100_000, desenho: "ADICIONADO" }]);
+    expect(compararRevisoes(conteudo([item({ desenho: "personalizado:abc" })]), conteudo([item({ desenho: "personalizado:xyz" })], 1)).opcoes[0].itens[0].desenho).toBe("TROCADO");
+    expect(compararRevisoes(conteudo([item({ desenho: "personalizado:abc" })]), conteudo([item()], 1)).opcoes[0].itens[0].desenho).toBe("REMOVIDO");
+  });
+  it("preço e desenho mudando juntos geram UM item alterado com os dois motivos", () => {
+    const r = compararRevisoes(conteudo([item()]), conteudo([item({ desenho: "personalizado:abc", precoTotalCentavos: 120_000 })], 1));
+    expect(r.opcoes[0].itens).toHaveLength(1);
+    expect(r.opcoes[0].itens[0]).toMatchObject({ tipo: "ALTERADO", antesCentavos: 100_000, depoisCentavos: 120_000, desenho: "ADICIONADO" });
+  });
+  it("só o preço mudou: o item não ganha o campo de desenho (como sempre foi)", () => {
+    const r = compararRevisoes(conteudo([item()]), conteudo([item({ precoTotalCentavos: 120_000 })], 1));
+    expect(r.opcoes[0].itens[0]).toEqual({ tipo: "ALTERADO", descricao: "JANELA", medidas: "2000 X 1200", antesCentavos: 100_000, depoisCentavos: 120_000 });
+  });
+});

@@ -5,6 +5,7 @@ import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { montarFormasDePagamento, type FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
 import { problemasParaEnviar } from "@/lib/dominio/ciclo-proposta";
+import type { ImagemDoDesenho } from "@/lib/dominio/desenho-item";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
 import { gerarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { calcularTotais, MAXIMO_CENTAVOS, quantidadeTotal } from "@/lib/dominio/preco";
@@ -31,6 +32,15 @@ export async function travarFamiliaDaProposta(tx: Tx, propostaId: string): Promi
   await tx.$queryRaw`SELECT p."id" FROM "Proposta" p WHERE p."numero" = (SELECT "numero" FROM "Proposta" WHERE "id" = ${propostaId}) AND p."deletadoEm" IS NULL ORDER BY p."id" FOR UPDATE`;
 }
 
+/**
+ * Referência congelada da imagem do desenho (caminho + hash): é o que o PDF da proposta enviada lê, nunca o item.
+ * Anexo sem hash ou dimensões é dado corrompido: recusa em vez de congelar uma referência que não dá para conferir.
+ */
+function imagemDoSnapshot(numeroDoItem: number, a: { id: string; caminho: string; mime: string; sha256: string | null; larguraPx: number | null; alturaPx: number | null }): ImagemDoDesenho {
+  if (!a.sha256 || !a.larguraPx || !a.alturaPx) throw new ErroNegocio(`O desenho personalizado do item ${numeroDoItem} está incompleto. Envie a imagem de novo.`);
+  return { anexoId: a.id, caminho: a.caminho, sha256: a.sha256, mime: a.mime, larguraPx: a.larguraPx, alturaPx: a.alturaPx };
+}
+
 /** Monta o conteúdo de impressão a partir do banco (rascunho: ao vivo; enviada: vira o snapshot). */
 export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configuracaoEmpresa" | "condicaoPagamento">, propostaId: string): Promise<ConteudoProposta> {
   const [p, empresa] = await Promise.all([
@@ -45,7 +55,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
         itens: {
           where: { deletadoEm: null },
           orderBy: [{ ordem: "asc" }, { id: "asc" }],
-          include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, tipologia: { select: { tipoDesenho: true } } },
+          include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, tipologia: { select: { tipoDesenho: true } }, desenhoAnexo: { select: { id: true, caminho: true, mime: true, sha256: true, larguraPx: true, alturaPx: true } } },
         },
       },
     }),
@@ -118,6 +128,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
             medidas: item.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
             quantidade: quantidadeTotal(item.medidas),
             precoTotalCentavos: item.precoTotalCentavos,
+            ...(item.desenhoAnexo ? { desenhoImagem: imagemDoSnapshot(numero, item.desenhoAnexo) } : {}),
           })),
         })),
         totais: { itensCentavos: t.itensCentavos, descontoCentavos: t.descontoCentavos, acrescimoNotaCentavos: t.acrescimoNotaCentavos, totalCentavos: t.totalCentavos, areaM2: t.areaM2 },

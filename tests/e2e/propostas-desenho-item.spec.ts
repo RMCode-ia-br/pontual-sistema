@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import sharp from "sharp";
 
 import { aguardarAvisosSumirem, ehCelular, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { criarTipologiaDeTeste, prepararUsuarioE2E } from "./banco";
+import { caminhoDoDesenhoDoItem, criarTipologiaDeTeste, prepararUsuarioE2E, removerObjetoDoStorage } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 
 /**
@@ -203,6 +203,33 @@ test("erros em português simples e o desenho anterior é mantido", async ({ pag
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(cartaoComImagem(page)).toBeVisible({ timeout: 20_000 });
+});
+
+test("duplicar o item copia o desenho personalizado (o arquivo é compartilhado)", async ({ page }) => {
+  await page.goto(`/propostas/${idProposta}`);
+  await expect(cartaoComImagem(page)).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Duplicar o item 1" }).click();
+  await expect(toast(page, "Item duplicado")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Desenho personalizado do item 2" })).toBeVisible({ timeout: 20_000 });
+  await aguardarAvisosSumirem(page);
+});
+
+test("PDFs com imagem saem; se o arquivo some do Storage, a rota devolve erro legível (503), não um 500 cru", async ({ page }) => {
+  for (const rota of ["pdf", "producao"]) {
+    const ok = await page.request.get(`/api/propostas/${idProposta}/${rota}`);
+    expect(ok.status(), rota).toBe(200);
+    expect(ok.headers()["content-type"]).toContain("application/pdf");
+    expect((await ok.body()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  }
+  const caminho = await caminhoDoDesenhoDoItem(idProposta);
+  expect(caminho).not.toBeNull();
+  await removerObjetoDoStorage(caminho!);
+  for (const rota of ["pdf", "producao"]) {
+    const falha = await page.request.get(`/api/propostas/${idProposta}/${rota}`);
+    expect(falha.status(), rota).toBe(503);
+    expect(falha.headers()["content-type"]).toContain("application/json");
+    expect(await falha.json()).toEqual({ erro: "Não foi possível carregar o desenho do item 1; tente de novo." });
+  }
 });
 
 test("voltar ao desenho automático remove a imagem do item", async ({ page }) => {

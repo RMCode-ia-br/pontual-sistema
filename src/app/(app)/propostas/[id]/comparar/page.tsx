@@ -6,7 +6,8 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
-import { compararRevisoes, type ConteudoComparavel } from "@/lib/dominio/ciclo-proposta";
+import { compararRevisoes, type ConteudoComparavel, type DiferencaItem } from "@/lib/dominio/ciclo-proposta";
+import { marcaDoDesenho } from "@/lib/dominio/desenho-item";
 import { formatarRevisao } from "@/lib/dominio/numeracao-proposta";
 import { formatarMoeda } from "@/lib/formatadores";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
@@ -31,12 +32,21 @@ function paraComparavel(c: ConteudoProposta): ConteudoComparavel {
     opcoes: c.opcoes.map((o) => ({
       nome: o.nome,
       totalCentavos: o.totais.totalCentavos,
-      itens: o.secoes.flatMap((s) => s.itens).map((i) => ({ descricao: i.descricao, medidas: i.medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}`).join(" / "), precoTotalCentavos: i.precoTotalCentavos })),
+      itens: o.secoes.flatMap((s) => s.itens).map((i) => ({ descricao: i.descricao, medidas: i.medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}`).join(" / "), precoTotalCentavos: i.precoTotalCentavos, desenho: marcaDoDesenho(i) })),
     })),
   };
 }
 
-const ROTULO = { ADICIONADO: "Novo", REMOVIDO: "Removido", ALTERADO: "Preço alterado" } as const;
+const ROTULO_DO_DESENHO = { ADICIONADO: "Desenho personalizado adicionado", TROCADO: "Desenho personalizado trocado", REMOVIDO: "Desenho personalizado removido" } as const;
+
+/** Rótulo do item: só o preço mudou ("Preço alterado", como sempre), só o desenho, ou os dois. */
+function rotuloDoItem(i: DiferencaItem): string {
+  if (i.tipo === "ADICIONADO") return "Novo";
+  if (i.tipo === "REMOVIDO") return "Removido";
+  const preco = i.antesCentavos !== i.depoisCentavos;
+  if (i.desenho && preco) return `Preço alterado · ${ROTULO_DO_DESENHO[i.desenho].toLowerCase()}`;
+  return i.desenho ? ROTULO_DO_DESENHO[i.desenho] : "Preço alterado";
+}
 
 export default async function PaginaComparar({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ com?: string }> }) {
   await exigirSessao();
@@ -100,12 +110,12 @@ export default async function PaginaComparar({ params, searchParams }: { params:
                 {o.itens.map((i, k) => (
                   <li key={k} className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-1">
                     <span>
-                      <Badge variant={i.tipo === "REMOVIDO" ? "destructive" : "secondary"}>{ROTULO[i.tipo]}</Badge> {i.descricao}
+                      <Badge variant={i.tipo === "REMOVIDO" ? "destructive" : "secondary"}>{rotuloDoItem(i)}</Badge> {i.descricao}
                     </span>
                     <span className="text-muted-foreground tabular-nums">
                       {i.antesCentavos === null ? "" : formatarMoeda(i.antesCentavos)}
-                      {i.antesCentavos !== null && i.depoisCentavos !== null ? " → " : ""}
-                      {i.depoisCentavos === null ? "" : formatarMoeda(i.depoisCentavos)}
+                      {i.antesCentavos !== null && i.depoisCentavos !== null && i.antesCentavos !== i.depoisCentavos ? " → " : ""}
+                      {i.depoisCentavos === null || i.antesCentavos === i.depoisCentavos ? "" : formatarMoeda(i.depoisCentavos)}
                     </span>
                   </li>
                 ))}

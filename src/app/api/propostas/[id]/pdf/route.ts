@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
+import { ErroDesenhoIndisponivel } from "@/modules/propostas/pdf/imagens";
 import { conteudoParaPdf, gerarPdfDaProposta } from "@/modules/propostas/pdf/gerar";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,14 @@ export async function GET(_requisicao: NextRequest, contexto: { params: Promise<
     SUBSTITUIDA: "SUBSTITUÍDA POR UMA REVISÃO MAIS RECENTE",
     EXPIRADA: "VALIDADE EXPIRADA",
   };
-  const pdf = await gerarPdfDaProposta(dados.conteudo, avisos[dados.status] ?? null);
+  let pdf: Buffer;
+  try {
+    pdf = await gerarPdfDaProposta(dados.conteudo, avisos[dados.status] ?? null);
+  } catch (erro) {
+    // Imagem do desenho que não carrega ou não confere: erro legível (nunca o PDF com o desenho automático no lugar).
+    if (erro instanceof ErroDesenhoIndisponivel) return NextResponse.json({ erro: erro.message }, { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "5" } });
+    throw erro;
+  }
   await registrarAuditoria(prisma, { usuario, entidade: "Proposta", entidadeId: id, acao: "GERAR_PDF", depois: { tipo: "proposta", status: dados.status } });
   const nome = `proposta-${dados.conteudo.numero}${dados.conteudo.revisao > 0 ? `-rev${dados.conteudo.revisao}` : ""}${dados.status === "RASCUNHO" ? "-rascunho" : ""}.pdf`;
   return new NextResponse(new Uint8Array(pdf), {

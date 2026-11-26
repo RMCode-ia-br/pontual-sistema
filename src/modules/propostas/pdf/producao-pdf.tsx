@@ -1,16 +1,18 @@
 import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
 
+import { resolverDesenhoDoItem } from "@/lib/dominio/desenho-item";
 import { textoDoRodape } from "@/lib/dominio/texto-proposta";
 
 import type { ConteudoProposta } from "../conteudo";
-import { COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, NEGRITO, Rodape } from "./comum";
+import { COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, ImagemDoDesenhoPdf, NEGRITO, Rodape } from "./comum";
+import { CAIXAS_ATUAIS, imagemParaPdf, type CaixasDoDesenho, type ImagensDoDesenho } from "./imagens";
 import type { LogoPdf } from "./proposta-pdf";
 
 /**
  * Folha de produção / ordem de serviço: SEM valores. Itens com medidas, tipologia, linha/acabamento/vidro (na
  * descrição), desenho, local e observações, para a fábrica e os instaladores. Se a proposta foi aprovada, só a opção aprovada.
  */
-export function ProducaoPdf({ c, opcaoId, logo = null }: { c: ConteudoProposta; opcaoId: string | null; logo?: LogoPdf }) {
+export function ProducaoPdf({ c, opcaoId, logo = null, imagens = {}, caixas = CAIXAS_ATUAIS }: { c: ConteudoProposta; opcaoId: string | null; logo?: LogoPdf; imagens?: ImagensDoDesenho; caixas?: CaixasDoDesenho }) {
   const cor = corDaMarca(c.empresa.corPrimaria);
   const opcoes = opcaoId ? c.opcoes.filter((o) => o.id === opcaoId) : c.opcoes;
   const varias = opcoes.length > 1;
@@ -54,7 +56,9 @@ export function ProducaoPdf({ c, opcaoId, logo = null }: { c: ConteudoProposta; 
             {o.secoes.map((s, si) => (
               <View key={si}>
                 {s.grupo ? <Text style={{ fontSize: 9.5, ...NEGRITO, marginTop: 8, marginBottom: 4 }}>• {s.grupo.toUpperCase()};</Text> : null}
-                {s.itens.map((i) => (
+                {s.itens.map((i) => {
+                  const desenho = resolverDesenhoDoItem(i);
+                  return (
                   <View key={i.numero} wrap={false} style={{ flexDirection: "row", alignItems: "flex-start", borderBottomWidth: 0.5, borderBottomColor: COR_PDF.linha, paddingVertical: 6 }}>
                     <Text style={{ width: 26, flexShrink: 0, ...NEGRITO, fontSize: 11 }}>{String(i.numero).padStart(2, "0")}</Text>
                     <View style={{ flex: 1, paddingRight: 8 }}>
@@ -69,11 +73,16 @@ export function ProducaoPdf({ c, opcaoId, logo = null }: { c: ConteudoProposta; 
                       {i.local ? <Text style={{ fontSize: 8.5, marginTop: 2 }}>Local: {i.local}</Text> : null}
                       {i.observacoes ? <Text style={{ fontSize: 8.5, marginTop: 1 }}>Obs.: {i.observacoes}</Text> : null}
                     </View>
-                    <View style={{ width: 110, flexShrink: 0 }}>
-                      <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={110} />
+                    <View style={{ width: desenho.tipo === "imagem" ? caixas.producao.largura : 110, flexShrink: 0 }}>
+                      {desenho.tipo === "imagem" ? (
+                        <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.producao.largura} altura={caixas.producao.altura} />
+                      ) : (
+                        <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={110} />
+                      )}
                     </View>
                   </View>
-                ))}
+                  );
+                })}
               </View>
             ))}
           </View>

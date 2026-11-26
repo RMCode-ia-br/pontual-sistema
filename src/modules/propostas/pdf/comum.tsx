@@ -1,9 +1,11 @@
-import { Font, Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
+import { Font, Image, Line, Rect, Svg, Text, View } from "@react-pdf/renderer";
 
 import { ALTURA_QUADRO, gerarDesenho, LARGURA_QUADRO, type TipoDesenho } from "@/lib/dominio/desenho";
 import { FAMILIA_PDF, registrarFontesDoPdf } from "@/lib/pdf/fontes";
 import { quebrasDaPalavra } from "@/lib/pdf/quebra-de-palavras";
 import { COR_PADRAO_DO_SISTEMA, derivarTemaDaMarca } from "@/lib/tema/derivar";
+
+import type { ImagemCarregada } from "./imagens";
 
 export { FAMILIA_PDF };
 
@@ -59,6 +61,19 @@ export function DesenhoPdf({ tipo, folhas, larguraMm, alturaMm, largura = 96 }: 
         ),
       )}
     </Svg>
+  );
+}
+
+/**
+ * Desenho personalizado (imagem do usuário) na caixa do desenho: centralizado, proporção preservada (sem esticar nem
+ * cortar), fundo branco. A imagem já vem processada (até 1600 px, sem metadados).
+ */
+export function ImagemDoDesenhoPdf({ imagem, largura, altura }: { imagem: ImagemCarregada; largura: number; altura: number }) {
+  return (
+    <View style={{ width: largura, height: altura, backgroundColor: "#ffffff", justifyContent: "center", alignItems: "center" }}>
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- Image do react-pdf (PDF), não é <img> HTML */}
+      <Image src={imagem} style={{ width: largura, height: altura, objectFit: "contain" }} />
+    </View>
   );
 }
 

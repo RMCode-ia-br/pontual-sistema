@@ -2,12 +2,14 @@ import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
 import { Fragment, type ReactNode } from "react";
 
 import type { FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
+import { resolverDesenhoDoItem } from "@/lib/dominio/desenho-item";
 import { linhasDaForma, linhasDePagamento, linhasDePrazo, notasNumeradas, textoDoRodape } from "@/lib/dominio/texto-proposta";
 import { pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { linhasDoTexto } from "@/lib/validadores/texto-multilinha";
 
 import type { ConteudoProposta } from "../conteudo";
-import { CaixaTitulo, COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, moeda, NEGRITO, Rodape } from "./comum";
+import { CaixaTitulo, COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, ImagemDoDesenhoPdf, moeda, NEGRITO, Rodape } from "./comum";
+import { CAIXAS_ATUAIS, imagemParaPdf, type CaixasDoDesenho, type ImagensDoDesenho } from "./imagens";
 
 export type LogoPdf = { data: Buffer; format: "png" | "jpg" } | null;
 
@@ -21,7 +23,7 @@ const nomeGenerico = (nome: string) => /^op[cç][aã]o\s*\d+$/i.test(nome.trim()
  * linha separada, notas importantes, termos comerciais, assinatura e rodapé em todas as páginas.
  * Nunca mostra custo, markup nem comissões (o conteúdo nem os contém).
  */
-export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null }) {
+export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIXAS_ATUAIS }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null; imagens?: ImagensDoDesenho; caixas?: CaixasDoDesenho }) {
   const cor = corDaMarca(c.empresa.corPrimaria);
   const maiusculas = (t: string) => (c.descricoesMaiusculas ? t.toUpperCase() : t);
   const nomeEmpresa = c.empresa.nomeFantasia ?? "";
@@ -83,6 +85,7 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
                 {s.grupo ? <Text style={{ fontSize: 9.5, ...NEGRITO, marginTop: 8, marginBottom: 4 }}>• {s.grupo.toUpperCase()};</Text> : null}
                 {s.itens.map((i) => {
                   const comAnotacoes = i.medidas.some((m) => !!m.local);
+                  const desenho = resolverDesenhoDoItem(i);
                   return (
                     <View key={i.numero} wrap={false} style={{ flexDirection: "row", borderWidth: 1, borderColor: COR_PDF.texto, marginBottom: -1 }}>
                       <Text style={{ width: 24, flexShrink: 0, textAlign: "center", paddingTop: 3, borderRightWidth: 1, borderRightColor: COR_PDF.texto }}>{String(i.numero).padStart(2, "0")}</Text>
@@ -103,7 +106,11 @@ export function PropostaPdf({ c, logo, aviso = null }: { c: ConteudoProposta; lo
                         ) : null}
                         {i.observacoes ? <Text style={{ fontSize: 8.5, marginTop: 4 }}>OBS: {maiusculas(i.observacoes)}</Text> : null}
                         <View style={{ marginTop: 6, alignSelf: "center" }}>
-                          <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={170} />
+                          {desenho.tipo === "imagem" ? (
+                            <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.proposta.largura} altura={caixas.proposta.altura} />
+                          ) : (
+                            <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={170} />
+                          )}
                         </View>
                       </View>
                       {c.exibirValorPorItem ? (
