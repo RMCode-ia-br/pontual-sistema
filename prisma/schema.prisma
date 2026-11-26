@@ -341,6 +341,12 @@ model Anexo {
   descricao       String?
   momento         MomentoFoto?
   usarNoPortfolio Boolean      @default(true)
+  /// Só imagens processadas pelo sistema (desenho do item da proposta): SHA-256 do arquivo final e dimensões em pixels.
+  sha256          String?
+  larguraPx       Int?
+  alturaPx        Int?
+  /// Itens de proposta que usam este anexo como desenho personalizado (o mesmo arquivo pode servir a várias revisões).
+  itensComDesenho ItemProposta[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1631,6 +1637,9 @@ model ItemProposta {
   observacoes           String?
   /// Configuração do desenho (ex.: sentido de abertura); vazio = padrão da tipologia.
   desenhoConfig         Json?
+  /// Desenho personalizado (imagem colada ou enviada pelo usuário); vazio = desenho automático da tipologia.
+  desenhoAnexoId        String?
+  desenhoAnexo          Anexo?               @relation(fields: [desenhoAnexoId], references: [id], onDelete: Restrict)
   modoPreco             ModoPreco            @default(MANUAL)
   cobranca              TipoCobranca?
   /// Valor digitado (modo MANUAL).
@@ -1659,6 +1668,7 @@ model ItemProposta {
   @@index([opcaoId, deletadoEm, ordem])
   @@index([grupoId])
   @@index([tipologiaId])
+  @@index([desenhoAnexoId])
 }
 
 model ItemPropostaMedida {
