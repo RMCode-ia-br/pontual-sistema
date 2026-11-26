@@ -128,14 +128,14 @@ test("enviar: o PDF da enviada e a folha de produção mostram a imagem DENTRO d
   const proposta = await imagensDoPdf(await baixarPdf(page, idOriginal, "pdf"));
   expect(nossas(proposta, X)).toHaveLength(1);
   expect(nossas(proposta, Y)).toHaveLength(1);
-  conferirDentroDaCaixa(nossas(proposta, X)[0], CAIXAS_DA_IMAGEM.proposta, X);
-  conferirDentroDaCaixa(nossas(proposta, Y)[0], CAIXAS_DA_IMAGEM.proposta, Y);
+  conferirDentroDaCaixa(nossas(proposta, X)[0], CAIXAS_DA_IMAGEM.NORMAL.proposta, X);
+  conferirDentroDaCaixa(nossas(proposta, Y)[0], CAIXAS_DA_IMAGEM.NORMAL.proposta, Y);
 
   const producao = await imagensDoPdf(await baixarPdf(page, idOriginal, "producao"));
   expect(nossas(producao, X)).toHaveLength(1);
   expect(nossas(producao, Y)).toHaveLength(1);
-  conferirDentroDaCaixa(nossas(producao, X)[0], CAIXAS_DA_IMAGEM.producao, X);
-  conferirDentroDaCaixa(nossas(producao, Y)[0], CAIXAS_DA_IMAGEM.producao, Y);
+  conferirDentroDaCaixa(nossas(producao, X)[0], CAIXAS_DA_IMAGEM.NORMAL.producao, X);
+  conferirDentroDaCaixa(nossas(producao, Y)[0], CAIXAS_DA_IMAGEM.NORMAL.producao, Y);
 
   // O item 1 (sem imagem) segue com o desenho automático (vetorial): além das duas imagens nossas só pode haver a logo da empresa.
   expect(proposta.length - nossas(proposta, X).length - nossas(proposta, Y).length).toBeLessThanOrEqual(1);
@@ -195,6 +195,6 @@ test("a mexida na revisão não alterou o PDF da enviada (lê o snapshot); o ras
   expect(nossas(revisao, W)).toHaveLength(1); // item 2: trocado
   expect(nossas(revisao, X)).toHaveLength(0);
   expect(nossas(revisao, Y)).toHaveLength(0); // item 3: voltou ao automático
-  conferirDentroDaCaixa(nossas(revisao, Z)[0], CAIXAS_DA_IMAGEM.proposta, Z);
-  conferirDentroDaCaixa(nossas(revisao, W)[0], CAIXAS_DA_IMAGEM.proposta, W);
+  conferirDentroDaCaixa(nossas(revisao, Z)[0], CAIXAS_DA_IMAGEM.NORMAL.proposta, Z);
+  conferirDentroDaCaixa(nossas(revisao, W)[0], CAIXAS_DA_IMAGEM.NORMAL.proposta, W);
 });

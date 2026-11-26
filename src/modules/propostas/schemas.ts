@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { AJUSTE_MAXIMO_PB, MAXIMO_FORMAS_PAGAMENTO } from "@/lib/dominio/alternativas-pagamento";
+import { TAMANHOS_DO_DESENHO } from "@/lib/dominio/desenho-item";
 import { FORMAS_PAGAMENTO, GATILHOS, MAXIMO_PARCELAS_CARTAO, validarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { valorParaCentavos } from "@/lib/dominio/numeros";
 import { MAXIMO_CENTAVOS, percentualParaPontosBase } from "@/lib/dominio/preco";
@@ -106,6 +107,8 @@ export const itemSchema = z.object({
   modoPreco: z.enum(MODOS_PRECO, { message: "Escolha como calcular o preço." }),
   valorManual: dinheiroOpcional("Valor"),
   markup: percentualOpcional("Markup", 100000),
+  /** Tamanho do desenho personalizado no PDF; ausente = não mexer. */
+  tamanhoDesenho: z.enum(TAMANHOS_DO_DESENHO).optional(),
   medidas: z.array(medidaSchema).min(1, "Informe ao menos uma medida.").max(30, "No máximo 30 medidas por item."),
 });
 export type EntradaItem = z.input<typeof itemSchema>;

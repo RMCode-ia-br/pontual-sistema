@@ -1,4 +1,4 @@
-import type { ImagemDoDesenho } from "@/lib/dominio/desenho-item";
+import type { ImagemDoDesenho, TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 
 /** Imagem do desenho já baixada e conferida (bytes + formato que o react-pdf lê). */
 export type ImagemCarregada = { data: Buffer; format: "png" | "jpg" };
@@ -8,6 +8,8 @@ export type ImagensDoDesenho = Record<string, ImagemCarregada>;
 export type CaixaDoDesenho = { largura: number; altura: number };
 /** Caixa (em pontos) que o desenho ocupa no PDF da proposta e na folha de produção. */
 export type CaixasDoDesenho = { proposta: CaixaDoDesenho; producao: CaixaDoDesenho };
+/** Uma caixa por tamanho que o usuário escolhe no item. */
+export type CaixasPorTamanho = Record<TamanhoDoDesenho, CaixasDoDesenho>;
 
 /**
  * Caixa do DESENHO AUTOMÁTICO (quadro de 120 × 90, na largura de cada PDF). É a de sempre e não muda: item sem imagem
@@ -16,10 +18,16 @@ export type CaixasDoDesenho = { proposta: CaixaDoDesenho; producao: CaixaDoDesen
 export const CAIXAS_DO_DESENHO_AUTOMATICO: CaixasDoDesenho = { proposta: { largura: 170, altura: 127.5 }, producao: { largura: 110, altura: 82.5 } };
 
 /**
- * Caixa da IMAGEM PERSONALIZADA, só para item que tem imagem (PONTO ÚNICO de ajuste: PDF, folha de produção e testes
- * leem daqui). Tamanho PROVISÓRIO (Régis e Marcelo, Fase 3.6b-1): pode mudar depois do teste real com um desenho do Word.
+ * Caixas da IMAGEM PERSONALIZADA, só para item que tem imagem (PONTO ÚNICO de ajuste: PDF, folha de produção, editor e
+ * testes leem daqui). A imagem cabe inteira na caixa, centralizada, sem esticar nem cortar.
+ * - NORMAL: proposta 200 × 150 pt; produção 190 × 142,5 pt (ao lado do texto, como o desenho automático).
+ * - GRANDE: até 340 × 255 pt nos dois; na folha de produção a imagem vai ABAIXO do texto, na largura da coluna.
+ * Valores provisórios: podem mudar depois do teste real com desenhos do Word.
  */
-export const CAIXAS_DA_IMAGEM: CaixasDoDesenho = { proposta: { largura: 200, altura: 150 }, producao: { largura: 190, altura: 142.5 } };
+export const CAIXAS_DA_IMAGEM: CaixasPorTamanho = {
+  NORMAL: { proposta: { largura: 200, altura: 150 }, producao: { largura: 190, altura: 142.5 } },
+  GRANDE: { proposta: { largura: 340, altura: 255 }, producao: { largura: 340, altura: 255 } },
+};
 
 /**
  * A imagem do desenho de um item não pôde ser carregada ou não confere com o hash congelado. O PDF NÃO sai com o

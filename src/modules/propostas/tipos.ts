@@ -1,4 +1,6 @@
 /** Formas simples (só dados, sem Date) que o servidor entrega aos componentes do editor. */
+import { lerTamanhoDoDesenho, type TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
+
 import type { PropostaDoEditor } from "./queries";
 
 export type MedidaSer = { larguraMm: number; alturaMm: number; quantidade: number; local: string | null };
@@ -34,6 +36,8 @@ export type ItemSer = {
   medidas: MedidaSer[];
   /** Desenho personalizado (imagem do usuário); null = desenho automático. `url` é um link temporário do Storage. */
   desenho: { anexoId: string; larguraPx: number | null; alturaPx: number | null; url: string | null } | null;
+  /** Tamanho do desenho personalizado no PDF (vem de `desenhoConfig`; Normal quando não há nada). */
+  tamanhoDesenho: TamanhoDoDesenho;
 };
 
 export type ParcelaSer = { descricao: string; percentualPb: number; gatilho: string; forma: string | null; diasApos: number | null; dataFixa: string | null; parcelasCartao: number | null };
@@ -168,6 +172,7 @@ export function serializarProposta(p: PropostaDoEditor, urlsDosDesenhos: Record<
       custoMaterialInformadoCentavos: i.custoMaterialInformadoCentavos,
       avisoPreco: i.avisoPreco,
       calculadoEm: i.calculadoEm ? i.calculadoEm.toISOString() : null,
+      tamanhoDesenho: lerTamanhoDoDesenho(i.desenhoConfig),
       desenho: i.desenhoAnexo ? { anexoId: i.desenhoAnexo.id, larguraPx: i.desenhoAnexo.larguraPx, alturaPx: i.desenhoAnexo.alturaPx, url: urlsDosDesenhos[i.desenhoAnexo.caminho] ?? null } : null,
       medidas: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
     })),

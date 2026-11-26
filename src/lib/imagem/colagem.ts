@@ -4,8 +4,10 @@
  */
 import { LIMITE_BYTES_IMAGEM, TIPOS_DE_IMAGEM_ACEITOS } from "./validar";
 
-export const MENSAGEM_COLAGEM_SEM_IMAGEM =
-  "Não encontrei uma imagem no que foi colado. No Word, clique no desenho, copie e cole aqui; se não der, salve como imagem e escolha o arquivo.";
+/** Orientação para quem não consegue colar direto do Word (português simples, sem termos técnicos). */
+export const ORIENTACAO_DO_WORD = "No Word, se copiar o desenho direto não funcionar, use o recorte de tela (tecla Windows + Shift + S), selecione o desenho e cole aqui com Ctrl+V. Também dá para salvar o desenho como imagem (PNG ou JPG) e escolher o arquivo.";
+export const DICA_DO_DESENHO = "Você pode copiar o desenho do Word e colar aqui com Ctrl+V. Também dá para arrastar a imagem para cá.";
+export const MENSAGEM_COLAGEM_SEM_IMAGEM = `Não encontrei uma imagem no que foi colado. ${ORIENTACAO_DO_WORD}`;
 export const MENSAGEM_FORMATO_NAO_ACEITO = "Só aceitamos imagens PNG ou JPG. No Word, copie o desenho e cole aqui, ou salve como imagem.";
 
 export type EscolhaDaColagem = { tipo: "imagem"; indice: number } | { tipo: "formato-nao-aceito" } | { tipo: "sem-imagem" };

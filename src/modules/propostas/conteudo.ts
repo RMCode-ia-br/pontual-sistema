@@ -1,5 +1,5 @@
 import type { FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
-import type { ImagemDoDesenho } from "@/lib/dominio/desenho-item";
+import type { ImagemDoDesenho, TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 
 /**
  * Conteúdo "de impressão" da proposta: é o que o PDF mostra e o que é CONGELADO (snapshot) ao enviar (R4).
@@ -17,6 +17,8 @@ export type ItemConteudo = {
   precoTotalCentavos: number;
   /** Desenho personalizado (imagem). Só existe quando o item tem imagem: sem ela o snapshot é idêntico ao de antes. Referência imutável (caminho + hash). */
   desenhoImagem?: ImagemDoDesenho;
+  /** Tamanho do desenho personalizado. Só existe quando o item tem imagem E o tamanho é "GRANDE" (Normal = sem o campo: snapshot de antes). */
+  tamanhoDesenho?: TamanhoDoDesenho;
 };
 
 export type OpcaoConteudo = {

@@ -63,9 +63,9 @@ test("preparação: proposta com um item", async ({ page }) => {
 
   await page.getByRole("button", { name: "Adicionar item" }).click();
   const dialogo = page.getByRole("dialog");
-  // Item NOVO ainda não existe: o desenho pede para salvar antes.
-  await expect(dialogo.getByText("Salve o item para adicionar um desenho personalizado")).toBeVisible();
-  await expect(dialogo.getByRole("button", { name: /Colar ou escolher imagem/ })).toHaveCount(0);
+  // Item NOVO já aceita a imagem antes de salvar (a dica de "salvar primeiro" saiu no Bloco 5).
+  await expect(dialogo.getByText("Salve o item para adicionar")).toHaveCount(0);
+  await expect(dialogo.getByRole("button", { name: /Colar ou escolher imagem/ })).toBeVisible();
   await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: TIPOLOGIA });
   await dialogo.getByLabel("Largura da medida 1").fill("2000");
   await dialogo.getByLabel("Altura da medida 1").fill("1200");

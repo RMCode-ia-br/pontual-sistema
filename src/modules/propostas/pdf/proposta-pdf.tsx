@@ -9,7 +9,7 @@ import { linhasDoTexto } from "@/lib/validadores/texto-multilinha";
 
 import type { ConteudoProposta } from "../conteudo";
 import { CaixaTitulo, COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, ImagemDoDesenhoPdf, moeda, NEGRITO, Rodape } from "./comum";
-import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, imagemParaPdf, type CaixasDoDesenho, type ImagensDoDesenho } from "./imagens";
+import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, imagemParaPdf, type CaixasPorTamanho, type ImagensDoDesenho } from "./imagens";
 
 export type LogoPdf = { data: Buffer; format: "png" | "jpg" } | null;
 
@@ -23,7 +23,7 @@ const nomeGenerico = (nome: string) => /^op[cç][aã]o\s*\d+$/i.test(nome.trim()
  * linha separada, notas importantes, termos comerciais, assinatura e rodapé em todas as páginas.
  * Nunca mostra custo, markup nem comissões (o conteúdo nem os contém).
  */
-export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIXAS_DA_IMAGEM }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null; imagens?: ImagensDoDesenho; caixas?: CaixasDoDesenho }) {
+export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIXAS_DA_IMAGEM }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null; imagens?: ImagensDoDesenho; caixas?: CaixasPorTamanho }) {
   const cor = corDaMarca(c.empresa.corPrimaria);
   const maiusculas = (t: string) => (c.descricoesMaiusculas ? t.toUpperCase() : t);
   const nomeEmpresa = c.empresa.nomeFantasia ?? "";
@@ -107,7 +107,7 @@ export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIX
                         {i.observacoes ? <Text style={{ fontSize: 8.5, marginTop: 4 }}>OBS: {maiusculas(i.observacoes)}</Text> : null}
                         <View style={{ marginTop: 6, alignSelf: "center" }}>
                           {desenho.tipo === "imagem" ? (
-                            <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.proposta.largura} altura={caixas.proposta.altura} />
+                            <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas[desenho.tamanho].proposta.largura} altura={caixas[desenho.tamanho].proposta.altura} />
                           ) : (
                             <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={CAIXAS_DO_DESENHO_AUTOMATICO.proposta.largura} />
                           )}
@@ -219,16 +219,16 @@ export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIX
             <Text style={{ fontSize: 8.5, marginLeft: 14, marginTop: 1 }}>
               {c.validade.encerradaPorReajuste ? "Encerrada por reajuste de fornecedor." : `${[c.validade.texto, c.validade.ate ? `até ${dataBr(c.validade.ate)}` : null].filter(Boolean).join(" — ") || "Até alteração dos fornecedores"}.`}
             </Text>
+            {/* A assinatura fica DENTRO do último bloco dos termos: acompanha os "Termos comerciais" e nunca sobra sozinha numa página. */}
+            {c.consultor.nome ? (
+              <View style={{ marginTop: 16 }}>
+                <Text style={{ fontSize: 9 }}>Att,</Text>
+                <Text style={{ ...NEGRITO, fontSize: 10, marginTop: 14 }}>{c.consultor.nome.toUpperCase()}</Text>
+                {c.consultor.cargo ? <Text style={{ fontSize: 8.5 }}>{c.consultor.cargo.toUpperCase()}</Text> : null}
+              </View>
+            ) : null}
           </View>
         </Termos>
-
-        {c.consultor.nome ? (
-          <View style={{ marginTop: 16 }} wrap={false}>
-            <Text style={{ fontSize: 9 }}>Att,</Text>
-            <Text style={{ ...NEGRITO, fontSize: 10, marginTop: 14 }}>{c.consultor.nome.toUpperCase()}</Text>
-            {c.consultor.cargo ? <Text style={{ fontSize: 8.5 }}>{c.consultor.cargo.toUpperCase()}</Text> : null}
-          </View>
-        ) : null}
       </Page>
     </Document>
   );

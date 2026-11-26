@@ -53,7 +53,8 @@ export function problemasParaEnviar(d: DadosParaEnvio): string[] {
 // ----- Comparação entre revisões -----
 
 /** `desenho`: "automatico" ou "personalizado:<sha256>" (ver `marcaDoDesenho`); ausente = automático (revisões antigas e sem imagem). */
-export type ItemComparavel = { descricao: string; medidas: string; precoTotalCentavos: number; desenho?: string };
+/** `tamanho`: "NORMAL" ou "GRANDE" do desenho personalizado; ausente = Normal. */
+export type ItemComparavel = { descricao: string; medidas: string; precoTotalCentavos: number; desenho?: string; tamanho?: string };
 export type OpcaoComparavel = { nome: string; totalCentavos: number; itens: ItemComparavel[] };
 /** Forma de pagamento para comparar: o total dela em cada opção (pelo nome da opção). */
 export type FormaComparavel = { nome: string; totais: { opcaoNome: string; totalCentavos: number }[] };
@@ -61,7 +62,7 @@ export type ConteudoComparavel = { numero: string; revisao: number; comNotaFisca
 
 /** Mudança do desenho do item entre as revisões (só aparece quando o desenho mudou de verdade). */
 export type MudancaDeDesenho = "ADICIONADO" | "TROCADO" | "REMOVIDO";
-export type DiferencaItem = { tipo: "ADICIONADO" | "REMOVIDO" | "ALTERADO"; descricao: string; medidas: string; antesCentavos: number | null; depoisCentavos: number | null; desenho?: MudancaDeDesenho };
+export type DiferencaItem = { tipo: "ADICIONADO" | "REMOVIDO" | "ALTERADO"; descricao: string; medidas: string; antesCentavos: number | null; depoisCentavos: number | null; desenho?: MudancaDeDesenho; tamanhoDoDesenhoAlterado?: true };
 export type DiferencaOpcao = { nome: string; situacao: "NOVA" | "REMOVIDA" | "MANTIDA"; totalAntesCentavos: number | null; totalDepoisCentavos: number | null; itens: DiferencaItem[] };
 export type MudancaDeTotalDaForma = { opcaoNome: string; antesCentavos: number | null; depoisCentavos: number | null };
 export type DiferencaForma = { nome: string; situacao: "NOVA" | "REMOVIDA" | "MANTIDA"; mudancas: MudancaDeTotalDaForma[] };
@@ -70,6 +71,12 @@ export type ResultadoComparacao = { notaFiscalMudou: boolean; opcoes: DiferencaO
 const chaveDoItem = (i: ItemComparavel) => `${i.descricao.trim().toLowerCase()}|${i.medidas}`;
 const AUTOMATICO = "automatico";
 const desenhoDe = (i: ItemComparavel) => i.desenho ?? AUTOMATICO;
+
+/** O tamanho só importa quando os DOIS lados têm o mesmo desenho personalizado (se o desenho mudou, o motivo é o desenho). */
+function tamanhoMudou(antes: ItemComparavel, depois: ItemComparavel): boolean {
+  if (desenhoDe(antes) === AUTOMATICO || desenhoDe(antes) !== desenhoDe(depois)) return false;
+  return (antes.tamanho ?? "NORMAL") !== (depois.tamanho ?? "NORMAL");
+}
 
 function mudancaDoDesenho(antes: ItemComparavel, depois: ItemComparavel): MudancaDeDesenho | null {
   const a = desenhoDe(antes);
@@ -96,8 +103,9 @@ export function compararRevisoes(antes: ConteudoComparavel, depois: ConteudoComp
         }
         const [id] = restantes.splice(idx, 1);
         const desenho = mudancaDoDesenho(ia, id);
-        if (id.precoTotalCentavos !== ia.precoTotalCentavos || desenho) {
-          itens.push({ tipo: "ALTERADO", descricao: ia.descricao, medidas: ia.medidas, antesCentavos: ia.precoTotalCentavos, depoisCentavos: id.precoTotalCentavos, ...(desenho ? { desenho } : {}) });
+        const tamanho = tamanhoMudou(ia, id);
+        if (id.precoTotalCentavos !== ia.precoTotalCentavos || desenho || tamanho) {
+          itens.push({ tipo: "ALTERADO", descricao: ia.descricao, medidas: ia.medidas, antesCentavos: ia.precoTotalCentavos, depoisCentavos: id.precoTotalCentavos, ...(desenho ? { desenho } : {}), ...(tamanho ? { tamanhoDoDesenhoAlterado: true as const } : {}) });
         }
       }
       for (const id of restantes) itens.push({ tipo: "ADICIONADO", descricao: id.descricao, medidas: id.medidas, antesCentavos: null, depoisCentavos: id.precoTotalCentavos });

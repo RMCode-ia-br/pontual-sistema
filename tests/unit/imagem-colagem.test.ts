@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { conferirArquivoNoNavegador, escolherImagem, MENSAGEM_FORMATO_NAO_ACEITO } from "@/lib/imagem/colagem";
+import { conferirArquivoNoNavegador, DICA_DO_DESENHO, escolherImagem, MENSAGEM_COLAGEM_SEM_IMAGEM, MENSAGEM_FORMATO_NAO_ACEITO, ORIENTACAO_DO_WORD } from "@/lib/imagem/colagem";
 import { LIMITE_BYTES_IMAGEM } from "@/lib/imagem/validar";
 
 describe("escolherImagem (colagem e arrastar)", () => {
@@ -30,5 +30,18 @@ describe("conferirArquivoNoNavegador", () => {
     const r = conferirArquivoNoNavegador(arquivo);
     if (esperado === null) expect(r).toBeNull();
     else expect(r).toMatch(esperado);
+  });
+});
+
+
+describe("textos de ajuda do desenho (português simples)", () => {
+  it("a orientação cita o recorte de tela (Windows + Shift + S), o Ctrl+V e salvar como imagem PNG ou JPG", () => {
+    expect(ORIENTACAO_DO_WORD).toBe(
+      "No Word, se copiar o desenho direto não funcionar, use o recorte de tela (tecla Windows + Shift + S), selecione o desenho e cole aqui com Ctrl+V. Também dá para salvar o desenho como imagem (PNG ou JPG) e escolher o arquivo.",
+    );
+  });
+  it("a dica começa pela frase de sempre", () => expect(DICA_DO_DESENHO.startsWith("Você pode copiar o desenho do Word e colar aqui com Ctrl+V.")).toBe(true));
+  it("a mensagem de colagem sem imagem diz o que houve e repete a orientação", () => {
+    expect(MENSAGEM_COLAGEM_SEM_IMAGEM).toBe(`Não encontrei uma imagem no que foi colado. ${ORIENTACAO_DO_WORD}`);
   });
 });

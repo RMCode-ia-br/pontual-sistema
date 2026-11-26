@@ -15,6 +15,7 @@ import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, ErroDesenhoIndisponivel
 import { ProducaoPdf } from "@/modules/propostas/pdf/producao-pdf";
 import { PropostaPdf } from "@/modules/propostas/pdf/proposta-pdf";
 
+import { imagensDoPdf, yDoTextoNoPdf } from "../e2e/desenho-ajudantes";
 import { conteudoDeExemplo } from "./fixtures-proposta";
 
 type Documento = Parameters<typeof renderToBuffer>[0];
@@ -161,7 +162,8 @@ describe.skipIf(pdftotext === undefined)("PDF com imagem: layout e texto", () =>
     delete c.opcoes[0].secoes[0].itens[1].desenhoImagem; // o item 2 segue automático
     const a = await proposta(c);
     // Outra caixa qualquer, derivada da constante (o teste não fixa o tamanho da caixa da imagem): o texto não muda.
-    const maior = { proposta: { largura: CAIXAS_DA_IMAGEM.proposta.largura * 1.2, altura: CAIXAS_DA_IMAGEM.proposta.altura * 1.2 }, producao: CAIXAS_DA_IMAGEM.producao };
+    const base = CAIXAS_DA_IMAGEM.NORMAL;
+    const maior = { ...CAIXAS_DA_IMAGEM, NORMAL: { proposta: { largura: base.proposta.largura * 1.2, altura: base.proposta.altura * 1.2 }, producao: base.producao } };
     const b = await proposta(c, { caixas: maior });
     expect(semEspaco(textoDo(b, "-raw"))).toBe(semEspaco(textoDo(a, "-raw")));
   });
@@ -169,4 +171,119 @@ describe.skipIf(pdftotext === undefined)("PDF com imagem: layout e texto", () =>
   it("a caixa do DESENHO AUTOMÁTICO é a de sempre (a da imagem é outra constante e pode mudar)", () => {
     expect(CAIXAS_DO_DESENHO_AUTOMATICO).toEqual({ proposta: { largura: 170, altura: 127.5 }, producao: { largura: 110, altura: 82.5 } });
   });
+});
+
+// ----- Bloco 5: tamanho Normal/Grande por item e assinatura junto dos termos -----
+
+function ligarTamanho(c: ConteudoProposta, f: Proc, tamanho: "NORMAL" | "GRANDE") {
+  ligar(c, [f]);
+  for (const o of c.opcoes) for (const s of o.secoes) for (const i of s.itens) if (tamanho === "GRANDE") i.tamanhoDesenho = "GRANDE";
+}
+
+function dentroDaCaixa(i: { larguraPt: number; alturaPt: number; larguraPx: number; alturaPx: number }, caixa: { largura: number; altura: number }) {
+  const folga = 0.6;
+  expect(i.larguraPt).toBeLessThanOrEqual(caixa.largura + folga);
+  expect(i.alturaPt).toBeLessThanOrEqual(caixa.altura + folga);
+  expect(Math.abs(i.larguraPt - caixa.largura) < folga || Math.abs(i.alturaPt - caixa.altura) < folga, "encosta numa dimensão da caixa").toBe(true);
+  expect(Math.abs(i.larguraPt / i.alturaPt - i.larguraPx / i.alturaPx) / (i.larguraPx / i.alturaPx)).toBeLessThan(0.01); // sem esticar
+}
+
+describe("tamanho do desenho por item (caixas lidas das constantes)", () => {
+  it("proposta: Normal cabe na caixa Normal e Grande na Grande (maior que a Normal), sem esticar", async () => {
+    const normal = conteudoDeExemplo(lista(1));
+    ligarTamanho(normal, horizontal, "NORMAL");
+    const grande = conteudoDeExemplo(lista(1));
+    ligarTamanho(grande, horizontal, "GRANDE");
+    const [n] = await imagensDoPdf(await proposta(normal));
+    const [g] = await imagensDoPdf(await proposta(grande));
+    dentroDaCaixa(n, CAIXAS_DA_IMAGEM.NORMAL.proposta);
+    dentroDaCaixa(g, CAIXAS_DA_IMAGEM.GRANDE.proposta);
+    expect(g.larguraPt).toBeGreaterThan(n.larguraPt);
+  });
+
+  it("proposta com imagem vertical e quadrada nos dois tamanhos: sempre dentro da caixa do tamanho", async () => {
+    for (const tamanho of ["NORMAL", "GRANDE"] as const) {
+      for (const f of [vertical, quadrado]) {
+        const c = conteudoDeExemplo(lista(1));
+        ligarTamanho(c, f, tamanho);
+        const [i] = await imagensDoPdf(await proposta(c));
+        dentroDaCaixa(i, CAIXAS_DA_IMAGEM[tamanho].proposta);
+      }
+    }
+  });
+
+  it("folha de produção: Normal ao lado do texto; Grande ABAIXO do texto, dentro da caixa Grande", async () => {
+    const normal = conteudoDeExemplo(lista(1));
+    ligarTamanho(normal, horizontal, "NORMAL");
+    const grande = conteudoDeExemplo(lista(1));
+    ligarTamanho(grande, horizontal, "GRANDE");
+    const [n] = await imagensDoPdf(await producao(normal));
+    const [g] = await imagensDoPdf(await producao(grande));
+    dentroDaCaixa(n, CAIXAS_DA_IMAGEM.NORMAL.producao);
+    dentroDaCaixa(g, CAIXAS_DA_IMAGEM.GRANDE.producao);
+    expect(g.larguraPt).toBeGreaterThan(n.larguraPt);
+    // Em pontos de PDF o y cresce para CIMA. Grande fica ABAIXO do texto do item (o topo da imagem está abaixo do texto);
+    // Normal fica AO LADO (o topo da imagem não está abaixo da linha do texto: a coluna do desenho começa junto com o texto).
+    const yDoTexto = await yDoTextoNoPdf(await producao(grande), g.pagina, "SUPREMA 1");
+    expect(g.y + g.alturaPt, "o topo da imagem Grande fica abaixo do texto do item").toBeLessThan(yDoTexto);
+    const yDoTextoNormal = await yDoTextoNoPdf(await producao(normal), n.pagina, "SUPREMA 1");
+    // A imagem fica centralizada na caixa: o topo da CAIXA (não o da imagem) é que acompanha o texto.
+    const topoDaCaixaNormal = n.y + n.alturaPt + (CAIXAS_DA_IMAGEM.NORMAL.producao.altura - n.alturaPt) / 2;
+    expect(topoDaCaixaNormal, "a caixa da imagem Normal começa na altura do texto").toBeGreaterThan(yDoTextoNormal - 20);
+    // Grande fica na coluna do texto (não encostada na margem direita como a Normal).
+    expect(g.x + g.larguraPt).toBeLessThan(n.x + n.larguraPt + 0.6);
+  });
+
+  it("itens Grandes continuam indivisíveis: o texto de cada item e a sua imagem ficam na MESMA página, nas duas folhas", async () => {
+    const c = conteudoDeExemplo(lista(9));
+    ligarTamanho(c, horizontal, "GRANDE");
+    for (const [rotulo, gerar] of [["proposta", proposta], ["produção", producao]] as const) {
+      const pdf = await gerar(c);
+      const imagens = (await imagensDoPdf(pdf)).sort((a, b) => a.pagina - b.pagina);
+      expect(imagens).toHaveLength(9);
+      const paginas = textoDo(pdf, "-layout").split("\f");
+      for (let k = 1; k <= 9; k++) {
+        const paginaDoTexto = paginas.findIndex((p) => new RegExp(`SUPREMA ${k}\\b`).test(p)) + 1;
+        expect(imagens[k - 1].pagina, `${rotulo}: item ${k}`).toBe(paginaDoTexto);
+      }
+      expect(new Set(imagens.map((i) => i.pagina)).size, `${rotulo}: itens grandes ocupam várias páginas`).toBeGreaterThan(1);
+    }
+  });
+});
+
+describe.skipIf(pdftotext === undefined)("a assinatura acompanha os termos comerciais (nunca sozinha numa página)", () => {
+  /** Páginas do PDF com texto (a última página vazia do pdftotext não conta). */
+  const paginasDe = (pdf: Buffer) => textoDo(pdf, "-layout").split("\f").filter((p) => p.trim() !== "");
+
+  function conferirAssinatura(pdf: Buffer, rotulo: string) {
+    const paginas = paginasDe(pdf);
+    const comAssinatura = paginas.filter((p) => p.includes("Att,"));
+    expect(comAssinatura, `${rotulo}: a assinatura aparece uma vez`).toHaveLength(1);
+    // Na mesma página da assinatura há texto dos termos (a validade é o último bloco, a assinatura vai junto dele).
+    expect(comAssinatura[0], `${rotulo}: assinatura sem a validade dos termos na mesma página`).toContain("Validade da proposta");
+  }
+
+  it("sem imagem, com 1 a 40 itens (varre as quantidades em que a assinatura costumava sobrar sozinha)", async () => {
+    for (let n = 1; n <= 40; n++) conferirAssinatura(await proposta(conteudoDeExemplo(lista(n))), `${n} itens`);
+  }, 300_000);
+
+  it("com imagem Normal e Grande, de 1 a 12 itens", async () => {
+    for (const tamanho of ["NORMAL", "GRANDE"] as const) {
+      for (let n = 1; n <= 12; n++) {
+        const c = conteudoDeExemplo(lista(n));
+        ligarTamanho(c, horizontal, tamanho);
+        conferirAssinatura(await proposta(c), `${tamanho}, ${n} itens`);
+      }
+    }
+  }, 300_000);
+
+  it("com formas de pagamento em duas colunas (termos soltos na página), com e sem imagem", async () => {
+    for (const n of [1, 3, 6, 9, 12, 18]) {
+      const semImagem = comFormas(conteudoDeExemplo(lista(n), [{ nome: "Linha Suprema" }, { nome: "Linha Gold", descontoCentavos: 36_000 }]));
+      conferirAssinatura(await proposta(semImagem), `formas, ${n} itens, sem imagem`);
+      const comImagem = comFormas(conteudoDeExemplo(lista(n), [{ nome: "Linha Suprema" }, { nome: "Linha Gold", descontoCentavos: 36_000 }]));
+      ligarTamanho(comImagem, horizontal, "GRANDE");
+      conferirAssinatura(await proposta(comImagem), `formas, ${n} itens, Grande`);
+    }
+  }, 300_000);
 });

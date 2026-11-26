@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
 import { compararRevisoes, type ConteudoComparavel, type DiferencaItem } from "@/lib/dominio/ciclo-proposta";
-import { marcaDoDesenho } from "@/lib/dominio/desenho-item";
+import { marcaDoDesenho, marcaDoTamanho } from "@/lib/dominio/desenho-item";
 import { formatarRevisao } from "@/lib/dominio/numeracao-proposta";
 import { formatarMoeda } from "@/lib/formatadores";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
@@ -32,20 +32,22 @@ function paraComparavel(c: ConteudoProposta): ConteudoComparavel {
     opcoes: c.opcoes.map((o) => ({
       nome: o.nome,
       totalCentavos: o.totais.totalCentavos,
-      itens: o.secoes.flatMap((s) => s.itens).map((i) => ({ descricao: i.descricao, medidas: i.medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}`).join(" / "), precoTotalCentavos: i.precoTotalCentavos, desenho: marcaDoDesenho(i) })),
+      itens: o.secoes.flatMap((s) => s.itens).map((i) => ({ descricao: i.descricao, medidas: i.medidas.map((m) => `${m.larguraMm} X ${m.alturaMm}`).join(" / "), precoTotalCentavos: i.precoTotalCentavos, desenho: marcaDoDesenho(i), tamanho: marcaDoTamanho(i) })),
     })),
   };
 }
 
 const ROTULO_DO_DESENHO = { ADICIONADO: "Desenho personalizado adicionado", TROCADO: "Desenho personalizado trocado", REMOVIDO: "Desenho personalizado removido" } as const;
 
-/** Rótulo do item: só o preço mudou ("Preço alterado", como sempre), só o desenho, ou os dois. */
+/** Rótulo do item: junta, na ordem, o que mudou (preço, desenho, tamanho do desenho). Só o preço = "Preço alterado", como sempre. */
 function rotuloDoItem(i: DiferencaItem): string {
   if (i.tipo === "ADICIONADO") return "Novo";
   if (i.tipo === "REMOVIDO") return "Removido";
-  const preco = i.antesCentavos !== i.depoisCentavos;
-  if (i.desenho && preco) return `Preço alterado · ${ROTULO_DO_DESENHO[i.desenho].toLowerCase()}`;
-  return i.desenho ? ROTULO_DO_DESENHO[i.desenho] : "Preço alterado";
+  const partes: string[] = [];
+  if (i.antesCentavos !== i.depoisCentavos) partes.push("Preço alterado");
+  if (i.desenho) partes.push(partes.length > 0 ? ROTULO_DO_DESENHO[i.desenho].toLowerCase() : ROTULO_DO_DESENHO[i.desenho]);
+  if (i.tamanhoDoDesenhoAlterado) partes.push(partes.length > 0 ? "tamanho do desenho alterado" : "Tamanho do desenho alterado");
+  return partes.length > 0 ? partes.join(" · ") : "Preço alterado";
 }
 
 export default async function PaginaComparar({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ com?: string }> }) {

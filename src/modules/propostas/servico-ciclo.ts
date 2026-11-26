@@ -5,7 +5,7 @@ import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { montarFormasDePagamento, type FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
 import { problemasParaEnviar } from "@/lib/dominio/ciclo-proposta";
-import type { ImagemDoDesenho } from "@/lib/dominio/desenho-item";
+import { lerTamanhoDoDesenho, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
 import { gerarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { calcularTotais, MAXIMO_CENTAVOS, quantidadeTotal } from "@/lib/dominio/preco";
@@ -17,6 +17,7 @@ import { mudarFaseDoProjeto } from "@/modules/projetos/servico";
 
 import type { ConteudoProposta } from "./conteudo";
 import { reservarNumeroDeProposta } from "./servico";
+import { configParaCopia } from "./servico-desenho";
 
 type Tx = Prisma.TransactionClient;
 type Usuario = { id: string; nome: string };
@@ -129,6 +130,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
             quantidade: quantidadeTotal(item.medidas),
             precoTotalCentavos: item.precoTotalCentavos,
             ...(item.desenhoAnexo ? { desenhoImagem: imagemDoSnapshot(numero, item.desenhoAnexo) } : {}),
+            ...(item.desenhoAnexo && lerTamanhoDoDesenho(item.desenhoConfig) === "GRANDE" ? { tamanhoDesenho: "GRANDE" as const } : {}),
           })),
         })),
         totais: { itensCentavos: t.itensCentavos, descontoCentavos: t.descontoCentavos, acrescimoNotaCentavos: t.acrescimoNotaCentavos, totalCentavos: t.totalCentavos, areaM2: t.areaM2 },
@@ -566,6 +568,7 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
         calculadoEm: i.calculadoEm,
         avisoPreco: i.avisoPreco,
         desenhoAnexoId: i.desenhoAnexoId, // revisão e cópia levam o desenho personalizado (referência ao mesmo arquivo)
+        desenhoConfig: configParaCopia(i.desenhoConfig), // e o tamanho dele
         medidas: { create: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, ...autor })) },
         ...autor,
       },

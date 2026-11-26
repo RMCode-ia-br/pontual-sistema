@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { CATEGORIA_DESENHO_DO_ITEM, ENTIDADE_DO_DESENHO_DO_ITEM } from "@/lib/dominio/desenho-item";
@@ -8,6 +8,11 @@ import { CATEGORIA_DESENHO_DO_ITEM, ENTIDADE_DO_DESENHO_DO_ITEM } from "@/lib/do
 import { exigirRascunho } from "./servico";
 
 type Db = Prisma.TransactionClient;
+
+/** `desenhoConfig` (JSON nulável) para copiar de um item para outro: nulo vira `DbNull`, que é o que o Prisma pede na gravação. */
+export function configParaCopia(config: Prisma.JsonValue | null): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  return config === null ? Prisma.DbNull : (config as Prisma.InputJsonValue);
+}
 type Usuario = { id: string; nome: string };
 
 export type ImagemGravada = {

@@ -104,3 +104,32 @@ describe("compararRevisoes: desenho personalizado do item (Fase 3.6b-1)", () => 
     expect(r.opcoes[0].itens[0]).toEqual({ tipo: "ALTERADO", descricao: "JANELA", medidas: "2000 X 1200", antesCentavos: 100_000, depoisCentavos: 120_000 });
   });
 });
+
+describe("compararRevisoes: tamanho do desenho personalizado (Fase 3.6b-1, Bloco 5)", () => {
+  const item = (extra: Partial<{ desenho: string; tamanho: string; precoTotalCentavos: number }> = {}) => ({ descricao: "JANELA", medidas: "2000 X 1200", precoTotalCentavos: 100_000, ...extra });
+  const conteudo = (itens: ReturnType<typeof item>[], revisao = 0): ConteudoComparavel => ({ numero: "1157-26", revisao, comNotaFiscal: false, opcoes: [{ nome: "Opção 1", totalCentavos: 100_000, itens }] });
+  const IMG = "personalizado:abc";
+
+  it("mesmo desenho, tamanho Normal → Grande: item alterado com o motivo 'tamanho do desenho alterado'", () => {
+    const r = compararRevisoes(conteudo([item({ desenho: IMG })]), conteudo([item({ desenho: IMG, tamanho: "GRANDE" })], 1));
+    expect(r.semMudancas).toBe(false);
+    expect(r.opcoes[0].itens).toEqual([{ tipo: "ALTERADO", descricao: "JANELA", medidas: "2000 X 1200", antesCentavos: 100_000, depoisCentavos: 100_000, tamanhoDoDesenhoAlterado: true }]);
+  });
+  it("Grande → Normal também; ausente e NORMAL são a mesma coisa (snapshots antigos)", () => {
+    expect(compararRevisoes(conteudo([item({ desenho: IMG, tamanho: "GRANDE" })]), conteudo([item({ desenho: IMG })], 1)).opcoes[0].itens[0].tamanhoDoDesenhoAlterado).toBe(true);
+    expect(compararRevisoes(conteudo([item({ desenho: IMG })]), conteudo([item({ desenho: IMG, tamanho: "NORMAL" })], 1)).semMudancas).toBe(true);
+  });
+  it("tamanho sem imagem não conta (o desenho automático não tem tamanho)", () => {
+    expect(compararRevisoes(conteudo([item()]), conteudo([item({ tamanho: "GRANDE" })], 1)).semMudancas).toBe(true);
+  });
+  it("se o desenho mudou, o motivo é o desenho (o tamanho não é repetido)", () => {
+    const r = compararRevisoes(conteudo([item({ desenho: IMG })]), conteudo([item({ desenho: "personalizado:xyz", tamanho: "GRANDE" })], 1));
+    expect(r.opcoes[0].itens[0]).toMatchObject({ desenho: "TROCADO" });
+    expect(r.opcoes[0].itens[0].tamanhoDoDesenhoAlterado).toBeUndefined();
+  });
+  it("preço e tamanho mudando juntos geram um item só, com os dois motivos", () => {
+    const r = compararRevisoes(conteudo([item({ desenho: IMG })]), conteudo([item({ desenho: IMG, tamanho: "GRANDE", precoTotalCentavos: 120_000 })], 1));
+    expect(r.opcoes[0].itens).toHaveLength(1);
+    expect(r.opcoes[0].itens[0]).toMatchObject({ tipo: "ALTERADO", antesCentavos: 100_000, depoisCentavos: 120_000, tamanhoDoDesenhoAlterado: true });
+  });
+});

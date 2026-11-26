@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { DesenhoEsquadria } from "@/components/desenho-esquadria";
@@ -11,11 +11,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { gerarDescricao, valoresDoTemplate } from "@/lib/dominio/descricao-item";
 import type { TipoDesenho } from "@/lib/dominio/desenho";
+import type { TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 import { areaM2, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
 import { aoColarMoeda, centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
 
 import { calcularPreviaDoItem, salvarItem } from "../actions/estrutura";
+import { enviarDesenhoDoItem } from "./desenho-envio";
 import { DesenhoPersonalizado } from "./desenho-personalizado";
 import { ROTULO_MODO_PRECO, MODOS_PRECO } from "../schemas";
 import type { ItemSer, OpcoesEditor } from "../tipos";
@@ -43,21 +45,23 @@ type Previa = { ok: true; preco: number; custo: number | null; markupPb: number 
 const inteiro = (t: string) => (/^\d+$/.test(t.trim()) ? Number(t.trim()) : null);
 
 export function DialogoItem({ aberto, aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProposta, item, opcoes, descricoesMaiusculas, aoSalvar }: Props) {
+  // Enquanto salva o item ou envia a imagem o diálogo NÃO fecha (Esc, clique fora e X incluídos): fechar no meio perderia o aviso de falha.
+  const [ocupado, setOcupado] = useState(false);
   return (
-    <Dialog open={aberto} onOpenChange={(a) => !a && aoFechar()}>
+    <Dialog open={aberto} onOpenChange={(a) => !a && !ocupado && aoFechar()}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{item ? "Editar item" : "Novo item"}</DialogTitle>
           <DialogDescription>Escolha a tipologia, as medidas e como calcular o preço. A descrição técnica é gerada sozinha e pode ser editada.</DialogDescription>
         </DialogHeader>
         {/* O formulário só monta com o diálogo aberto: cada abertura começa do estado certo. */}
-        {aberto ? <FormItem {...{ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProposta, item, opcoes, descricoesMaiusculas, aoSalvar }} /> : null}
+        {aberto ? <FormItem {...{ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProposta, item, opcoes, descricoesMaiusculas, aoSalvar }} aoOcupar={setOcupado} /> : null}
       </DialogContent>
     </Dialog>
   );
 }
 
-function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProposta, item, opcoes, descricoesMaiusculas, aoSalvar }: Omit<Props, "aberto">) {
+function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProposta, item, opcoes, descricoesMaiusculas, aoSalvar, aoOcupar }: Omit<Props, "aberto"> & { aoOcupar: (ocupado: boolean) => void }) {
   const [tipologiaId, setTipologiaId] = useState(item?.tipologiaId ?? "");
   const [linhaId, setLinhaId] = useState(item?.linhaId ?? "");
   const [acabamentoId, setAcabamentoId] = useState(item?.acabamentoId ?? "");
@@ -85,8 +89,26 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
   const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
   /** Imagem personalizada atual (a prévia ao lado e o cartão usam esta em vez do desenho automático). */
   const [personalizado, setPersonalizado] = useState<{ url: string | null } | null>(item?.desenho ? { url: item.desenho.url } : null);
-  const [pendente, iniciar] = useTransition();
+  const [salvandoItem, iniciar] = useTransition();
   const pedido = useRef(0);
+  /** Id do item: o do item que está sendo editado ou, depois do primeiro "Salvar" de um item novo, o que acabou de ser criado (salvar de novo ATUALIZA, nunca duplica). */
+  const [itemId, setItemId] = useState<string | null>(item?.id ?? null);
+  const [tamanhoDesenho, setTamanhoDesenho] = useState<TamanhoDoDesenho>(item?.tamanhoDesenho ?? "NORMAL");
+  /** Item novo: imagem escolhida que ainda não foi enviada (fica no cliente com prévia local). */
+  const [imagemPendente, setImagemPendente] = useState<File | null>(null);
+  const [avisoDeDesenho, setAvisoDeDesenho] = useState<string | null>(null);
+  const [enviandoImagem, setEnviandoImagem] = useState(false);
+  const [ocupadoDoDesenho, setOcupadoDoDesenho] = useState(false);
+  const salvandoRef = useRef(false); // trava de duplo clique (o estado só muda depois do próximo desenho da tela)
+  const ocupado = salvandoItem || enviandoImagem || ocupadoDoDesenho;
+  useEffect(() => {
+    aoOcupar(ocupado);
+  }, [ocupado, aoOcupar]);
+  const mudarPrevia = useCallback((url: string | null, tem: boolean) => setPersonalizado(tem ? { url } : null), []);
+  const imagemEnviada = useCallback(() => {
+    setImagemPendente(null);
+    setAvisoDeDesenho(null);
+  }, []);
 
   const tipologia = opcoes.tipologias.find((t) => t.id === tipologiaId) ?? null;
   const nome = (lista: { id: string; nome: string }[], id: string) => lista.find((x) => x.id === id)?.nome ?? null;
@@ -114,24 +136,9 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
   // Enquanto a descrição não foi editada à mão, acompanha o template (derivado: sem efeito).
   const descricaoAtual = descricaoEditada || !gerada ? descricao : gerada.texto;
 
-  // Prévia do preço no servidor (com pequeno atraso para não consultar a cada tecla).
-  const chaveDaPrevia = JSON.stringify([modo, tipologiaId, linhaId, acabamentoId, tipoVidroId, espessura, folhas, medidasLidas.ok ? medidasLidas.lidas : null, valorManual, markup]);
-  useEffect(() => {
-    if (!medidasLidas.ok) return;
-    const numero = ++pedido.current;
-    const espera = setTimeout(async () => {
-      const r = await calcularPreviaDoItem(entradaDoServidor());
-      if (numero !== pedido.current) return;
-      if (r.ok && r.dados && "ok" in r.dados && r.dados.ok) setPrevia({ ok: true, preco: r.dados.precoTotalCentavos, custo: r.dados.custoEstimadoCentavos, markupPb: r.dados.markupPb, aviso: r.dados.aviso, modo: r.dados.modoPreco });
-      else setPrevia({ ok: false, erro: r.ok ? "Não foi possível calcular." : r.erro });
-    }, 450);
-    return () => clearTimeout(espera);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaPrevia]);
-
   function entradaDoServidor() {
     return {
-      id: item?.id ?? null,
+      id: itemId,
       propostaId,
       opcaoId: opcaoEscolhida,
       grupoId: grupoEscolhido || null,
@@ -148,11 +155,28 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
       local,
       observacoes,
       modoPreco: modo,
+      // O tamanho só vai quando há imagem (com ou sem imagem pendente): sem imagem a configuração do item não é tocada.
+      ...(personalizado || imagemPendente ? { tamanhoDesenho } : {}),
       valorManual,
       markup: modo === "COMPOSICAO" ? markup : "",
       medidas: medidasLidas.lidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
     };
   }
+
+  // Prévia do preço no servidor (com pequeno atraso para não consultar a cada tecla).
+  const chaveDaPrevia = JSON.stringify([modo, tipologiaId, linhaId, acabamentoId, tipoVidroId, espessura, folhas, medidasLidas.ok ? medidasLidas.lidas : null, valorManual, markup]);
+  useEffect(() => {
+    if (!medidasLidas.ok) return;
+    const numero = ++pedido.current;
+    const espera = setTimeout(async () => {
+      const r = await calcularPreviaDoItem(entradaDoServidor());
+      if (numero !== pedido.current) return;
+      if (r.ok && r.dados && "ok" in r.dados && r.dados.ok) setPrevia({ ok: true, preco: r.dados.precoTotalCentavos, custo: r.dados.custoEstimadoCentavos, markupPb: r.dados.markupPb, aviso: r.dados.aviso, modo: r.dados.modoPreco });
+      else setPrevia({ ok: false, erro: r.ok ? "Não foi possível calcular." : r.erro });
+    }, 450);
+    return () => clearTimeout(espera);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaPrevia]);
 
   function escolherTipologia(id: string) {
     setTipologiaId(id);
@@ -165,21 +189,45 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
   }
 
   function salvar() {
+    // Duas chamadas seguidas (duplo clique, Enter) não salvam duas vezes: a segunda é ignorada.
+    if (salvandoRef.current || ocupado) return;
     setErro(null);
     setErrosCampo({});
     if (!medidasLidas.ok) {
       setErro("Preencha largura, altura e quantidade de todas as medidas (números inteiros; largura e altura em milímetros).");
       return;
     }
+    salvandoRef.current = true;
     iniciar(async () => {
-      const r = await salvarItem(entradaDoServidor());
-      if (r.ok) {
-        toast.success(r.mensagem ?? "Item salvo.");
+      try {
+        const r = await salvarItem(entradaDoServidor());
+        if (!r.ok) {
+          setErro(r.erro);
+          setErrosCampo(r.campos ?? {});
+          return;
+        }
+        // O item está salvo. Daqui em diante salvar de novo atualiza ESTE item.
+        const id = r.dados?.id ?? itemId;
+        if (id) setItemId(id);
         aoSalvar();
+        if (imagemPendente && id) {
+          setAvisoDeDesenho(null);
+          setEnviandoImagem(true);
+          const envio = await enviarDesenhoDoItem({ propostaId, itemId: id, arquivo: imagemPendente, temAnterior: false });
+          setEnviandoImagem(false);
+          if (!envio.ok) {
+            // O item NUNCA se perde: fica salvo, o diálogo continua aberto e a pessoa pode tentar enviar de novo.
+            setAvisoDeDesenho("O item foi salvo, mas o desenho não foi enviado. Tente de novo.");
+            return;
+          }
+          setImagemPendente(null);
+          toast.success("Item salvo e desenho personalizado enviado.");
+        } else {
+          toast.success(r.mensagem ?? "Item salvo.");
+        }
         aoFechar();
-      } else {
-        setErro(r.erro);
-        setErrosCampo(r.campos ?? {});
+      } finally {
+        salvandoRef.current = false;
       }
     });
   }
@@ -286,10 +334,18 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
 
       <DesenhoPersonalizado
         propostaId={propostaId}
-        itemId={item?.id ?? null}
+        itemId={itemId}
         desenhoInicial={item?.desenho ?? null}
         automatico={<DesenhoEsquadria tipo={desenho} folhas={inteiro(folhas)} larguraMm={primeira.larguraMm || 2000} alturaMm={primeira.alturaMm || 1200} />}
-        aoMudar={(url, tem) => setPersonalizado(tem ? { url } : null)}
+        tamanho={tamanhoDesenho}
+        aoMudarTamanho={setTamanhoDesenho}
+        pendente={imagemPendente}
+        aoEscolherPendente={setImagemPendente}
+        avisoDeFalha={avisoDeDesenho}
+        enviandoPendente={enviandoImagem}
+        aoEnviado={imagemEnviada}
+        aoOcupar={setOcupadoDoDesenho}
+        aoMudar={mudarPrevia}
       />
 
       <fieldset className="grid gap-2 rounded-lg border p-3">
@@ -411,11 +467,11 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
         </p>
       ) : null}
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={aoFechar}>
-          Cancelar
+        <Button type="button" variant="outline" onClick={aoFechar} disabled={ocupado}>
+          {itemId && !item ? "Fechar" : "Cancelar"}
         </Button>
-        <Button type="button" onClick={salvar} disabled={pendente}>
-          {pendente ? <Loader2 className="animate-spin" aria-hidden /> : null} {item ? "Salvar item" : "Adicionar item"}
+        <Button type="button" onClick={salvar} disabled={ocupado}>
+          {ocupado ? <Loader2 className="animate-spin" aria-hidden /> : null} {itemId ? "Salvar item" : "Adicionar item"}
         </Button>
       </DialogFooter>
     </div>

@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio, executar, falha, falhaDeValidacao, sucesso, type ResultadoAcao } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
 import { gerarDescricao } from "@/lib/dominio/descricao-item";
+import { aplicarTamanhoNaConfig } from "@/lib/dominio/desenho-item";
 import { normalizarCabecalho } from "@/lib/dominio/mapeamento";
 import { mover } from "@/lib/dominio/estrutura-proposta";
 import { can } from "@/lib/permissoes";
@@ -18,6 +19,7 @@ import { medidasParaProposta } from "@/modules/visitas/queries";
 
 import { duplicarOpcaoSchema, grupoSchema, itemSchema, opcaoSchema, type EntradaItem } from "../schemas";
 import { calcularPrecoDoItem, exigirRascunho, type SaidaCalculoItem } from "../servico";
+import { configParaCopia } from "../servico-desenho";
 import { conferirCatalogos, conferirTeto, duplicarOpcaoNaTransacao } from "../servico-estrutura";
 
 type Tx = Prisma.TransactionClient;
@@ -115,18 +117,21 @@ export async function salvarItem(entrada: EntradaItem): Promise<ResultadoAcao<{ 
       let id: string;
       let antes: Record<string, unknown> | null = null;
       if (v.id) {
-        const atual = await tx.itemProposta.findFirst({ where: { id: v.id, propostaId: v.propostaId, deletadoEm: null }, select: { id: true, descricao: true, modoPreco: true, precoTotalCentavos: true, opcaoId: true, grupoId: true } });
+        const atual = await tx.itemProposta.findFirst({ where: { id: v.id, propostaId: v.propostaId, deletadoEm: null }, select: { id: true, descricao: true, modoPreco: true, precoTotalCentavos: true, opcaoId: true, grupoId: true, desenhoConfig: true } });
         if (!atual) throw new ErroNegocio("Item não encontrado.");
-        antes = atual;
+        const { desenhoConfig: configAtual, ...resumoDoAntes } = atual;
+        antes = resumoDoAntes;
         // Trocar de seção/opção leva o item para o fim da nova.
         const mudouDeLugar = atual.opcaoId !== v.opcaoId || atual.grupoId !== v.grupoId;
         const ordem = mudouDeLugar ? ((await tx.itemProposta.aggregate({ where: { propostaId: v.propostaId, opcaoId: v.opcaoId, deletadoEm: null }, _max: { ordem: true } }))._max.ordem ?? -1) + 1 : undefined;
-        await tx.itemProposta.update({ where: { id: v.id }, data: { ...dados, ...(ordem === undefined ? {} : { ordem }), atualizadoPorId: sessao.id } });
+        const novaConfig = v.tamanhoDesenho === undefined ? undefined : (aplicarTamanhoNaConfig(configAtual, v.tamanhoDesenho) ?? Prisma.DbNull);
+        await tx.itemProposta.update({ where: { id: v.id }, data: { ...dados, ...(ordem === undefined ? {} : { ordem }), ...(novaConfig === undefined ? {} : { desenhoConfig: novaConfig as Prisma.InputJsonValue }), atualizadoPorId: sessao.id } });
         await tx.itemPropostaMedida.updateMany({ where: { itemId: v.id, deletadoEm: null }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
         id = v.id;
       } else {
         const ordem = ((await tx.itemProposta.aggregate({ where: { propostaId: v.propostaId, opcaoId: v.opcaoId, deletadoEm: null }, _max: { ordem: true } }))._max.ordem ?? -1) + 1;
-        const novo = await tx.itemProposta.create({ data: { propostaId: v.propostaId, ...dados, ordem, criadoPorId: sessao.id, atualizadoPorId: sessao.id }, select: { id: true } });
+        const configNova = aplicarTamanhoNaConfig(null, v.tamanhoDesenho);
+        const novo = await tx.itemProposta.create({ data: { propostaId: v.propostaId, ...dados, ...(configNova ? { desenhoConfig: configNova as Prisma.InputJsonValue } : {}), ordem, criadoPorId: sessao.id, atualizadoPorId: sessao.id }, select: { id: true } });
         id = novo.id;
       }
       await tx.itemPropostaMedida.createMany({
@@ -190,6 +195,7 @@ export async function duplicarItem(propostaIdBruto: string, itemIdBruto: string)
           calculadoEm: o.calculadoEm,
           avisoPreco: o.avisoPreco,
           desenhoAnexoId: o.desenhoAnexoId, // o desenho personalizado acompanha o item (o arquivo é compartilhado)
+          desenhoConfig: configParaCopia(o.desenhoConfig), // e o tamanho dele
           medidas: { create: o.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, criadoPorId: sessao.id, atualizadoPorId: sessao.id })) },
           criadoPorId: sessao.id,
           atualizadoPorId: sessao.id,

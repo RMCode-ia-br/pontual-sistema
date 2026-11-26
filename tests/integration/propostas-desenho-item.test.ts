@@ -266,3 +266,40 @@ describe("duplicar opção copia a referência do desenho", () => {
     await expect(duplicar(m.propostaId, opcaoId)).rejects.toThrow(/já foi enviada/);
   });
 });
+
+describe("o tamanho do desenho (desenhoConfig) é copiado", () => {
+  const GRANDE = { tamanhoDesenho: "GRANDE" };
+  const duplicar = (propostaId: string, opcaoId: string) =>
+    prisma.$transaction((tx) => duplicarOpcaoNaTransacao(tx, { usuario, ip: null, v: { propostaId, opcaoId, nome: `${PREFIXO} Opção tamanho`, linhaId: null, acabamentoId: null, tipoVidroId: null, espessuraVidroMm: undefined } as never }));
+
+  it("duplicar opção copia o tamanho Grande e deixa nulo o item que nunca mexeu nele", async () => {
+    const m = await montar("TamanhoDupOpcao");
+    await definir(m.propostaId, m.itens[0]);
+    await prisma.itemProposta.update({ where: { id: m.itens[0] }, data: { desenhoConfig: GRANDE } });
+    const opcaoId = (await prisma.opcaoProposta.findFirstOrThrow({ where: { propostaId: m.propostaId, deletadoEm: null } })).id;
+    const nova = await duplicar(m.propostaId, opcaoId);
+    const copias = await prisma.itemProposta.findMany({ where: { opcaoId: nova.id, deletadoEm: null }, orderBy: { ordem: "asc" } });
+    expect(copias.map((i) => i.desenhoConfig)).toEqual([GRANDE, null]);
+  });
+
+  it("revisão copia o tamanho; mudar o tamanho na revisão não mexe no item da original", async () => {
+    const m = await montar("TamanhoRevisao");
+    await definir(m.propostaId, m.itens[0]);
+    await prisma.itemProposta.update({ where: { id: m.itens[0] }, data: { desenhoConfig: GRANDE } });
+    await prisma.proposta.update({ where: { id: m.propostaId }, data: { status: "ENVIADA" } });
+    const rev = await prisma.$transaction((tx) => copiarProposta(tx, { usuarioId: usuario.id, origemId: m.propostaId, modo: "REVISAO" }));
+    const itens = await prisma.itemProposta.findMany({ where: { propostaId: rev.id, deletadoEm: null }, orderBy: { ordem: "asc" } });
+    expect(itens.map((i) => i.desenhoConfig)).toEqual([GRANDE, null]);
+    await prisma.itemProposta.update({ where: { id: itens[0].id }, data: { desenhoConfig: { tamanhoDesenho: "NORMAL" } } });
+    expect((await item(m.itens[0])).desenhoConfig).toEqual(GRANDE);
+  });
+
+  it("outras chaves da configuração (futuras) também acompanham a cópia", async () => {
+    const m = await montar("TamanhoOutrasChaves");
+    await prisma.itemProposta.update({ where: { id: m.itens[1] }, data: { desenhoConfig: { sentido: "esquerda", tamanhoDesenho: "GRANDE" } } });
+    const opcaoId = (await prisma.opcaoProposta.findFirstOrThrow({ where: { propostaId: m.propostaId, deletadoEm: null } })).id;
+    const nova = await duplicar(m.propostaId, opcaoId);
+    const copias = await prisma.itemProposta.findMany({ where: { opcaoId: nova.id, deletadoEm: null }, orderBy: { ordem: "asc" } });
+    expect(copias[1].desenhoConfig).toEqual({ sentido: "esquerda", tamanhoDesenho: "GRANDE" });
+  });
+});

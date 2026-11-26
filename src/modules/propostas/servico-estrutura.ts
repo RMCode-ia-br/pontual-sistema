@@ -8,6 +8,7 @@ import { MAXIMO_CENTAVOS } from "@/lib/dominio/preco";
 
 import type { DuplicarOpcaoEntrada } from "./schemas";
 import { calcularPrecoDoItem, exigirRascunho } from "./servico";
+import { configParaCopia } from "./servico-desenho";
 
 type Tx = Prisma.TransactionClient;
 
@@ -128,6 +129,7 @@ export async function duplicarOpcaoNaTransacao(tx: Tx, { usuario, v, ip }: { usu
           calculadoEm: new Date(),
           avisoPreco: aviso,
           desenhoAnexoId: i.desenhoAnexoId,
+          desenhoConfig: configParaCopia(i.desenhoConfig),
           medidas: { create: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, criadoPorId: usuario.id, atualizadoPorId: usuario.id })) },
           criadoPorId: usuario.id,
           atualizadoPorId: usuario.id,

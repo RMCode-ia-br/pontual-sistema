@@ -8,13 +8,14 @@ import { processarImagemDeDesenho } from "@/lib/imagem/processar";
 import { gravarObjeto, removerObjeto } from "@/lib/storage";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
 import { carregarImagensDoDesenho, conteudoParaPdf, gerarPdfDaProposta, gerarPdfDeProducao } from "@/modules/propostas/pdf/gerar";
-import { ErroDesenhoIndisponivel } from "@/modules/propostas/pdf/imagens";
+import { CAIXAS_DA_IMAGEM, ErroDesenhoIndisponivel } from "@/modules/propostas/pdf/imagens";
 import { proximoCodigoDoProjeto } from "@/modules/projetos/servico";
 import { reservarNumeroDeProposta } from "@/modules/propostas/servico";
 import { aprovarProposta, copiarProposta, enviarProposta } from "@/modules/propostas/servico-ciclo";
 import { definirDesenhoDoItem, removerDesenhoDoItem } from "@/modules/propostas/servico-desenho";
 import { desfazerAprovacao } from "@/modules/propostas/servico-desfazer";
 
+import { imagensDoPdf } from "../e2e/desenho-ajudantes";
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
 
 /**
@@ -278,5 +279,44 @@ describe("aprovar, desfazer e remover continuam corretos", () => {
     await prisma.$transaction((tx) => removerDesenhoDoItem(tx, { usuario, propostaId: rev.id, itemId: itemDaRevisao }));
     expect(Object.keys(await carregarImagensDoDesenho((await conteudoParaPdf(rev.id))!.conteudo))).toEqual([]);
     expect(Object.keys(await carregarImagensDoDesenho((await conteudoParaPdf(m.propostaId))!.conteudo))).toEqual([a.sha256]);
+  });
+});
+
+describe("tamanho do desenho no snapshot (Bloco 5)", () => {
+  const GRANDE = { tamanhoDesenho: "GRANDE" };
+  const tamanhoDe = (i: { tamanhoDesenho?: string }) => ("tamanhoDesenho" in i ? i.tamanhoDesenho : undefined);
+
+  it("só entra no snapshot quando o item tem imagem E o tamanho é Grande (item sem imagem nunca ganha o campo)", async () => {
+    const m = await montar("TamanhoSnapshot", 3);
+    const a = await imagemNoStorage("#3366cc");
+    const b = await imagemNoStorage("#22aa55");
+    await ligar(m.propostaId, m.itens[0], a); // com imagem, Grande
+    await ligar(m.propostaId, m.itens[1], b); // com imagem, Normal (sem configuração)
+    await prisma.itemProposta.update({ where: { id: m.itens[0] }, data: { desenhoConfig: GRANDE } });
+    await prisma.itemProposta.update({ where: { id: m.itens[2] }, data: { desenhoConfig: GRANDE } }); // Grande, mas SEM imagem
+    await enviar(m.propostaId);
+    const [i1, i2, i3] = itensDo(await snapshotDe(m.propostaId));
+    expect(tamanhoDe(i1)).toBe("GRANDE");
+    expect("tamanhoDesenho" in i2).toBe(false);
+    expect("tamanhoDesenho" in i3).toBe(false);
+  });
+
+  it("depois de enviar, mudar o tamanho do item NÃO muda o PDF da enviada (lê o snapshot); a revisão copia o tamanho", async () => {
+    const m = await montar("TamanhoCongela");
+    const a = await imagemNoStorage("#3366cc", 1200, 400);
+    await ligar(m.propostaId, m.itens[0], a);
+    await prisma.itemProposta.update({ where: { id: m.itens[0] }, data: { desenhoConfig: GRANDE } });
+    await enviar(m.propostaId);
+    await prisma.itemProposta.update({ where: { id: m.itens[0] }, data: { desenhoConfig: { tamanhoDesenho: "NORMAL" } } }); // pior caso: a linha muda por fora
+
+    const dados = (await conteudoParaPdf(m.propostaId))!;
+    const [i] = (await imagensDoPdf(await gerarPdfDaProposta(dados.conteudo))).filter((x) => x.larguraPx === a.larguraPx && x.alturaPx === a.alturaPx);
+    const caixa = CAIXAS_DA_IMAGEM.GRANDE.proposta;
+    expect(Math.abs(i.larguraPt - caixa.largura) < 0.6 || Math.abs(i.alturaPt - caixa.altura) < 0.6, "continua no tamanho Grande congelado").toBe(true);
+    expect(i.larguraPt).toBeGreaterThan(CAIXAS_DA_IMAGEM.NORMAL.proposta.largura + 1);
+
+    const rev = await revisar(m.propostaId);
+    const itemDaRevisao = await prisma.itemProposta.findFirstOrThrow({ where: { propostaId: rev.id, deletadoEm: null }, orderBy: { ordem: "asc" } });
+    expect(itemDaRevisao.desenhoConfig).toEqual({ tamanhoDesenho: "NORMAL" }); // a revisão parte do estado ATUAL do item, como o resto do item
   });
 });

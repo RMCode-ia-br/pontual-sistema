@@ -58,3 +58,14 @@ export async function imagensDoPdf(pdf: Buffer): Promise<ImagemNoPdf[]> {
   }
   return imagens;
 }
+
+/** Altura (y, em pontos; cresce para CIMA) do primeiro trecho de texto que contém `trecho` na página; falha se não achar. */
+export async function yDoTextoNoPdf(pdf: Buffer, pagina: number, trecho: string): Promise<number> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const documento = await pdfjs.getDocument({ data: new Uint8Array(pdf), useSystemFonts: true, isEvalSupported: false }).promise;
+  const conteudo = await (await documento.getPage(pagina)).getTextContent();
+  for (const t of conteudo.items) {
+    if ("str" in t && t.str.includes(trecho)) return t.transform[5];
+  }
+  throw new Error(`texto "${trecho}" não encontrado na página ${pagina}`);
+}

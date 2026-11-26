@@ -5,14 +5,14 @@ import { textoDoRodape } from "@/lib/dominio/texto-proposta";
 
 import type { ConteudoProposta } from "../conteudo";
 import { COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, ImagemDoDesenhoPdf, NEGRITO, Rodape } from "./comum";
-import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, imagemParaPdf, type CaixasDoDesenho, type ImagensDoDesenho } from "./imagens";
+import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, imagemParaPdf, type CaixasPorTamanho, type ImagensDoDesenho } from "./imagens";
 import type { LogoPdf } from "./proposta-pdf";
 
 /**
  * Folha de produção / ordem de serviço: SEM valores. Itens com medidas, tipologia, linha/acabamento/vidro (na
  * descrição), desenho, local e observações, para a fábrica e os instaladores. Se a proposta foi aprovada, só a opção aprovada.
  */
-export function ProducaoPdf({ c, opcaoId, logo = null, imagens = {}, caixas = CAIXAS_DA_IMAGEM }: { c: ConteudoProposta; opcaoId: string | null; logo?: LogoPdf; imagens?: ImagensDoDesenho; caixas?: CaixasDoDesenho }) {
+export function ProducaoPdf({ c, opcaoId, logo = null, imagens = {}, caixas = CAIXAS_DA_IMAGEM }: { c: ConteudoProposta; opcaoId: string | null; logo?: LogoPdf; imagens?: ImagensDoDesenho; caixas?: CaixasPorTamanho }) {
   const cor = corDaMarca(c.empresa.corPrimaria);
   const opcoes = opcaoId ? c.opcoes.filter((o) => o.id === opcaoId) : c.opcoes;
   const varias = opcoes.length > 1;
@@ -72,14 +72,22 @@ export function ProducaoPdf({ c, opcaoId, logo = null, imagens = {}, caixas = CA
                       </View>
                       {i.local ? <Text style={{ fontSize: 8.5, marginTop: 2 }}>Local: {i.local}</Text> : null}
                       {i.observacoes ? <Text style={{ fontSize: 8.5, marginTop: 1 }}>Obs.: {i.observacoes}</Text> : null}
+                      {desenho.tipo === "imagem" && desenho.tamanho === "GRANDE" ? (
+                        // Grande: abaixo do texto, na largura da coluna (o item continua indivisível).
+                        <View style={{ marginTop: 6, alignSelf: "center" }}>
+                          <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.GRANDE.producao.largura} altura={caixas.GRANDE.producao.altura} />
+                        </View>
+                      ) : null}
                     </View>
-                    <View style={{ width: desenho.tipo === "imagem" ? caixas.producao.largura : CAIXAS_DO_DESENHO_AUTOMATICO.producao.largura, flexShrink: 0 }}>
-                      {desenho.tipo === "imagem" ? (
-                        <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.producao.largura} altura={caixas.producao.altura} />
-                      ) : (
-                        <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={CAIXAS_DO_DESENHO_AUTOMATICO.producao.largura} />
-                      )}
-                    </View>
+                    {desenho.tipo === "imagem" && desenho.tamanho === "GRANDE" ? null : (
+                      <View style={{ width: desenho.tipo === "imagem" ? caixas.NORMAL.producao.largura : CAIXAS_DO_DESENHO_AUTOMATICO.producao.largura, flexShrink: 0 }}>
+                        {desenho.tipo === "imagem" ? (
+                          <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.NORMAL.producao.largura} altura={caixas.NORMAL.producao.altura} />
+                        ) : (
+                          <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={CAIXAS_DO_DESENHO_AUTOMATICO.producao.largura} />
+                        )}
+                      </View>
+                    )}
                   </View>
                   );
                 })}
