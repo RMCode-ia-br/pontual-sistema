@@ -97,3 +97,55 @@ Em 1260-26 e 1261-26 a soma dos itens é o valor **à vista** (15.360 e 10.050).
 - **E2E da fase (desktop e 390 px), `formas-pagamento-fase.spec.ts`:** cria as três formas pela tela (principal, Pix com desconto, cartão 10x com a marca da maquininha ligada sozinha), envia, baixa o PDF, confere o aceite (forma em branco e obrigatória; "Valor aprovado" escondido; texto "para mudar a forma depois de aprovada, desfaça a aprovação e aprove de novo"; prévia com "10X R$ 1.408,00 CARTÃO"), aprova o cartão, confere a parcela a receber (R$ 14.080,00), o Vendido do mês, o repasse de cartão (R$ 1.280,00) no relatório e no painel e a margem da obra (receita R$ 12.800,00); depois desfaz e aprova de novo no Pix com desconto (Vendido e margem menores, sem repasse). Outro cenário prova o contrário: sem formas extras a linha "Valor aprovado" aparece, a forma não é pedida e o texto de desfazer não aparece, e as parcelas são 50% + 50% como sempre.
 - **Verificação visual final:** editor (desktop e 390 px, claro e escuro), diálogo de aceite (claro e escuro, desktop e 390 px), margem da obra com o repasse de cartão (claro e escuro) e PDF (5 formas × 2 opções, uma página e com quebra). Sem rolagem lateral em 390 px.
 - **Resultado (só testes da área, de dia):** `typecheck` e `lint` limpos; unitários da área verdes; integração: casos reais, painel (com recusa de coluna nula), relatórios comerciais/clientes-produtos/operacionais, custo da obra e aprovação com formas, todos passaram (custo da obra rerodado depois da correção); E2E da área 112 passaram (formas, aprovação e desfazer, custo, painel, relatórios, propostas). A suíte completa fica para depois do "pode rodar a suíte".
+
+## Revisão sênior (subagente de contexto limpo)
+
+Nove pontos pedidos, todos OK com evidência (arquivo:linha) no parecer; **nenhum defeito crítico ou alto**. Dois itens médios corrigidos antes da suíte; o resto foi para as pendências.
+
+| Ponto | Veredito |
+|---|---|
+| (a) forma do aceite pertence à própria proposta e não está excluída | OK: o aceite recebe só o NOME, resolvido no snapshot/conteúdo da própria proposta; a linha viva é buscada com `propostaId` + nome + `deletadoEm: null`; nenhum id de forma vem da tela. Ressalva: unicidade do nome só no servidor (pendência) |
+| (b) limites no servidor | OK: 4 extras, cartão 1 a 12, ajuste ±50% (também no total digitado), soma 100%, opção do total pertence à proposta, nomes únicos, texto livre XOR parcelas; CHECKs do SQL batem. Lacunas menores corrigidas (abaixo) |
+| (c) ordem de bloqueio e nova tentativa em deadlock | OK nas quatro ações (aprovar, desfazer, trocar, reabrir) |
+| (d) cinco colunas nos consumidores | OK: painel, vendas, faturamento mensal, margem por obra e CSVs; nada lê mais o repasse do JSON do snapshot |
+| (e) desfazer e trocar sem resíduo | OK: cinco colunas zeradas; reabrir só muda status |
+| (f) BigInt e última parcela absorvendo | OK; a prévia da tela usa as mesmas funções do servidor |
+| (g) snapshot congelado | OK: aceite, PDF, comparação e prévia da troca leem o snapshot |
+| (h) RLS | OK: bloco `ENABLE ROW LEVEL SECURITY` e `REVOKE` de anon/authenticated na migração |
+| (i) propostas antigas e PDF sem formas | OK: só o preenchimento previsto; ramo sem formas do PDF estruturalmente idêntico; textos gravados em `tests/unit/golden/` |
+
+**Corrigido (importante):**
+1. **Número bloqueado derrubava a página inteira** (e o erro vira código genérico em produção). Agora o painel, o relatório de vendas (resumo e ticket), o faturamento mensal, a margem por obra e a aba "Custo e margem" mostram o AVISO com os números das propostas no lugar do valor (`ouAviso`, componente `AvisoDeDadosIncompletos`); as rotas de CSV respondem 409 com a mensagem. O número continua bloqueado (decisão 151); só mudou a apresentação.
+2. **Servidor aceitava a mesma opção duas vezes no total digitado e total acima do teto** (erro cru do banco). `lerAlternativas` agora recusa as duas coisas em português.
+3. Ajuste cosmético: o valor "− R$ 1.280,00" da margem não quebra mais de linha em 390 px.
+
+**Pendências (não bloqueiam):** ver a seção "Da Fase 3.6a" de `docs/PENDENCIAS.md` (unicidade do nome só no servidor; validação antes do recálculo do markup; CSV da lista de vendas sem forma e repasse; `prisma migrate diff` antes da próxima migração; acessibilidade das formas; procedência dos arquivos golden).
+
+## Passos manuais (para o Régis levar ao Marcelo)
+
+1. **Cadastrar em Configurações → Condições de pagamento** as condições que ele usa nas formas extras (por exemplo "Cartão 3x", "Cartão 6x", "Cartão 10x" com uma parcela de 100% no cartão e o número de vezes, e "À vista, 50% de sinal na confirmação e o restante na instalação"). Elas aparecem na lista "Modelo de condição" de cada forma; a marca de taxa da maquininha liga sozinha quando há parcela no cartão.
+2. **Lançar a taxa real da maquininha como despesa da empresa**, na categoria "Taxas de cartão", SEM ligar à obra (a margem da obra já tira o repasse; a despesa entra no resultado da empresa).
+3. Para mudar a forma de pagamento de uma proposta já aprovada: desfazer a aprovação e aprovar de novo escolhendo a outra forma (só se ainda não houve recebimento); a tela do aceite diz isso.
+
+## Para a 7C (permissões)
+
+- Quem cria e edita formas de pagamento da proposta (hoje `can(editar, proposta)`, sempre verdadeiro).
+- Quem escolhe a forma no aceite (`can(aprovar, proposta)`).
+- **Desfazer a aprovação** (e trocar) como ação destrutiva em `ACOES_DESTRUTIVAS`: agora é também o caminho para mudar a forma depois de aprovada.
+- Quem vê o repasse de taxa de cartão e a margem (`can(ver, custo)`).
+- Fase 8: `CHECK` opcional no banco para os valores do aceite e índice único do nome da forma (PENDENCIAS).
+
+## Verificação final (suíte completa)
+
+Rodada única em 2026-11-25, das 21h21 às 22h55 (America/Sao_Paulo), sobre o commit `2ebe7e4`. Conexão com o banco conferida antes de cada etapa (DIRECT_URL e DATABASE_URL responderam); nenhuma falha de rede (nada de ENOTFOUND/ETIMEDOUT).
+
+| Suíte | Passaram | Falharam | Ignorados | Não rodaram | Base 7B |
+|---|---|---|---|---|---|
+| Unitários (83 arquivos) | 1.470 | 0 | 0 | 0 | 1.274 |
+| Integração (40 arquivos) | 526 | 0 | 0 | 0 | 398 |
+| E2E (desktop e 390 px) | 673 | 0 (veja abaixo) | 19 | 0 | 647 passaram, 1 falha, 19 ignorados, 1 não rodou |
+
+- **E2E, 1ª rodada completa:** 671 passaram, 19 ignorados, 1 falha e 1 não rodou. A falha foi `importacao.spec.ts:55` no desktop ("importa 300 produtos de exemplo"): o passo 2 da planilha (mapeamento de colunas) não apareceu dentro dos 5 s depois do envio ("element(s) not found"). Não é rede, o módulo de importação não foi tocado pela 3.6a, e o MESMO teste passou no celular nessa mesma rodada. O teste que "não rodou" é o seguinte do mesmo arquivo serial. Refiz SÓ esse arquivo no desktop (conexão conferida de novo): 5 de 5 passaram, inclusive os dois. Classificação: instabilidade de tempo sob carga (mesma família do login lento da 7B), não defeito; registrada na PENDENCIAS (aumentar a espera do passo 2). Total final do E2E: 671 + 2 = 673 passaram.
+- **Os 19 ignorados são os mesmos da base da 7B** (12 de captura de tela, 2 de tarefas que exigem banco vazio, 5 só de desktop), por desenho; não são testes que deixaram de rodar por erro.
+- **Saldo contra a base da 7B:** +196 unitários, +128 de integração, +26 de E2E (a fase acrescentou testes de regra de cálculo, schema, PDF com texto extraído, casos reais 1260-26 e 1261-26, recusa de valor do aceite nulo, aprovação com forma escolhida e a história inteira pela tela). Zero falha real e zero teste não rodado por erro.
+- **Dados de teste:** tudo com prefixo ("Int ", "E2E "), nada dependeu de registro que o dono possa editar; o banco de São Paulo não recebeu migração nova nesta rodada (as duas da fase foram aplicadas nos Blocos 1 e 2, com OK do dono).
