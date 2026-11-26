@@ -131,6 +131,7 @@ export const duplicarOpcaoSchema = z.object({
   tipoVidroId: idOpcional,
   espessuraVidroMm: inteiroOpcional("Espessura", 1, 50),
 });
+export type DuplicarOpcaoEntrada = z.infer<typeof duplicarOpcaoSchema>;
 
 // ----- Proposta (cabeçalho, condições comerciais e cronograma) -----
 

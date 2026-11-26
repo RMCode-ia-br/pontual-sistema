@@ -9,7 +9,7 @@ import { linhasDoTexto } from "@/lib/validadores/texto-multilinha";
 
 import type { ConteudoProposta } from "../conteudo";
 import { CaixaTitulo, COR_PDF, corDaMarca, DesenhoPdf, dataBr, FAMILIA_PDF, ImagemDoDesenhoPdf, moeda, NEGRITO, Rodape } from "./comum";
-import { CAIXAS_ATUAIS, imagemParaPdf, type CaixasDoDesenho, type ImagensDoDesenho } from "./imagens";
+import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, imagemParaPdf, type CaixasDoDesenho, type ImagensDoDesenho } from "./imagens";
 
 export type LogoPdf = { data: Buffer; format: "png" | "jpg" } | null;
 
@@ -23,7 +23,7 @@ const nomeGenerico = (nome: string) => /^op[cç][aã]o\s*\d+$/i.test(nome.trim()
  * linha separada, notas importantes, termos comerciais, assinatura e rodapé em todas as páginas.
  * Nunca mostra custo, markup nem comissões (o conteúdo nem os contém).
  */
-export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIXAS_ATUAIS }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null; imagens?: ImagensDoDesenho; caixas?: CaixasDoDesenho }) {
+export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIXAS_DA_IMAGEM }: { c: ConteudoProposta; logo: LogoPdf; aviso?: string | null; imagens?: ImagensDoDesenho; caixas?: CaixasDoDesenho }) {
   const cor = corDaMarca(c.empresa.corPrimaria);
   const maiusculas = (t: string) => (c.descricoesMaiusculas ? t.toUpperCase() : t);
   const nomeEmpresa = c.empresa.nomeFantasia ?? "";
@@ -109,7 +109,7 @@ export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIX
                           {desenho.tipo === "imagem" ? (
                             <ImagemDoDesenhoPdf imagem={imagemParaPdf(imagens, desenho.imagem, i.numero)} largura={caixas.proposta.largura} altura={caixas.proposta.altura} />
                           ) : (
-                            <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={170} />
+                            <DesenhoPdf tipo={i.tipoDesenho} folhas={i.folhas} larguraMm={i.medidas[0]?.larguraMm ?? 2000} alturaMm={i.medidas[0]?.alturaMm ?? 1200} largura={CAIXAS_DO_DESENHO_AUTOMATICO.proposta.largura} />
                           )}
                         </View>
                       </View>

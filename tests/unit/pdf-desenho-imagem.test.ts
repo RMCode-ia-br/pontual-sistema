@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { montarFormasDePagamento } from "@/lib/dominio/alternativas-pagamento";
 import { processarImagemDeDesenho } from "@/lib/imagem/processar";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
-import { CAIXAS_ATUAIS, ErroDesenhoIndisponivel, imagemParaPdf, type ImagensDoDesenho } from "@/modules/propostas/pdf/imagens";
+import { CAIXAS_DA_IMAGEM, CAIXAS_DO_DESENHO_AUTOMATICO, ErroDesenhoIndisponivel, imagemParaPdf, type ImagensDoDesenho } from "@/modules/propostas/pdf/imagens";
 import { ProducaoPdf } from "@/modules/propostas/pdf/producao-pdf";
 import { PropostaPdf } from "@/modules/propostas/pdf/proposta-pdf";
 
@@ -160,8 +160,13 @@ describe.skipIf(pdftotext === undefined)("PDF com imagem: layout e texto", () =>
     ligar(c, [horizontal]);
     delete c.opcoes[0].secoes[0].itens[1].desenhoImagem; // o item 2 segue automático
     const a = await proposta(c);
-    const b = await proposta(c, { caixas: { proposta: { largura: 240, altura: 180 }, producao: { largura: 260, altura: 195 } } });
+    // Outra caixa qualquer, derivada da constante (o teste não fixa o tamanho da caixa da imagem): o texto não muda.
+    const maior = { proposta: { largura: CAIXAS_DA_IMAGEM.proposta.largura * 1.2, altura: CAIXAS_DA_IMAGEM.proposta.altura * 1.2 }, producao: CAIXAS_DA_IMAGEM.producao };
+    const b = await proposta(c, { caixas: maior });
     expect(semEspaco(textoDo(b, "-raw"))).toBe(semEspaco(textoDo(a, "-raw")));
-    expect(CAIXAS_ATUAIS).toEqual({ proposta: { largura: 170, altura: 127.5 }, producao: { largura: 110, altura: 82.5 } }); // as caixas de hoje não mudaram
+  });
+
+  it("a caixa do DESENHO AUTOMÁTICO é a de sempre (a da imagem é outra constante e pode mudar)", () => {
+    expect(CAIXAS_DO_DESENHO_AUTOMATICO).toEqual({ proposta: { largura: 170, altura: 127.5 }, producao: { largura: 110, altura: 82.5 } });
   });
 });

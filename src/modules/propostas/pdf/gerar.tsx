@@ -9,7 +9,7 @@ import { criarUrlDeDownload, criarUrlsDeDownload } from "@/lib/storage";
 
 import type { ConteudoProposta } from "../conteudo";
 import { construirConteudo } from "../servico-ciclo";
-import { CAIXAS_ATUAIS, ErroDesenhoIndisponivel, type CaixasDoDesenho, type ImagemCarregada, type ImagensDoDesenho } from "./imagens";
+import { CAIXAS_DA_IMAGEM, ErroDesenhoIndisponivel, type CaixasDoDesenho, type ImagemCarregada, type ImagensDoDesenho } from "./imagens";
 import { formatoDaImagem } from "./logo";
 import { ProducaoPdf } from "./producao-pdf";
 import { PropostaPdf, type LogoPdf } from "./proposta-pdf";
@@ -112,10 +112,10 @@ export async function carregarImagensDoDesenho(conteudo: ConteudoProposta, opcao
 
 export async function gerarPdfDaProposta(conteudo: ConteudoProposta, aviso: string | null = null, opcoes: { caixas?: CaixasDoDesenho } = {}): Promise<Buffer> {
   const [logo, imagens] = await Promise.all([carregarLogo(conteudo.empresa.logoCaminho), carregarImagensDoDesenho(conteudo)]);
-  return renderToBuffer(<PropostaPdf c={conteudo} logo={logo} aviso={aviso} imagens={imagens} caixas={opcoes.caixas ?? CAIXAS_ATUAIS} />);
+  return renderToBuffer(<PropostaPdf c={conteudo} logo={logo} aviso={aviso} imagens={imagens} caixas={opcoes.caixas ?? CAIXAS_DA_IMAGEM} />);
 }
 
 export async function gerarPdfDeProducao(conteudo: ConteudoProposta, opcaoId: string | null, opcoes: { caixas?: CaixasDoDesenho } = {}): Promise<Buffer> {
   const [logo, imagens] = await Promise.all([carregarLogo(conteudo.empresa.logoCaminho), carregarImagensDoDesenho(conteudo, opcaoId)]);
-  return renderToBuffer(<ProducaoPdf c={conteudo} logo={logo} opcaoId={opcaoId} imagens={imagens} caixas={opcoes.caixas ?? CAIXAS_ATUAIS} />);
+  return renderToBuffer(<ProducaoPdf c={conteudo} logo={logo} opcaoId={opcaoId} imagens={imagens} caixas={opcoes.caixas ?? CAIXAS_DA_IMAGEM} />);
 }

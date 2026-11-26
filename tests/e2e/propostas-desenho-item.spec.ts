@@ -1,9 +1,10 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
 
 import { aguardarAvisosSumirem, ehCelular, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
 import { caminhoDoDesenhoDoItem, criarTipologiaDeTeste, prepararUsuarioE2E, removerObjetoDoStorage } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
+import { desenho, disparar } from "./desenho-ajudantes";
 
 /**
  * Fase 3.6b-1 (Bloco 2): desenho personalizado no item da proposta. Colar (evento de colar simulado com DataTransfer),
@@ -26,32 +27,6 @@ test.beforeAll(async () => {
 test.beforeEach(async ({ page }) => {
   await entrarEEsperarPainel(page, USUARIO_E2E.login, USUARIO_E2E.senhaNova);
 });
-
-/** Desenho de teste: fundo branco e um retângulo colorido (muda a cor para cada arquivo ficar distinto). */
-async function desenho(largura: number, altura: number, cor: string): Promise<Buffer> {
-  const retangulo = await sharp({ create: { width: Math.round(largura * 0.8), height: Math.round(altura * 0.8), channels: 3, background: cor } }).png().toBuffer();
-  return sharp({ create: { width: largura, height: altura, channels: 3, background: "#ffffff" } })
-    .composite([{ input: retangulo, gravity: "center" }])
-    .png()
-    .toBuffer();
-}
-
-/** Dispara um evento de colar (Ctrl+V) ou de soltar arquivo, com um arquivo dentro de um DataTransfer, no elemento. */
-async function disparar(alvo: Locator, tipoDeEvento: "paste" | "drop", arquivo: { buffer: Buffer; nome: string; mime: string } | null, texto?: string) {
-  await alvo.evaluate(
-    (el, p) => {
-      const dt = new DataTransfer();
-      if (p.base64) {
-        const bytes = Uint8Array.from(atob(p.base64), (c) => c.charCodeAt(0));
-        dt.items.add(new File([bytes], p.nome, { type: p.mime }));
-      }
-      if (p.texto) dt.setData("text/plain", p.texto);
-      const evento = p.tipo === "paste" ? new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }) : new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true });
-      el.dispatchEvent(evento);
-    },
-    { tipo: tipoDeEvento, base64: arquivo?.buffer.toString("base64") ?? "", nome: arquivo?.nome ?? "", mime: arquivo?.mime ?? "", texto: texto ?? "" },
-  );
-}
 
 const areaDoDesenho = (page: Page) => page.getByRole("group", { name: "Colar ou escolher imagem do desenho" });
 const previa = (page: Page) => page.getByTestId("previa-desenho");
@@ -157,6 +132,9 @@ test("colar em qualquer campo do diálogo também vale, mas texto colado nos cam
   await expect(toast(page, "Desenho personalizado salvo")).toBeVisible({ timeout: 40_000 });
   await expect.poll(() => previa(page).getAttribute("src")).not.toBe(antes);
   await capturaDoDialogo(page, "desenho-editor-vertical-claro");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await capturaDoDialogo(page, "desenho-editor-vertical-escuro");
+  await page.emulateMedia({ colorScheme: "light" });
 });
 
 test("arrastar e soltar um arquivo na área troca o desenho (quadrado)", async ({ page }) => {
@@ -166,6 +144,9 @@ test("arrastar e soltar um arquivo na área troca o desenho (quadrado)", async (
   await expect(toast(page, "Desenho personalizado salvo")).toBeVisible({ timeout: 40_000 });
   await expect.poll(() => previa(page).getAttribute("src")).not.toBe(antes);
   await capturaDoDialogo(page, "desenho-editor-quadrado-claro");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await capturaDoDialogo(page, "desenho-editor-quadrado-escuro");
+  await page.emulateMedia({ colorScheme: "light" });
 });
 
 test("escolher arquivo (JPG) pelo botão; o envio mostra 'Enviando…'", async ({ page }) => {

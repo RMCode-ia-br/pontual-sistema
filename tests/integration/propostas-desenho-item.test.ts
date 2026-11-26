@@ -6,6 +6,7 @@ import { criarClientePrisma } from "@/lib/db/criar-cliente";
 import { proximoCodigoDoProjeto } from "@/modules/projetos/servico";
 import { reservarNumeroDeProposta } from "@/modules/propostas/servico";
 import { copiarProposta } from "@/modules/propostas/servico-ciclo";
+import { duplicarOpcaoNaTransacao } from "@/modules/propostas/servico-estrutura";
 import { definirDesenhoDoItem, removerDesenhoDoItem, type ImagemGravada } from "@/modules/propostas/servico-desenho";
 
 import { comConexao, criarUsuarioDeTeste } from "./banco-teste";
@@ -31,6 +32,8 @@ async function limpar() {
     await c.query(`DELETE FROM "LogAuditoria" WHERE "entidade" IN ('Proposta','Projeto') AND ("entidadeId" IN (${propostas}) OR "entidadeId" IN (${projetos}))`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "ItemPropostaMedida" WHERE "itemId" IN (${itens})`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "ItemProposta" WHERE "propostaId" IN (${propostas})`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "LinhaAluminio" WHERE nome LIKE $1`, [`${PREFIXO}%`]);
+    await c.query(`DELETE FROM "LogAuditoria" WHERE "entidade" = 'OpcaoProposta' AND "entidadeId" IN (SELECT id FROM "OpcaoProposta" WHERE "propostaId" IN (${propostas}))`, [`${PREFIXO}%`]);
     await c.query(`DELETE FROM "LogAuditoria" WHERE "entidade" = 'Anexo' AND "entidadeId" IN (SELECT id FROM "Anexo" WHERE caminho LIKE 'Int Des/%')`);
     await c.query(`DELETE FROM "Anexo" WHERE caminho LIKE 'Int Des/%'`);
     await c.query(`DELETE FROM "PropostaParcela" WHERE "propostaId" IN (${propostas})`, [`${PREFIXO}%`]);
@@ -216,5 +219,50 @@ describe("revisão copia a referência", () => {
     expect((await item(m.itens[0])).desenhoAnexoId).toBe(a.anexoId);
     expect((await anexo(a.anexoId)).deletadoEm).toBeNull();
     expect((await item(itensDaRevisao[0].id)).desenhoAnexoId).toBe(novo.anexoId);
+  });
+});
+
+describe("duplicar opção copia a referência do desenho", () => {
+  const duplicar = (propostaId: string, opcaoId: string, extra: { linhaId?: string | null } = {}) =>
+    prisma.$transaction((tx) =>
+      duplicarOpcaoNaTransacao(tx, { usuario, ip: null, v: { propostaId, opcaoId, nome: `${PREFIXO} Opção copiada`, linhaId: extra.linhaId ?? null, acabamentoId: null, tipoVidroId: null, espessuraVidroMm: undefined } as never }),
+    );
+  const opcaoDe = async (propostaId: string) => (await prisma.opcaoProposta.findFirstOrThrow({ where: { propostaId, deletadoEm: null }, orderBy: { ordem: "asc" } })).id;
+  const itensDaOpcao = (opcaoId: string) => prisma.itemProposta.findMany({ where: { opcaoId, deletadoEm: null }, orderBy: { ordem: "asc" } });
+
+  it("sem trocas: o item com imagem aponta para o MESMO anexo e o sem imagem continua sem", async () => {
+    const m = await montar("DupOpcao");
+    const a = await definir(m.propostaId, m.itens[0]);
+    const nova = await duplicar(m.propostaId, await opcaoDe(m.propostaId));
+    const copias = await itensDaOpcao(nova.id);
+    expect(copias.map((i) => i.desenhoAnexoId)).toEqual([a.anexoId, null]);
+    expect((await anexo(a.anexoId)).deletadoEm).toBeNull();
+    expect((await item(m.itens[0])).desenhoAnexoId).toBe(a.anexoId); // a opção original não mudou
+  });
+
+  it("com troca de linha (itens recalculados): a referência do desenho continua copiada", async () => {
+    const m = await montar("DupOpcaoLinha");
+    const linha = await prisma.linhaAluminio.create({ data: { nome: `${PREFIXO} Linha ${randomUUID().slice(0, 6)}` } });
+    const a = await definir(m.propostaId, m.itens[0]);
+    const nova = await duplicar(m.propostaId, await opcaoDe(m.propostaId), { linhaId: linha.id });
+    const copias = await itensDaOpcao(nova.id);
+    expect(copias.map((i) => i.linhaId)).toEqual([linha.id, linha.id]); // a troca valeu
+    expect(copias.map((i) => i.desenhoAnexoId)).toEqual([a.anexoId, null]);
+  });
+
+  it("tirar o desenho de um dos lados NÃO apaga o do outro (o anexo é compartilhado)", async () => {
+    const m = await montar("DupOpcaoRemove");
+    const a = await definir(m.propostaId, m.itens[0]);
+    const nova = await duplicar(m.propostaId, await opcaoDe(m.propostaId));
+    await remover(m.propostaId, m.itens[0]);
+    expect((await anexo(a.anexoId)).deletadoEm).toBeNull();
+    expect((await itensDaOpcao(nova.id))[0].desenhoAnexoId).toBe(a.anexoId);
+  });
+
+  it("proposta que não é rascunho recusa duplicar a opção", async () => {
+    const m = await montar("DupOpcaoEnviada");
+    const opcaoId = await opcaoDe(m.propostaId);
+    await prisma.proposta.update({ where: { id: m.propostaId }, data: { status: "ENVIADA" } });
+    await expect(duplicar(m.propostaId, opcaoId)).rejects.toThrow(/já foi enviada/);
   });
 });

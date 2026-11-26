@@ -158,3 +158,12 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **Coluna que vira fonte única precisa de falha alta, não de `COALESCE(coluna, 0)`:** somar zero em silêncio esconderia margem maior do que a real. Recuse com erro claro e limite a checagem à condição certa (aprovada COM valor aprovado), para linhas de teste sem valor não travarem o painel de quem usa o sistema.
 - **Helpers de teste que gravam proposta aprovada direto no banco** (relatórios, custo da obra, E2E) precisam gravar as quatro colunas do aceite; o teste do custo da obra que só tinha duas falhou exatamente por isso.
 - **Scripts de correção em massa:** `node -e '...'` e heredoc com `\r`, `\f` e `\n` viram caracteres reais dentro do arquivo gerado (regex quebrada, formfeed em comentário). Escreva o script com a ferramenta Write (arquivo `.cjs`) e use `replace(a, () => b)` para o `$` do texto novo não ser interpretado.
+
+## Desenho personalizado do item (Fase 3.6b-1)
+- **Comparar PDFs por pixel tem ruído de base:** o mesmo código, gerado duas vezes, já difere em 8 a 14 pixels em linhas finas de 1 a 3 px (sempre nos mesmos pontos), com texto idêntico. Compare por texto (`pdftotext -raw`) e por pixel, e meça o "antes contra antes" primeiro para saber o piso do ruído.
+- **Imagens do PDF sem rasterizar:** o `pdfjs-dist` (build `legacy`, no Node, sem canvas) lê o operador `paintImageXObject` e a matriz acumulada (`save`/`restore`/`transform`): dá tamanho em pixels, tamanho em pontos e posição de cada imagem. Foi assim que o E2E conferiu "dentro da caixa, sem esticar" (`tests/e2e/desenho-ajudantes.ts`).
+- **O Playwright apaga `test-results/` ao começar:** capturas e scripts temporários guardados lá somem na rodada seguinte. Guarde fora (scratchpad) ou numa pasta própria ignorada pelo git (`.scratch-pdf/`, no `.git/info/exclude`).
+- **`tsc` olha `test-results/`:** um script temporário com erro de tipo lá quebra o typecheck do projeto.
+- **Enviar proposta exige condição de pagamento escolhida:** sem ela a ação recusa e o erro aparece atrás do diálogo de confirmação (que continua aberto, sem toast). E2E que envia proposta precisa escolher a condição antes.
+- **Corrida na navegação:** depois de "Criar revisão", espere a URL mudar antes de ler o id da revisão.
+- **Shell:** heredoc e `sed` com barras invertidas, crases ou `${}` corrompem scripts de edição; use a ferramenta de edição ou `Write` para trechos com regex e template.

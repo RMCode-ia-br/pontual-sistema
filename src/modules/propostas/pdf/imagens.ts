@@ -10,10 +10,16 @@ export type CaixaDoDesenho = { largura: number; altura: number };
 export type CaixasDoDesenho = { proposta: CaixaDoDesenho; producao: CaixaDoDesenho };
 
 /**
- * Caixas de hoje (a do desenho automático: 120 × 90 de quadro, na largura de cada PDF). A imagem personalizada usa a
- * mesma caixa por padrão; o tamanho final para itens com imagem ainda está em decisão (Fase 3.6b-1, Bloco 3).
+ * Caixa do DESENHO AUTOMÁTICO (quadro de 120 × 90, na largura de cada PDF). É a de sempre e não muda: item sem imagem
+ * personalizada sai exatamente como antes.
  */
-export const CAIXAS_ATUAIS: CaixasDoDesenho = { proposta: { largura: 170, altura: 127.5 }, producao: { largura: 110, altura: 82.5 } };
+export const CAIXAS_DO_DESENHO_AUTOMATICO: CaixasDoDesenho = { proposta: { largura: 170, altura: 127.5 }, producao: { largura: 110, altura: 82.5 } };
+
+/**
+ * Caixa da IMAGEM PERSONALIZADA, só para item que tem imagem (PONTO ÚNICO de ajuste: PDF, folha de produção e testes
+ * leem daqui). Tamanho PROVISÓRIO (Régis e Marcelo, Fase 3.6b-1): pode mudar depois do teste real com um desenho do Word.
+ */
+export const CAIXAS_DA_IMAGEM: CaixasDoDesenho = { proposta: { largura: 200, altura: 150 }, producao: { largura: 190, altura: 142.5 } };
 
 /**
  * A imagem do desenho de um item não pôde ser carregada ou não confere com o hash congelado. O PDF NÃO sai com o
