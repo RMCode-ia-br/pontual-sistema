@@ -74,6 +74,12 @@ export async function lerPrimeirosBytes(caminho: string, quantidade = 16): Promi
   return new Uint8Array((await resposta.arrayBuffer()).slice(0, quantidade));
 }
 
+/** Grava bytes gerados pelo próprio servidor (imagem já processada). Nunca sobrescreve: o caminho é novo a cada envio. */
+export async function gravarObjeto(caminho: string, bytes: Uint8Array, mime: string): Promise<void> {
+  const { error } = await supabase().storage.from(nomeDoBucket()).upload(caminho, bytes, { contentType: mime, upsert: false, cacheControl: "3600" });
+  if (error) throw new Error("Não foi possível gravar o arquivo.");
+}
+
 export async function removerObjeto(caminho: string): Promise<void> {
   await supabase().storage.from(nomeDoBucket()).remove([caminho]);
 }

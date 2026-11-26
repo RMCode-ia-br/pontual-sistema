@@ -11,6 +11,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
+import { CATEGORIA_DESENHO_DO_ITEM, ENTIDADE_DO_DESENHO_DO_ITEM } from "@/lib/dominio/desenho-item";
 import { can } from "@/lib/permissoes";
 import { criarUrlDeDownload, criarUrlDeUpload, infoDoObjeto, lerPrimeirosBytes, removerObjeto } from "@/lib/storage";
 import { assinaturaConfere, ENTIDADES_COM_ANEXO, sanitizarNomeArquivo, validarArquivo } from "@/lib/storage/regras";
@@ -178,9 +179,13 @@ export async function excluirAnexo(idBruto: string): Promise<ResultadoAcao> {
     await prisma.$transaction(async (tx) => {
       const antes = await tx.anexo.findFirst({
         where: { id: id.data, deletadoEm: null },
-        select: { id: true, nome: true, entidadeTipo: true, entidadeId: true },
+        select: { id: true, nome: true, entidadeTipo: true, entidadeId: true, categoria: true },
       });
       if (!antes) throw new ErroNegocio("Arquivo não encontrado.");
+      // O desenho do item é controlado pelo item da proposta (trocar/remover lá): a exclusão genérica nunca o apaga.
+      if (antes.categoria === CATEGORIA_DESENHO_DO_ITEM || antes.entidadeTipo === ENTIDADE_DO_DESENHO_DO_ITEM) {
+        throw new ErroNegocio("Este desenho pertence a um item da proposta. Remova-o pelo próprio item.");
+      }
       await tx.anexo.update({ where: { id: antes.id }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
       await registrarAuditoria(tx, { usuario: sessao, entidade: "Anexo", entidadeId: antes.id, acao: "EXCLUIR", antes, ip });
     });

@@ -205,6 +205,7 @@ export async function duplicarItem(propostaIdBruto: string, itemIdBruto: string)
           markupPb: o.markupPb,
           calculadoEm: o.calculadoEm,
           avisoPreco: o.avisoPreco,
+          desenhoAnexoId: o.desenhoAnexoId, // o desenho personalizado acompanha o item (o arquivo é compartilhado)
           medidas: { create: o.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, criadoPorId: sessao.id, atualizadoPorId: sessao.id })) },
           criadoPorId: sessao.id,
           atualizadoPorId: sessao.id,
@@ -438,6 +439,7 @@ export async function duplicarOpcao(entrada: { propostaId: string; opcaoId: stri
             markupPb: i.markupPb,
             calculadoEm: new Date(),
             avisoPreco: aviso,
+            desenhoAnexoId: i.desenhoAnexoId,
             medidas: { create: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, criadoPorId: sessao.id, atualizadoPorId: sessao.id })) },
             criadoPorId: sessao.id,
             atualizadoPorId: sessao.id,

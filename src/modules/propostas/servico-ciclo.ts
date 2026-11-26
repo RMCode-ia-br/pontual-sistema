@@ -554,6 +554,7 @@ export async function copiarProposta(tx: Tx, entrada: { usuarioId: string; orige
         markupPb: i.markupPb,
         calculadoEm: i.calculadoEm,
         avisoPreco: i.avisoPreco,
+        desenhoAnexoId: i.desenhoAnexoId, // revisão e cópia levam o desenho personalizado (referência ao mesmo arquivo)
         medidas: { create: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local, ordem: m.ordem, ...autor })) },
         ...autor,
       },
