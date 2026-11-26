@@ -23,7 +23,8 @@ async function semRolagemHorizontal(page: Page) {
 test("a verificação de saúde responde ok sem expor dados", async ({ request }) => {
   const resposta = await request.get("/api/health");
   expect(resposta.status()).toBe(200);
-  expect(await resposta.json()).toEqual({ status: "ok" });
+  // `sharp` é um campo à parte ("ok" ou "falhou"): a falha dele nunca derruba o status geral.
+  expect(await resposta.json()).toEqual({ status: "ok", sharp: expect.stringMatching(/^(ok|falhou)$/) });
 });
 
 test.describe("fluxo de acesso", () => {

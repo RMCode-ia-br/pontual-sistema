@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
+import { verificarSharp } from "@/lib/imagem/saude";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,9 @@ export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const ms = Math.round((performance.now() - inicio) * 10) / 10;
-    return NextResponse.json({ status: "ok" }, { headers: { "Cache-Control": "no-store", "Server-Timing": `db;dur=${ms}` } });
+    // Campo à parte: o processador de imagens (desenho do item) não é motivo para marcar o sistema como fora do ar.
+    const sharp = await verificarSharp();
+    return NextResponse.json({ status: "ok", sharp }, { headers: { "Cache-Control": "no-store", "Server-Timing": `db;dur=${ms}` } });
   } catch (erro) {
     // Log estruturado só com o tipo do erro (nunca a connection string).
     console.error(JSON.stringify({ evento: "health.falha", tipo: erro instanceof Error ? erro.name : "Erro" }));

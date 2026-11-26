@@ -100,7 +100,7 @@ Ainda falta rodar o workflow **manualmente uma vez** (aba Actions, "Backup do ba
 
 ### Verificação de saúde
 
-`GET /api/health` responde `{"status":"ok"}` (200) ou `{"status":"erro"}` (503), sem expor dados. Cadastre-o em um monitor gratuito (ex.: UptimeRobot) a cada 5 a 30 minutos: além de avisar de queda, mantém o projeto Supabase ativo e avisa se ele pausar.
+`GET /api/health` responde `{"status":"ok","sharp":"ok"}` (200) ou `{"status":"erro"}` (503), sem expor dados. O campo `sharp` ("ok" ou "falhou") diz só se o processador de imagens do desenho do item funciona na função; "falhou" NÃO marca o sistema como fora do ar (o `status` continua "ok" e o código, 200). Cadastre-o em um monitor gratuito (ex.: UptimeRobot) a cada 5 a 30 minutos: além de avisar de queda, mantém o projeto Supabase ativo e avisa se ele pausar.
 
 A tela Configurações, Backup e saúde mostra o uso do banco (limite 500 MB) e dos arquivos (limite 1 GB), com alerta a partir de 70% e 90%.
 
