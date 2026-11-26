@@ -48,6 +48,8 @@ async function limpar(c: Client): Promise<void> {
   if (ids.length > 0) {
     const anexos = await c.query<{ caminho: string }>(`SELECT caminho FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
     await removerObjetos(anexos.rows.map((a) => a.caminho));
+    // Desenho personalizado de item (Fase 3.6b-1): o item aponta para o anexo (Restrict); desliga antes de apagar o anexo.
+    await c.query(`UPDATE "ItemProposta" SET "desenhoAnexoId" = NULL WHERE "desenhoAnexoId" IN (SELECT id FROM "Anexo" WHERE "criadoPorId" = ANY($1))`, [ids]);
     await c.query(`DELETE FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
   }
 

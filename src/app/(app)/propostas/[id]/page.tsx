@@ -21,7 +21,7 @@ import { EditorProposta } from "@/modules/propostas/components/editor-proposta";
 import { PainelCiclo, type FormaParaAceite } from "@/modules/propostas/components/painel-ciclo";
 import type { ConteudoProposta } from "@/modules/propostas/conteudo";
 import { construirConteudo } from "@/modules/propostas/servico-ciclo";
-import { itensComCustoDesatualizado, listarMotivosDeRecusa, listarOpcoesDoEditor, listarRevisoes, obterMensagemDeEnvio, obterPropostaParaEditor } from "@/modules/propostas/queries";
+import { itensComCustoDesatualizado, listarMotivosDeRecusa, listarOpcoesDoEditor, listarRevisoes, obterMensagemDeEnvio, obterPropostaParaEditor, urlsDosDesenhosDoEditor } from "@/modules/propostas/queries";
 import { ROTULO_STATUS_PROPOSTA } from "@/modules/propostas/schemas";
 import { serializarProposta } from "@/modules/propostas/tipos";
 import type { StatusProposta } from "@/lib/dominio/ciclo-proposta";
@@ -167,7 +167,7 @@ export default async function PaginaProposta({ params }: { params: Promise<{ id:
         ) : null}
       </div>
 
-      <EditorProposta proposta={serializarProposta(proposta)} opcoes={opcoes} somenteLeitura={!rascunho} temMedidasDaVisita={medidasDaVisita > 0} />
+      <EditorProposta proposta={serializarProposta(proposta, await urlsDosDesenhosDoEditor(proposta))} opcoes={opcoes} somenteLeitura={!rascunho} temMedidasDaVisita={medidasDaVisita > 0} />
 
       <div className="mt-6 max-w-3xl">
         <Anexos entidadeTipo="Proposta" entidadeId={proposta.id} anexos={anexos} titulo="Arquivos da proposta (aceite, comprovantes)" />

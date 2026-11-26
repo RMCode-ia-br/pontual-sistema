@@ -280,9 +280,21 @@ export function EditorProposta({ proposta, opcoes, somenteLeitura = false, temMe
               ) : null}
               {s.itens.map(({ numero, item }) => (
                 <article key={item.id} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[7rem_1fr_auto]" aria-label={`Item ${numero}`}>
-                  <div className="hidden sm:block" aria-hidden>
-                    <DesenhoEsquadria tipo={item.tipoDesenho as TipoDesenho} folhas={item.folhas} larguraMm={item.medidas[0]?.larguraMm ?? 2000} alturaMm={item.medidas[0]?.alturaMm ?? 1200} />
-                  </div>
+                  {item.desenho ? (
+                    // Desenho personalizado: aparece também no celular (o automático só no computador).
+                    <div className="max-w-28 sm:max-w-none">
+                      {item.desenho.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage
+                        <img src={item.desenho.url} alt={`Desenho personalizado do item ${numero}`} loading="lazy" className="aspect-[4/3] w-full rounded border bg-white object-contain" />
+                      ) : (
+                        <p className="text-muted-foreground text-xs">Desenho personalizado (prévia indisponível agora)</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="hidden sm:block" aria-hidden>
+                      <DesenhoEsquadria tipo={item.tipoDesenho as TipoDesenho} folhas={item.folhas} larguraMm={item.medidas[0]?.larguraMm ?? 2000} alturaMm={item.medidas[0]?.alturaMm ?? 1200} />
+                    </div>
+                  )}
                   <div className="min-w-0 text-sm">
                     <p className="font-medium">
                       {numero}. {item.medidas.reduce((n, m) => n + m.quantidade, 0)} un — {item.tipologiaNome ?? "Item livre"}

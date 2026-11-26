@@ -32,6 +32,8 @@ export type ItemSer = {
   avisoPreco: string | null;
   calculadoEm: string | null;
   medidas: MedidaSer[];
+  /** Desenho personalizado (imagem do usuário); null = desenho automático. `url` é um link temporário do Storage. */
+  desenho: { anexoId: string; larguraPx: number | null; alturaPx: number | null; url: string | null } | null;
 };
 
 export type ParcelaSer = { descricao: string; percentualPb: number; gatilho: string; forma: string | null; diasApos: number | null; dataFixa: string | null; parcelasCartao: number | null };
@@ -98,7 +100,7 @@ export type PropostaSer = {
 
 const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
-export function serializarProposta(p: PropostaDoEditor): PropostaSer {
+export function serializarProposta(p: PropostaDoEditor, urlsDosDesenhos: Record<string, string> = {}): PropostaSer {
   return {
     id: p.id,
     numero: p.numero,
@@ -166,6 +168,7 @@ export function serializarProposta(p: PropostaDoEditor): PropostaSer {
       custoMaterialInformadoCentavos: i.custoMaterialInformadoCentavos,
       avisoPreco: i.avisoPreco,
       calculadoEm: i.calculadoEm ? i.calculadoEm.toISOString() : null,
+      desenho: i.desenhoAnexo ? { anexoId: i.desenhoAnexo.id, larguraPx: i.desenhoAnexo.larguraPx, alturaPx: i.desenhoAnexo.alturaPx, url: urlsDosDesenhos[i.desenhoAnexo.caminho] ?? null } : null,
       medidas: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
     })),
     parcelas: p.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),

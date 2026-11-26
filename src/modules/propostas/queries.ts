@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { criarUrlsDeDownload } from "@/lib/storage";
 import { idsDePropostas } from "@/modules/busca/ids-por-busca";
 import { situacaoDasRevisoes } from "@/lib/dominio/desfazer-aprovacao";
 import { calcularPaginacao, lerParametrosLista, type ParametrosBrutos } from "@/lib/listas/parametros";
@@ -95,6 +96,7 @@ export async function obterPropostaParaEditor(id: string) {
         include: {
           medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
           tipologia: { select: { id: true, nome: true, tipoDesenho: true } },
+          desenhoAnexo: { select: { id: true, caminho: true, larguraPx: true, alturaPx: true } },
           linha: { select: { nome: true } },
           acabamento: { select: { nome: true } },
           tipoVidro: { select: { nome: true } },
@@ -105,6 +107,20 @@ export async function obterPropostaParaEditor(id: string) {
 }
 
 export type PropostaDoEditor = NonNullable<Awaited<ReturnType<typeof obterPropostaParaEditor>>>;
+
+/**
+ * Links temporários (30 min) dos desenhos personalizados dos itens, por caminho do Storage. Se o Storage não responder,
+ * devolve vazio: a tela mostra "prévia indisponível" em vez de quebrar a proposta inteira.
+ */
+export async function urlsDosDesenhosDoEditor(p: PropostaDoEditor): Promise<Record<string, string>> {
+  const caminhos = [...new Set(p.itens.flatMap((i) => (i.desenhoAnexo ? [i.desenhoAnexo.caminho] : [])))];
+  if (caminhos.length === 0) return {};
+  try {
+    return Object.fromEntries(await criarUrlsDeDownload(caminhos, 1800));
+  } catch {
+    return {};
+  }
+}
 
 /** Catálogos e padrões que o editor precisa (tipologias ativas com template, condições, markups de Configurações). */
 export async function listarOpcoesDoEditor() {

@@ -16,6 +16,7 @@ import { formatarMoeda } from "@/lib/formatadores";
 import { aoColarMoeda, centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
 
 import { calcularPreviaDoItem, salvarItem } from "../actions/estrutura";
+import { DesenhoPersonalizado } from "./desenho-personalizado";
 import { ROTULO_MODO_PRECO, MODOS_PRECO } from "../schemas";
 import type { ItemSer, OpcoesEditor } from "../tipos";
 
@@ -82,6 +83,8 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
+  /** Imagem personalizada atual (a prévia ao lado e o cartão usam esta em vez do desenho automático). */
+  const [personalizado, setPersonalizado] = useState<{ url: string | null } | null>(item?.desenho ? { url: item.desenho.url } : null);
   const [pendente, iniciar] = useTransition();
   const pedido = useRef(0);
 
@@ -272,9 +275,22 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
           ) : null}
         </div>
         <div className="hidden rounded-lg border p-2 sm:block" aria-hidden>
-          <DesenhoEsquadria tipo={desenho} folhas={inteiro(folhas)} larguraMm={primeira.larguraMm || 2000} alturaMm={primeira.alturaMm || 1200} />
+          {personalizado?.url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage (ou prévia local)
+            <img src={personalizado.url} alt="" className="aspect-[4/3] w-full bg-white object-contain" />
+          ) : (
+            <DesenhoEsquadria tipo={desenho} folhas={inteiro(folhas)} larguraMm={primeira.larguraMm || 2000} alturaMm={primeira.alturaMm || 1200} />
+          )}
         </div>
       </div>
+
+      <DesenhoPersonalizado
+        propostaId={propostaId}
+        itemId={item?.id ?? null}
+        desenhoInicial={item?.desenho ?? null}
+        automatico={<DesenhoEsquadria tipo={desenho} folhas={inteiro(folhas)} larguraMm={primeira.larguraMm || 2000} alturaMm={primeira.alturaMm || 1200} />}
+        aoMudar={(url, tem) => setPersonalizado(tem ? { url } : null)}
+      />
 
       <fieldset className="grid gap-2 rounded-lg border p-3">
         <legend className="px-1 text-sm font-medium">Medidas (mm) — vários vãos iguais no mesmo valor</legend>
