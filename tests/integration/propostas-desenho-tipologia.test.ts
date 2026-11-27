@@ -347,3 +347,24 @@ describe("salvar o desenho do item como nova tipologia: a nova tipologia é herd
     expect(shaDoItem(await aoVivo(m.propostaId), 0)).toBe(a.sha256);
   });
 });
+
+describe("imagem incompleta: a mensagem diz onde reenviar", () => {
+  it("tipologia com imagem sem hash: o rascunho avisa para reenviar NO CADASTRO DA TIPOLOGIA (e o item com imagem própria incompleta continua pedindo no item)", async () => {
+    const t = await novaTipologia("Incompleta");
+    const sem = await prisma.anexo.create({
+      data: { entidadeTipo: "Tipologia", entidadeId: t.id, categoria: "desenho-tipologia", nome: "desenho-tipologia.png", caminho: `IntDesTip/${randomUUID()}.png`, mime: "image/png", tamanhoBytes: 10, usarNoPortfolio: false, criadoPorId: usuario.id },
+      select: { id: true },
+    });
+    await prisma.tipologia.update({ where: { id: t.id }, data: { desenhoAnexoId: sem.id } });
+    const m = await montar("Incompleta", t.id);
+    await expect(aoVivo(m.propostaId)).rejects.toThrow("O desenho da tipologia usada no item 1 está incompleto. Envie a imagem de novo no cadastro da tipologia.");
+
+    // Imagem PRÓPRIA do item incompleta: a mensagem de sempre (reenviar no item), mesmo havendo imagem na tipologia.
+    const outroSem = await prisma.anexo.create({
+      data: { entidadeTipo: "ItemProposta", entidadeId: m.itens[0], categoria: "desenho-item", nome: "desenho-item.png", caminho: `IntDesTip/${randomUUID()}.png`, mime: "image/png", tamanhoBytes: 10, usarNoPortfolio: false, criadoPorId: usuario.id },
+      select: { id: true },
+    });
+    await prisma.itemProposta.update({ where: { id: m.itens[0] }, data: { desenhoAnexoId: outroSem.id } });
+    await expect(aoVivo(m.propostaId)).rejects.toThrow("O desenho personalizado do item 1 está incompleto. Envie a imagem de novo.");
+  });
+});

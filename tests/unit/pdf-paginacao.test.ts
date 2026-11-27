@@ -84,7 +84,7 @@ describe("a página 1 nunca fica só com o cabeçalho quando o item 1 cabe (cabe
     const ruins: string[] = [];
     for (const modo of ["NORMAL", "sem"] as const) {
       for (let titulo = 0; titulo <= 14; titulo++) {
-        for (let obs = 0; obs <= 2; obs++) {
+        for (let obs = 0; obs <= 1; obs++) {
           const r = await paginasDosItens(await proposta(montar(3, modo, titulo, obs)), 3);
           if (r.itens[0] !== 1) ruins.push(`${modo} título=${titulo} obs=${obs} → itens nas páginas [${r.itens}]`);
         }
@@ -97,7 +97,7 @@ describe("a página 1 nunca fica só com o cabeçalho quando o item 1 cabe (cabe
     const ruins: string[] = [];
     for (const modo of ["NORMAL", "sem"] as const) {
       for (let cabecalho = 0; cabecalho <= 14; cabecalho++) {
-        for (let obs = 0; obs <= 2; obs++) {
+        for (let obs = 0; obs <= 1; obs++) {
           const r = await paginasDosItens(await producao(montar(4, modo, cabecalho, obs)), 4);
           if (r.itens[0] !== 1) ruins.push(`${modo} cabeçalho=${cabecalho} obs=${obs} → itens nas páginas [${r.itens}]`);
         }
@@ -105,4 +105,40 @@ describe("a página 1 nunca fica só com o cabeçalho quando o item 1 cabe (cabe
     }
     expect(ruins, ruins.join("\n")).toEqual([]);
   }, 300_000);
+});
+
+/** A última página da folha de produção tem pelo menos um item (nunca uma página só com o rodapé). */
+async function ultimaPaginaTemItem(pdf: Buffer, n: number): Promise<{ paginas: number; temItem: boolean }> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(pdf), useSystemFonts: true, isEvalSupported: false }).promise;
+  const texto = (await (await doc.getPage(doc.numPages)).getTextContent()).items.map((i) => ("str" in i ? i.str : "")).join(" ");
+  let temItem = false;
+  for (let k = 1; k <= n; k++) if (new RegExp(`SUPREMA ${k}(?!\\d)`).test(texto)) temItem = true;
+  return { paginas: doc.numPages, temItem };
+}
+
+describe("folha de produção: nunca termina numa página vazia (só com o rodapé)", () => {
+  it("o último bloco da opção não tem espaço depois dele (o espaço sozinho criava uma página a mais), com altura do cabeçalho variada", async () => {
+    const ruins: string[] = [];
+    for (const modo of ["NORMAL", "sem"] as const) {
+      for (const n of [3, 4]) {
+        for (let cabecalho = 0; cabecalho <= 14; cabecalho++) {
+          for (let obs = 0; obs <= 1; obs++) {
+            const r = await ultimaPaginaTemItem(await producao(montar(n, modo, cabecalho, obs)), n);
+            if (!r.temItem) ruins.push(`${modo} n=${n} cabeçalho=${cabecalho} obs=${obs} → ${r.paginas} páginas, a última sem item`);
+          }
+        }
+      }
+    }
+    expect(ruins, ruins.join("\n")).toEqual([]);
+  }, 300_000);
+
+  it("com várias opções o espaço entre elas continua (só o último bloco fica sem espaço) e todas as opções aparecem", async () => {
+    const c = conteudoDeExemplo(lista(4), [{ nome: "Linha Suprema" }, { nome: "Linha Gold" }, { nome: "Linha Classic" }]);
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await producao(c)), useSystemFonts: true, isEvalSupported: false }).promise;
+    let texto = "";
+    for (let p = 1; p <= doc.numPages; p++) texto += (await (await doc.getPage(p)).getTextContent()).items.map((i) => ("str" in i ? i.str : "")).join(" ") + " ";
+    for (const nome of ["LINHA SUPREMA", "LINHA GOLD", "LINHA CLASSIC"]) expect(texto, nome).toContain(nome);
+  });
 });

@@ -37,8 +37,15 @@ export async function travarFamiliaDaProposta(tx: Tx, propostaId: string): Promi
  * Referência congelada da imagem do desenho (caminho + hash): é o que o PDF da proposta enviada lê, nunca o item.
  * Anexo sem hash ou dimensões é dado corrompido: recusa em vez de congelar uma referência que não dá para conferir.
  */
-function imagemDoSnapshot(numeroDoItem: number, a: { id: string; caminho: string; mime: string; sha256: string | null; larguraPx: number | null; alturaPx: number | null }): ImagemDoDesenho {
-  if (!a.sha256 || !a.larguraPx || !a.alturaPx) throw new ErroNegocio(`O desenho personalizado do item ${numeroDoItem} está incompleto. Envie a imagem de novo.`);
+function imagemDoSnapshot(numeroDoItem: number, origem: "ITEM" | "TIPOLOGIA", a: { id: string; caminho: string; mime: string; sha256: string | null; larguraPx: number | null; alturaPx: number | null }): ImagemDoDesenho {
+  if (!a.sha256 || !a.larguraPx || !a.alturaPx) {
+    // A causa está onde a imagem mora: no item (reenviar no item) ou na tipologia (reenviar no cadastro da tipologia).
+    throw new ErroNegocio(
+      origem === "ITEM"
+        ? `O desenho personalizado do item ${numeroDoItem} está incompleto. Envie a imagem de novo.`
+        : `O desenho da tipologia usada no item ${numeroDoItem} está incompleto. Envie a imagem de novo no cadastro da tipologia.`,
+    );
+  }
   return { anexoId: a.id, caminho: a.caminho, sha256: a.sha256, mime: a.mime, larguraPx: a.larguraPx, alturaPx: a.alturaPx };
 }
 
@@ -126,10 +133,10 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
             const desenho = resolverDesenhoDoItem({
               tipoDesenho: item.tipologia?.tipoDesenho ?? "GENERICO",
               folhas: item.folhas,
-              desenhoImagem: item.desenhoAnexo ? imagemDoSnapshot(numero, item.desenhoAnexo) : null,
+              desenhoImagem: item.desenhoAnexo ? imagemDoSnapshot(numero, "ITEM", item.desenhoAnexo) : null,
               tamanhoDesenho: lerTamanhoDoDesenho(item.desenhoConfig),
               // A imagem da tipologia só é lida (e conferida) quando o item não tem a própria: a do item vence.
-              desenhoDaTipologia: !item.desenhoAnexo && item.tipologia?.desenhoAnexo ? { imagem: imagemDoSnapshot(numero, item.tipologia.desenhoAnexo), tamanho: lerTamanhoDoDesenho(item.tipologia.desenhoConfig) } : null,
+              desenhoDaTipologia: !item.desenhoAnexo && item.tipologia?.desenhoAnexo ? { imagem: imagemDoSnapshot(numero, "TIPOLOGIA", item.tipologia.desenhoAnexo), tamanho: lerTamanhoDoDesenho(item.tipologia.desenhoConfig) } : null,
             });
             return {
             numero,

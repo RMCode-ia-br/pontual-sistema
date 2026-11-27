@@ -50,8 +50,9 @@ export function ProducaoPdf({ c, opcaoId, logo = null, imagens = {}, caixas = CA
           ) : null}
         </View>
 
+        {/* Espaço entre opções como paddingBottom (não marginBottom: a margem faz o react-pdf empurrar o bloco inteiro para a página seguinte). O ÚLTIMO bloco fica sem espaço: nada vem depois dele e o espaço sozinho criaria uma página vazia. */}
         {opcoes.map((o) => (
-          <View key={o.id} style={{ paddingBottom: 8 }}>
+          <View key={o.id} style={{ paddingBottom: o.id === opcoes[opcoes.length - 1].id ? 0 : 8 }}>
             {varias ? <Text style={{ fontSize: 10, ...NEGRITO, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
             {o.secoes.map((s, si) => (
               <View key={si}>
