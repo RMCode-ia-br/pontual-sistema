@@ -234,7 +234,7 @@ describe("tamanho do desenho por item (caixas lidas das constantes)", () => {
     expect(g.x + g.larguraPt).toBeLessThan(n.x + n.larguraPt + 0.6);
   });
 
-  it("itens Grandes continuam indivisíveis: o texto de cada item e a sua imagem ficam na MESMA página, nas duas folhas", async () => {
+  it.skipIf(pdftotext === undefined)("itens Grandes continuam indivisíveis: o texto de cada item e a sua imagem ficam na MESMA página, nas duas folhas", async () => {
     const c = conteudoDeExemplo(lista(9));
     ligarTamanho(c, horizontal, "GRANDE");
     for (const [rotulo, gerar] of [["proposta", proposta], ["produção", producao]] as const) {
