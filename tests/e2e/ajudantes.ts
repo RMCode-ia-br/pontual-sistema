@@ -76,3 +76,16 @@ export async function conferirComoECalculado(cartao: Locator, trecho: string | R
   await expect(cartao.getByText(trecho, { exact: false }).last()).toBeVisible();
   return botao;
 }
+
+/**
+ * Espera a página HIDRATAR (o React ligar os eventos) no elemento dado. Escolher arquivo ou disparar evento logo depois do
+ * `goto` (evento `load`) pode acontecer ANTES da hidratação: o navegador dispara o `change`, mas o componente ainda não o
+ * escuta e nada acontece (sem requisição, sem aviso, estouro de 30 s). O React marca cada nó hidratado com uma chave interna
+ * `__reactProps$...`; sem ela, o nó ainda é só HTML do servidor. Visto no trace das falhas de configuracoes.spec.ts (celular):
+ * o `setInputFiles` rodou 50 a 80 ms depois do último script e antes do pré-carregamento de rotas, que só começa depois de hidratar.
+ */
+export async function aguardarHidratado(alvo: Locator, tempoMaximoMs = 15_000) {
+  await expect
+    .poll(() => alvo.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$"))), { message: "a página precisa terminar de hidratar antes de interagir", timeout: tempoMaximoMs })
+    .toBe(true);
+}

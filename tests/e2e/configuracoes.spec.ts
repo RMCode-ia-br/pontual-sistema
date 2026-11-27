@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { alertaDeFormulario, aguardarAvisosSumirem, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
+import { alertaDeFormulario, aguardarAvisosSumirem, aguardarHidratado, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
 import {
   buscarAuditoriaFeitaPeloE2E,
   criarEspessuraDeVidroDeTeste,
@@ -108,6 +108,7 @@ test.describe("empresa, logo e auditoria", () => {
 
   test("troca o logo: envia a imagem ao Storage privado e passa a exibi-la", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
+    await aguardarHidratado(page.getByTestId("entrada-logo")); // sem isso o evento pode chegar antes de a página hidratar
     await page.getByTestId("entrada-logo").setInputFiles({ name: "logo-e2e.png", mimeType: "image/png", buffer: PNG_1X1 });
     await expect(toast(page, "Logo atualizado.")).toBeVisible({ timeout: 40_000 });
     await expect(page.getByAltText("Logo atual da empresa")).toBeVisible({ timeout: 20_000 });
@@ -123,6 +124,7 @@ test.describe("empresa, logo e auditoria", () => {
 
   test("recusa arquivo que não é imagem como logo", async ({ page }) => {
     await page.goto("/configuracoes/empresa");
+    await aguardarHidratado(page.getByTestId("entrada-logo"));
     await page.getByTestId("entrada-logo").setInputFiles({ name: "doc.txt", mimeType: "text/plain", buffer: Buffer.from("texto") });
     await expect(toast(page, /imagem|Tipo de arquivo/)).toBeVisible({ timeout: 40_000 });
   });
