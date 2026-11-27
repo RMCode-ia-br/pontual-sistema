@@ -78,7 +78,7 @@ export function PropostaPdf({ c, logo, aviso = null, imagens = {}, caixas = CAIX
 
         {/* Escopo */}
         {c.opcoes.map((o) => (
-          <View key={o.id} style={{ marginBottom: 10 }}>
+          <View key={o.id} style={{ paddingBottom: 10 }}>
             {varias ? <Text style={{ fontSize: 10, ...NEGRITO, backgroundColor: cor, color: "#ffffff", padding: 4, marginTop: 6, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
             {o.secoes.map((s, si) => (
               <View key={si}>

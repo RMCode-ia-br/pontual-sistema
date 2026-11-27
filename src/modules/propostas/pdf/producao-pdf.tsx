@@ -51,7 +51,7 @@ export function ProducaoPdf({ c, opcaoId, logo = null, imagens = {}, caixas = CA
         </View>
 
         {opcoes.map((o) => (
-          <View key={o.id} style={{ marginBottom: 8 }}>
+          <View key={o.id} style={{ paddingBottom: 8 }}>
             {varias ? <Text style={{ fontSize: 10, ...NEGRITO, marginBottom: 4 }}>{o.nome.toUpperCase()}</Text> : null}
             {o.secoes.map((s, si) => (
               <View key={si}>
