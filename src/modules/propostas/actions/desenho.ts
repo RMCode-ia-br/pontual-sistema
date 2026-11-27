@@ -110,8 +110,12 @@ export async function concluirUploadDesenho(entrada: unknown): Promise<Resultado
       return sucesso({ anexoId: r.anexoId, larguraPx: imagem.larguraPx, alturaPx: imagem.alturaPx }, "Desenho personalizado salvo.");
     } finally {
       // O original nunca é usado; a versão final só é apagada se NÃO chegou a ser registrada (nenhuma linha aponta para ela).
+      // Se a confirmação da transação se perdeu (conexão caída depois do COMMIT), confere no banco antes: em dúvida, deixa o arquivo órfão.
       await removerObjeto(caminhoOriginal).catch(() => undefined);
-      if (gravado && caminhoFinal) await removerObjeto(caminhoFinal).catch(() => undefined);
+      if (gravado && caminhoFinal) {
+        const registrado = await prisma.anexo.count({ where: { caminho: caminhoFinal } }).catch(() => 1);
+        if (registrado === 0) await removerObjeto(caminhoFinal).catch(() => undefined);
+      }
     }
   });
 }

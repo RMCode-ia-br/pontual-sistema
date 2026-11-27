@@ -8,6 +8,7 @@ import { conteudoParaPdf, gerarPdfDaProposta } from "@/modules/propostas/pdf/ger
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const IDENTIFICADOR = /^[\w-]{1,64}$/;
 

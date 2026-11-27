@@ -167,3 +167,10 @@ O que funcionou, o que deu errado e o que evitar. Atualizar ao fim de cada fase.
 - **Enviar proposta exige condição de pagamento escolhida:** sem ela a ação recusa e o erro aparece atrás do diálogo de confirmação (que continua aberto, sem toast). E2E que envia proposta precisa escolher a condição antes.
 - **Corrida na navegação:** depois de "Criar revisão", espere a URL mudar antes de ler o id da revisão.
 - **Shell:** heredoc e `sed` com barras invertidas, crases ou `${}` corrompem scripts de edição; use a ferramenta de edição ou `Write` para trechos com regex e template.
+
+## Desenho personalizado no item (Fase 3.6b-1)
+- Comparar PDFs: texto por `pdftotext -raw`, pixel por pdfjs + Chromium e posição de imagem por `getOperatorList`. Diferença de 8–14 px em linhas finas é ruído de renderização (o mesmo PDF gerado duas vezes já difere), não regressão.
+- `wrap={false}` em item com imagem 4:3 grande pode deixar a página 1 só com o cabeçalho (react-pdf); investigar à parte antes de mexer na paginação.
+- Playwright limpa `test-results/` a cada rodada: scripts e capturas de apoio ficam fora dele.
+- Rodada completa em paralelo estoura o limite de 5 s do Vitest (argon2, PDF): `testTimeout` de 30 s. Se o E2E completo falhar por timeout de 30 s em vários arquivos, reexecute só esses antes de concluir que há regressão.
+- Antes de apagar o arquivo gravado depois de um erro na transação, confira no banco se a linha chegou a ser gravada (COMMIT pode ter acontecido e a resposta se perdido).
