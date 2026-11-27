@@ -1020,3 +1020,27 @@ export async function auditoriasDaTipologia(nome: string, trecho: string): Promi
 export async function idDaTipologiaDeTeste(nome: string): Promise<string> {
   return comConexao(async (c) => (await c.query<{ id: string }>(`SELECT id FROM "Tipologia" WHERE nome = $1 AND "deletadoEm" IS NULL`, [nome])).rows[0].id);
 }
+
+/** Quantas tipologias vivas têm este nome (sem diferenciar maiúsculas). */
+export async function contarTipologiasComNome(nome: string): Promise<number> {
+  return comConexao(async (c) => (await c.query<{ n: number }>(`SELECT count(*)::int AS n FROM "Tipologia" WHERE lower(nome) = lower($1) AND "deletadoEm" IS NULL`, [nome])).rows[0].n);
+}
+
+/** Quantos anexos (linhas) existem para um caminho do Storage: a imagem compartilhada tem de continuar com UMA linha. */
+export async function contarAnexosComCaminho(caminho: string): Promise<number> {
+  return comConexao(async (c) => (await c.query<{ n: number }>(`SELECT count(*)::int AS n FROM "Anexo" WHERE caminho = $1`, [caminho])).rows[0].n);
+}
+
+/** Itens e propostas que já usam a tipologia pelo nome (a nova tipologia criada do item nasce sem composição, mão de obra e preços). */
+export async function composicaoDaTipologia(nome: string): Promise<{ insumos: number; maoDeObra: number; precos: number }> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ insumos: number; mao: number; precos: number }>(
+      `SELECT (SELECT count(*) FROM "ComposicaoInsumo" WHERE "tipologiaId" = t.id)::int AS insumos,
+              (SELECT count(*) FROM "ComposicaoMaoDeObra" WHERE "tipologiaId" = t.id)::int AS mao,
+              (SELECT count(*) FROM "TabelaPreco" WHERE "tipologiaId" = t.id)::int AS precos
+         FROM "Tipologia" t WHERE t.nome = $1 AND t."deletadoEm" IS NULL`,
+      [nome],
+    );
+    return { insumos: r.rows[0].insumos, maoDeObra: r.rows[0].mao, precos: r.rows[0].precos };
+  });
+}

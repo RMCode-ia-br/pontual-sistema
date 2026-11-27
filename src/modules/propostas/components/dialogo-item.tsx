@@ -11,10 +11,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { gerarDescricao, valoresDoTemplate } from "@/lib/dominio/descricao-item";
 import type { TipoDesenho } from "@/lib/dominio/desenho";
-import type { TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
+import { resolverDesenhoDoItem, type TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 import { areaM2, pontosBaseParaPercentual } from "@/lib/dominio/preco";
 import { formatarMoeda } from "@/lib/formatadores";
 import { aoColarMoeda, centavosParaCampo, mascararMoeda } from "@/lib/formatadores/mascaras";
+
+import { desenhoDaTipologiaParaTelaAcao } from "@/modules/tipologias/actions/desenho";
+import { SalvarComoTipologia } from "@/modules/tipologias/components/salvar-como-tipologia";
+import type { TIPOS_DESENHO } from "@/modules/tipologias/schemas";
 
 import { calcularPreviaDoItem, salvarItem } from "../actions/estrutura";
 import { enviarDesenhoDoItem } from "./desenho-envio";
@@ -89,6 +93,9 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
   const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
   /** Imagem personalizada atual (a prévia ao lado e o cartão usam esta em vez do desenho automático). */
   const [personalizado, setPersonalizado] = useState<{ url: string | null } | null>(item?.desenho ? { url: item.desenho.url } : null);
+  /** Link da imagem de cada tipologia já pedida (o do item aberto vem pronto da página; os outros, sob demanda ao trocar a tipologia). */
+  const [urlsDasTipologias, setUrlsDasTipologias] = useState<Record<string, string | null>>(item?.tipologiaId && item.desenhoDaTipologia ? { [item.tipologiaId]: item.desenhoDaTipologia.url } : {});
+  const [criandoTipologia, setCriandoTipologia] = useState(false);
   const [salvandoItem, iniciar] = useTransition();
   const pedido = useRef(0);
   /** Id do item: o do item que está sendo editado ou, depois do primeiro "Salvar" de um item novo, o que acabou de ser criado (salvar de novo ATUALIZA, nunca duplica). */
@@ -100,7 +107,7 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
   const [enviandoImagem, setEnviandoImagem] = useState(false);
   const [ocupadoDoDesenho, setOcupadoDoDesenho] = useState(false);
   const salvandoRef = useRef(false); // trava de duplo clique (o estado só muda depois do próximo desenho da tela)
-  const ocupado = salvandoItem || enviandoImagem || ocupadoDoDesenho;
+  const ocupado = salvandoItem || enviandoImagem || ocupadoDoDesenho || criandoTipologia;
   useEffect(() => {
     aoOcupar(ocupado);
   }, [ocupado, aoOcupar]);
@@ -186,6 +193,12 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
       if (modo === "MANUAL" && !valorManual) setModo("MANUAL");
     }
     setDescricaoEditada(false);
+    // Tipologia com desenho: o link da imagem vem sob demanda (o componente de cliente não recebe função do servidor; chama a ação).
+    if (t?.desenho && !(id in urlsDasTipologias)) {
+      void desenhoDaTipologiaParaTelaAcao({ tipologiaId: id }).then((r) => {
+        setUrlsDasTipologias((atual) => ({ ...atual, [id]: r.ok ? (r.dados?.url ?? null) : null }));
+      });
+    }
   }
 
   function salvar() {
@@ -234,6 +247,17 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
 
   const previaVisivel = medidasLidas.ok ? previa : null;
   const desenho = tipologia ? (tipologia.tipoDesenho as TipoDesenho) : "GENERICO";
+  /** Desenho guardado na tipologia escolhida (vale enquanto o item não tiver imagem própria). */
+  const herdado = tipologia?.desenho ? { anexoId: tipologia.desenho.anexoId, tamanho: tipologia.desenho.tamanho, url: urlsDasTipologias[tipologia.id] ?? null } : null;
+  // UMA decisão (item > tipologia > automático), a mesma do snapshot e dos PDFs.
+  const mostrado = resolverDesenhoDoItem({
+    tipoDesenho: desenho,
+    folhas: inteiro(folhas),
+    desenhoImagem: personalizado ? { url: personalizado.url } : null,
+    tamanhoDesenho: tamanhoDesenho,
+    desenhoDaTipologia: herdado ? { imagem: { url: herdado.url }, tamanho: herdado.tamanho } : null,
+  });
+  const urlDaPrevia = mostrado.tipo === "imagem" ? mostrado.imagem.url : null;
   const primeira = medidasLidas.ok ? medidasLidas.lidas[0] : { larguraMm: 2000, alturaMm: 1200 };
   const temFaces = tipologia?.templateDescricao.includes("{FACES}");
   const temTorres = tipologia?.templateDescricao.includes("{TORRES_CM}");
@@ -323,9 +347,9 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
           ) : null}
         </div>
         <div className="hidden rounded-lg border p-2 sm:block" aria-hidden>
-          {personalizado?.url ? (
+          {urlDaPrevia ? (
             // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage (ou prévia local)
-            <img src={personalizado.url} alt="" className="aspect-[4/3] w-full bg-white object-contain" />
+            <img src={urlDaPrevia} alt="" className="aspect-[4/3] w-full bg-white object-contain" />
           ) : (
             <DesenhoEsquadria tipo={desenho} folhas={inteiro(folhas)} larguraMm={primeira.larguraMm || 2000} alturaMm={primeira.alturaMm || 1200} />
           )}
@@ -346,7 +370,17 @@ function FormItem({ aoFechar, propostaId, opcaoId, grupoId, grupos, opcoesDaProp
         aoEnviado={imagemEnviada}
         aoOcupar={setOcupadoDoDesenho}
         aoMudar={mudarPrevia}
+        herdado={herdado ? { url: herdado.url, tamanho: herdado.tamanho } : null}
       />
+
+      {itemId && personalizado && !imagemPendente ? (
+        <SalvarComoTipologia
+          itemId={itemId}
+          tipoDesenhoInicial={desenho as (typeof TIPOS_DESENHO)[number]}
+          modeloInicial={tipologia?.templateDescricao ?? descricao}
+          aoOcupar={setCriandoTipologia}
+        />
+      ) : null}
 
       <fieldset className="grid gap-2 rounded-lg border p-3">
         <legend className="px-1 text-sm font-medium">Medidas (mm) — vários vãos iguais no mesmo valor</legend>

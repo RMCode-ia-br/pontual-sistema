@@ -5,7 +5,7 @@ import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { montarFormasDePagamento, type FormaPagamentoConteudo } from "@/lib/dominio/alternativas-pagamento";
 import { problemasParaEnviar } from "@/lib/dominio/ciclo-proposta";
-import { lerTamanhoDoDesenho, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
+import { lerTamanhoDoDesenho, resolverDesenhoDoItem, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
 import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
 import { gerarParcelas, type ParcelaPlanejada } from "@/lib/dominio/parcelas";
 import { calcularTotais, MAXIMO_CENTAVOS, quantidadeTotal } from "@/lib/dominio/preco";
@@ -42,6 +42,8 @@ function imagemDoSnapshot(numeroDoItem: number, a: { id: string; caminho: string
   return { anexoId: a.id, caminho: a.caminho, sha256: a.sha256, mime: a.mime, larguraPx: a.larguraPx, alturaPx: a.alturaPx };
 }
 
+const ANEXO_DO_DESENHO = { id: true, caminho: true, mime: true, sha256: true, larguraPx: true, alturaPx: true } as const;
+
 /** Monta o conteúdo de impressão a partir do banco (rascunho: ao vivo; enviada: vira o snapshot). */
 export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configuracaoEmpresa" | "condicaoPagamento">, propostaId: string): Promise<ConteudoProposta> {
   const [p, empresa] = await Promise.all([
@@ -56,7 +58,7 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
         itens: {
           where: { deletadoEm: null },
           orderBy: [{ ordem: "asc" }, { id: "asc" }],
-          include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, tipologia: { select: { tipoDesenho: true } }, desenhoAnexo: { select: { id: true, caminho: true, mime: true, sha256: true, larguraPx: true, alturaPx: true } } },
+          include: { medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } }, tipologia: { select: { tipoDesenho: true, desenhoConfig: true, desenhoAnexo: { select: ANEXO_DO_DESENHO } } }, desenhoAnexo: { select: ANEXO_DO_DESENHO } },
         },
       },
     }),
@@ -119,7 +121,17 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
         nome: o.nome,
         secoes: montarSecoes(o.id, p.grupos, p.itens).map((s) => ({
           grupo: s.grupo?.nome ?? null,
-          itens: s.itens.map(({ numero, item }) => ({
+          itens: s.itens.map(({ numero, item }) => {
+            // UMA decisão (item > tipologia > automático) para a tela e os PDFs; o snapshot guarda a imagem JÁ resolvida.
+            const desenho = resolverDesenhoDoItem({
+              tipoDesenho: item.tipologia?.tipoDesenho ?? "GENERICO",
+              folhas: item.folhas,
+              desenhoImagem: item.desenhoAnexo ? imagemDoSnapshot(numero, item.desenhoAnexo) : null,
+              tamanhoDesenho: lerTamanhoDoDesenho(item.desenhoConfig),
+              // A imagem da tipologia só é lida (e conferida) quando o item não tem a própria: a do item vence.
+              desenhoDaTipologia: !item.desenhoAnexo && item.tipologia?.desenhoAnexo ? { imagem: imagemDoSnapshot(numero, item.tipologia.desenhoAnexo), tamanho: lerTamanhoDoDesenho(item.tipologia.desenhoConfig) } : null,
+            });
+            return {
             numero,
             descricao: item.descricao,
             local: item.local,
@@ -129,9 +141,10 @@ export async function construirConteudo(db: Tx | Pick<Tx, "proposta" | "configur
             medidas: item.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
             quantidade: quantidadeTotal(item.medidas),
             precoTotalCentavos: item.precoTotalCentavos,
-            ...(item.desenhoAnexo ? { desenhoImagem: imagemDoSnapshot(numero, item.desenhoAnexo) } : {}),
-            ...(item.desenhoAnexo && lerTamanhoDoDesenho(item.desenhoConfig) === "GRANDE" ? { tamanhoDesenho: "GRANDE" as const } : {}),
-          })),
+            ...(desenho.tipo === "imagem" ? { desenhoImagem: desenho.imagem } : {}),
+            ...(desenho.tipo === "imagem" && desenho.tamanho === "GRANDE" ? { tamanhoDesenho: "GRANDE" as const } : {}),
+            };
+          }),
         })),
         totais: { itensCentavos: t.itensCentavos, descontoCentavos: t.descontoCentavos, acrescimoNotaCentavos: t.acrescimoNotaCentavos, totalCentavos: t.totalCentavos, areaM2: t.areaM2 },
       };

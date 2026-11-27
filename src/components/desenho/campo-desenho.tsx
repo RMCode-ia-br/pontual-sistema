@@ -66,6 +66,11 @@ type Props = {
   aoOcupar?: (ocupado: boolean) => void;
   /** Avisa o formulário qual é a imagem atual (para a prévia ao lado), sem passar função do servidor. */
   aoMudar?: (previaUrl: string | null, personalizado: boolean) => void;
+  /**
+   * Desenho herdado da tipologia (só o item usa). Sem imagem própria, é ele que vale: a prévia o mostra, o seletor de tamanho
+   * dá lugar a "Tamanho definido na tipologia: …" e "voltar" deixa de existir. Com imagem própria, "voltar" devolve este desenho.
+   */
+  herdado?: { url: string | null; tamanho: TamanhoDoDesenho } | null;
 };
 
 type Atual = { anexoId: string; previaUrl: string | null };
@@ -94,8 +99,14 @@ export function CampoDesenho({
   aoEnviado = NADA,
   aoOcupar = NADA,
   aoMudar = NADA,
+  herdado = null,
 }: Props) {
-  const textos = { ...TEXTOS_DO_ITEM, ...textosParciais };
+  const textos = {
+    ...TEXTOS_DO_ITEM,
+    // Com desenho na tipologia, tirar a imagem do item devolve o desenho da tipologia (não o automático).
+    ...(herdado ? { rotuloVoltar: "Voltar ao desenho da tipologia", mensagemVoltou: "Voltou ao desenho da tipologia.", erroVoltar: "Não foi possível voltar ao desenho da tipologia. Tente de novo." } : {}),
+    ...textosParciais,
+  };
   const router = useRouter();
   const [atual, setAtual] = useState<Atual | null>(desenhoInicial ? { anexoId: desenhoInicial.anexoId, previaUrl: desenhoInicial.url } : null);
   const [enviando, setEnviando] = useState(false);
@@ -176,7 +187,8 @@ export function CampoDesenho({
       setAtual(null);
       temAnterior.current = false;
       aoMudar(null, false);
-      toast.success(r.mensagem ?? textos.mensagemVoltou);
+      // A mensagem é do campo (diz para onde voltou: automático ou tipologia); a do servidor não sabe da tipologia.
+      toast.success(textos.mensagemVoltou);
       router.refresh();
     } catch {
       setErro(textos.erroVoltar);
@@ -244,6 +256,7 @@ export function CampoDesenho({
   }
 
   const temImagem = !!pendente || !!atual;
+  const usandoHerdado = !temImagem && !!herdado;
   const imagemParaMostrar = pendente ? previaPendente : atual?.previaUrl ?? null;
   const salvaMasSemEnviar = !!pendente && salvo; // o item foi salvo, mas a imagem não subiu
 
@@ -251,8 +264,15 @@ export function CampoDesenho({
     <fieldset className="grid gap-3 rounded-lg border p-3" data-testid="desenho-personalizado">
       <legend className="px-1 text-sm font-medium">{textos.legenda}</legend>
       <div className="grid gap-3 sm:grid-cols-[11rem_1fr] sm:items-start">
-        <div className="flex h-36 items-center justify-center overflow-hidden rounded-md border" aria-label={temImagem ? textos.ariaComImagem : textos.ariaSemImagem}>
-          {temImagem ? (
+        <div className="flex h-36 items-center justify-center overflow-hidden rounded-md border" aria-label={temImagem ? textos.ariaComImagem : usandoHerdado ? "Desenho da tipologia deste item" : textos.ariaSemImagem}>
+          {usandoHerdado ? (
+            herdado.url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage
+              <img src={herdado.url} alt="Desenho da tipologia" className="size-full bg-white object-contain" data-testid="previa-desenho-herdado" />
+            ) : (
+              <p className="text-muted-foreground p-2 text-center text-xs">Prévia indisponível agora. O desenho da tipologia está salvo.</p>
+            )
+          ) : temImagem ? (
             imagemParaMostrar ? (
               // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária do Storage (ou prévia local)
               <img src={imagemParaMostrar} alt={textos.altDaImagem} className="size-full bg-white object-contain" data-testid="previa-desenho" />
@@ -282,6 +302,11 @@ export function CampoDesenho({
           <p className="text-muted-foreground">
             {DICA_DO_DESENHO} Aceitamos PNG e JPG de até 8 MB.
           </p>
+          {usandoHerdado ? (
+            <p className="text-sm" data-testid="desenho-herdado-aviso">
+              Este item usa o desenho da tipologia. Para usar outro desenho só neste item, cole ou escolha uma imagem aqui.
+            </p>
+          ) : null}
           <p className="text-muted-foreground text-xs">{ORIENTACAO_DO_WORD}</p>
           <p className="text-muted-foreground text-xs">
             {salvo ? textos.salvoNaHora : textos.salvoQuandoSalvar} Nenhuma cota é desenhada sobre a imagem.
@@ -346,6 +371,11 @@ export function CampoDesenho({
         </div>
       </div>
 
+      {usandoHerdado ? (
+        <p className="text-sm" data-testid="tamanho-da-tipologia">
+          Tamanho definido na tipologia: {ROTULO_DO_TAMANHO[herdado.tamanho]}.
+        </p>
+      ) : null}
       {temImagem ? (
         <fieldset className="grid gap-1" data-testid="tamanho-do-desenho">
           <legend className="text-sm font-medium">Tamanho do desenho no PDF</legend>

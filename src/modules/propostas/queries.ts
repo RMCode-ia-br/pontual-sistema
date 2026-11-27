@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { lerTamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 import { criarUrlsDeDownload } from "@/lib/storage";
 import { idsDePropostas } from "@/modules/busca/ids-por-busca";
 import { situacaoDasRevisoes } from "@/lib/dominio/desfazer-aprovacao";
@@ -95,7 +96,7 @@ export async function obterPropostaParaEditor(id: string) {
         orderBy: [{ ordem: "asc" }, { id: "asc" }],
         include: {
           medidas: { where: { deletadoEm: null }, orderBy: { ordem: "asc" } },
-          tipologia: { select: { id: true, nome: true, tipoDesenho: true } },
+          tipologia: { select: { id: true, nome: true, tipoDesenho: true, desenhoConfig: true, desenhoAnexo: { select: { id: true, caminho: true, larguraPx: true, alturaPx: true } } } },
           desenhoAnexo: { select: { id: true, caminho: true, larguraPx: true, alturaPx: true } },
           linha: { select: { nome: true } },
           acabamento: { select: { nome: true } },
@@ -113,7 +114,9 @@ export type PropostaDoEditor = NonNullable<Awaited<ReturnType<typeof obterPropos
  * devolve vazio: a tela mostra "prévia indisponível" em vez de quebrar a proposta inteira.
  */
 export async function urlsDosDesenhosDoEditor(p: PropostaDoEditor): Promise<Record<string, string>> {
-  const caminhos = [...new Set(p.itens.flatMap((i) => (i.desenhoAnexo ? [i.desenhoAnexo.caminho] : [])))];
+  // Só as imagens que a tela pode mostrar: a do item e a da tipologia DOS ITENS desta proposta (a da tipologia também vale
+  // quando o item tem imagem própria: "Voltar ao desenho da tipologia" a mostra na hora, sem pedir outro link).
+  const caminhos = [...new Set(p.itens.flatMap((i) => [...(i.desenhoAnexo ? [i.desenhoAnexo.caminho] : []), ...(i.tipologia?.desenhoAnexo ? [i.tipologia.desenhoAnexo.caminho] : [])]))];
   if (caminhos.length === 0) return {};
   try {
     return Object.fromEntries(await criarUrlsDeDownload(caminhos, 1800));
@@ -128,7 +131,7 @@ export async function listarOpcoesDoEditor() {
     prisma.tipologia.findMany({
       where: { deletadoEm: null, ativo: true },
       orderBy: [{ ordem: "asc" }, { nome: "asc" }],
-      select: { id: true, nome: true, tipoDesenho: true, opcoesFolhas: true, templateDescricao: true, cobrancaPadrao: true, categoriaMarkup: true, exigeEsquadria: true },
+      select: { id: true, nome: true, tipoDesenho: true, opcoesFolhas: true, templateDescricao: true, cobrancaPadrao: true, categoriaMarkup: true, exigeEsquadria: true, desenhoConfig: true, desenhoAnexo: { select: { id: true, larguraPx: true, alturaPx: true } } },
     }),
     prisma.linhaAluminio.findMany({ where: { deletadoEm: null, ativo: true }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], select: { id: true, nome: true } }),
     prisma.acabamentoAluminio.findMany({ where: { deletadoEm: null, ativo: true }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], select: { id: true, nome: true } }),
@@ -142,7 +145,11 @@ export async function listarOpcoesDoEditor() {
     prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { markupPadraoPb: true, markupVidroTemperadoPb: true, acrescimoNotaPb: true, margemMinimaAlertaPercentual: true } }),
   ]);
   return {
-    tipologias,
+    // Sem link da imagem: os links só vêm das tipologias usadas pelos itens; ao trocar a tipologia no diálogo o link da nova é pedido sob demanda.
+    tipologias: tipologias.map(({ desenhoConfig, desenhoAnexo, ...resto }) => ({
+      ...resto,
+      desenho: desenhoAnexo ? { anexoId: desenhoAnexo.id, larguraPx: desenhoAnexo.larguraPx, alturaPx: desenhoAnexo.alturaPx, tamanho: lerTamanhoDoDesenho(desenhoConfig) } : null,
+    })),
     linhas,
     acabamentos,
     tiposVidro,

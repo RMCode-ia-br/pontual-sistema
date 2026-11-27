@@ -8,11 +8,11 @@ import { ErroNegocio, executar, falha, falhaDeValidacao, sucesso, type Resultado
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
-import { TAMANHOS_DO_DESENHO } from "@/lib/dominio/desenho-item";
+import { lerTamanhoDoDesenho, TAMANHOS_DO_DESENHO, type TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 import { caminhoDoOriginal, caminhoDoOriginalEhValido, concluirEnvioDeImagem } from "@/lib/imagem/envio";
 import { LIMITE_BYTES_IMAGEM, TIPOS_DE_IMAGEM_ACEITOS } from "@/lib/imagem/validar";
 import { can } from "@/lib/permissoes";
-import { criarUrlDeUpload } from "@/lib/storage";
+import { criarUrlDeDownload, criarUrlDeUpload } from "@/lib/storage";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
 
 import { TIPOS_DESENHO } from "../schemas";
@@ -150,4 +150,25 @@ export async function salvarDesenhoComoTipologiaAcao(entrada: unknown): Promise<
     },
     MENSAGEM_NOME_REPETIDO,
   );
+}
+
+export type DesenhoDaTipologiaParaTela = { anexoId: string; larguraPx: number | null; alturaPx: number | null; url: string | null; tamanho: TamanhoDoDesenho } | null;
+
+/**
+ * Link da imagem de UMA tipologia, para o diálogo do item mostrar o desenho herdado quando a pessoa troca a tipologia
+ * (o editor só assina as das tipologias já usadas pelos itens). Leitura; exige sessão. Sem desenho ou tipologia fora do ar: null.
+ */
+export async function desenhoDaTipologiaParaTelaAcao(entrada: unknown): Promise<ResultadoAcao<DesenhoDaTipologiaParaTela>> {
+  await exigirSessao();
+  const dados = tipologiaSchema.safeParse(entrada);
+  if (!dados.success) return falhaDeValidacao(dados.error);
+  return executar("tipologias.desenho.paraTela", async () => {
+    const t = await prisma.tipologia.findFirst({
+      where: { id: dados.data.tipologiaId, deletadoEm: null },
+      select: { desenhoConfig: true, desenhoAnexo: { select: { id: true, caminho: true, larguraPx: true, alturaPx: true } } },
+    });
+    if (!t?.desenhoAnexo) return sucesso(null);
+    const url = await criarUrlDeDownload(t.desenhoAnexo.caminho, 1800).catch(() => null);
+    return sucesso({ anexoId: t.desenhoAnexo.id, larguraPx: t.desenhoAnexo.larguraPx, alturaPx: t.desenhoAnexo.alturaPx, url, tamanho: lerTamanhoDoDesenho(t.desenhoConfig) });
+  });
 }

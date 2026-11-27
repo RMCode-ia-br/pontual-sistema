@@ -38,6 +38,8 @@ export type ItemSer = {
   desenho: { anexoId: string; larguraPx: number | null; alturaPx: number | null; url: string | null } | null;
   /** Tamanho do desenho personalizado no PDF (vem de `desenhoConfig`; Normal quando não há nada). */
   tamanhoDesenho: TamanhoDoDesenho;
+  /** Desenho guardado na tipologia do item (herdado quando o item não tem imagem própria); o tamanho é o da tipologia. */
+  desenhoDaTipologia: { anexoId: string; larguraPx: number | null; alturaPx: number | null; url: string | null; tamanho: TamanhoDoDesenho } | null;
 };
 
 export type ParcelaSer = { descricao: string; percentualPb: number; gatilho: string; forma: string | null; diasApos: number | null; dataFixa: string | null; parcelasCartao: number | null };
@@ -174,6 +176,9 @@ export function serializarProposta(p: PropostaDoEditor, urlsDosDesenhos: Record<
       calculadoEm: i.calculadoEm ? i.calculadoEm.toISOString() : null,
       tamanhoDesenho: lerTamanhoDoDesenho(i.desenhoConfig),
       desenho: i.desenhoAnexo ? { anexoId: i.desenhoAnexo.id, larguraPx: i.desenhoAnexo.larguraPx, alturaPx: i.desenhoAnexo.alturaPx, url: urlsDosDesenhos[i.desenhoAnexo.caminho] ?? null } : null,
+      desenhoDaTipologia: i.tipologia?.desenhoAnexo
+        ? { anexoId: i.tipologia.desenhoAnexo.id, larguraPx: i.tipologia.desenhoAnexo.larguraPx, alturaPx: i.tipologia.desenhoAnexo.alturaPx, url: urlsDosDesenhos[i.tipologia.desenhoAnexo.caminho] ?? null, tamanho: lerTamanhoDoDesenho(i.tipologia.desenhoConfig) }
+        : null,
       medidas: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),
     })),
     parcelas: p.parcelas.map((x) => ({ descricao: x.descricao, percentualPb: x.percentualPb, gatilho: x.gatilho, forma: x.forma, diasApos: x.diasApos, dataFixa: dia(x.dataFixa), parcelasCartao: x.parcelasCartao })),
@@ -194,7 +199,7 @@ export function serializarProposta(p: PropostaDoEditor, urlsDosDesenhos: Record<
 }
 
 export type OpcoesEditor = {
-  tipologias: { id: string; nome: string; tipoDesenho: string; opcoesFolhas: number[]; templateDescricao: string; cobrancaPadrao: string; categoriaMarkup: string; exigeEsquadria: boolean }[];
+  tipologias: { id: string; nome: string; tipoDesenho: string; opcoesFolhas: number[]; templateDescricao: string; cobrancaPadrao: string; categoriaMarkup: string; exigeEsquadria: boolean; desenho: { anexoId: string; larguraPx: number | null; alturaPx: number | null; tamanho: TamanhoDoDesenho } | null }[];
   linhas: { id: string; nome: string }[];
   acabamentos: { id: string; nome: string }[];
   tiposVidro: { id: string; nome: string }[];
