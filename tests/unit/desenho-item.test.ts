@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aplicarTamanhoNaConfig, lerTamanhoDoDesenho, marcaDoDesenho, marcaDoTamanho, resolverDesenhoDoItem, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
+import { aplicarTamanhoNaConfig, configDoDesenhoSchema, lerTamanhoDoDesenho, marcaDoDesenho, marcaDoTamanho, resolverDesenhoDoItem, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
 
 const imagem: ImagemDoDesenho = { anexoId: "a1", caminho: "ItemProposta/i1/x.png", sha256: "abc", mime: "image/png", larguraPx: 800, alturaPx: 600 };
 
@@ -13,8 +13,8 @@ describe("resolverDesenhoDoItem", () => {
     expect(resolverDesenhoDoItem({ tipoDesenho: "BOX_FRONTAL", folhas: 2, tamanhoDesenho: "GRANDE" }).tipo).toBe("automatico");
   });
   it("com imagem: a imagem do item vence, no tamanho Normal quando nada diz o contrário", () => {
-    expect(resolverDesenhoDoItem({ tipoDesenho: "BOX_FRONTAL", folhas: 2, desenhoImagem: imagem })).toEqual({ tipo: "imagem", imagem, tamanho: "NORMAL" });
-    expect(resolverDesenhoDoItem({ tipoDesenho: "BOX_FRONTAL", folhas: 2, desenhoImagem: imagem, tamanhoDesenho: "GRANDE" })).toEqual({ tipo: "imagem", imagem, tamanho: "GRANDE" });
+    expect(resolverDesenhoDoItem({ tipoDesenho: "BOX_FRONTAL", folhas: 2, desenhoImagem: imagem })).toEqual({ tipo: "imagem", imagem, tamanho: "NORMAL", origem: "ITEM" });
+    expect(resolverDesenhoDoItem({ tipoDesenho: "BOX_FRONTAL", folhas: 2, desenhoImagem: imagem, tamanhoDesenho: "GRANDE" })).toEqual({ tipo: "imagem", imagem, tamanho: "GRANDE", origem: "ITEM" });
   });
 });
 
@@ -58,4 +58,56 @@ describe("tamanho dentro de desenhoConfig (JSON)", () => {
     aplicarTamanhoNaConfig(original, "GRANDE");
     expect(original).toEqual({ sentido: "esquerda" });
   });
+});
+
+// ----- Fase 3.6b-3: prioridade item > tipologia > automático -----
+
+const imagemTipologia: ImagemDoDesenho = { anexoId: "t1", caminho: "Tipologia/t1/x.png", sha256: "def", mime: "image/png", larguraPx: 1000, alturaPx: 500 };
+const doItem = { desenhoImagem: imagem };
+const daTipologia = { desenhoDaTipologia: { imagem: imagemTipologia } };
+
+describe("resolverDesenhoDoItem: prioridade item > tipologia > automático (tabela)", () => {
+  // [descrição, entrada, tipo, origem, imagem esperada, tamanho]
+  it.each([
+    ["nenhuma imagem: automático", {}, "automatico", undefined, undefined, undefined],
+    ["tipologia sem imagem (null): automático", { desenhoDaTipologia: null }, "automatico", undefined, undefined, undefined],
+    ["só o item tem imagem: a do item", { ...doItem }, "imagem", "ITEM", imagem, "NORMAL"],
+    ["só a tipologia tem imagem: herda", { ...daTipologia }, "imagem", "TIPOLOGIA", imagemTipologia, "NORMAL"],
+    ["as duas: a do item vence", { ...doItem, ...daTipologia }, "imagem", "ITEM", imagem, "NORMAL"],
+    ["item com imagem e tamanho Grande, tipologia Normal: o tamanho é o do item", { ...doItem, tamanhoDesenho: "GRANDE", desenhoDaTipologia: { imagem: imagemTipologia, tamanho: "NORMAL" } }, "imagem", "ITEM", imagem, "GRANDE"],
+    ["herdada com tamanho Grande da tipologia: o tamanho é o da tipologia", { desenhoDaTipologia: { imagem: imagemTipologia, tamanho: "GRANDE" } }, "imagem", "TIPOLOGIA", imagemTipologia, "GRANDE"],
+    ["herdada: o tamanho do item NÃO conta (o item não tem tamanho próprio sem imagem própria)", { tamanhoDesenho: "GRANDE", ...daTipologia }, "imagem", "TIPOLOGIA", imagemTipologia, "NORMAL"],
+    ["item sem imagem com tamanho Grande e tipologia sem imagem: automático", { tamanhoDesenho: "GRANDE" }, "automatico", undefined, undefined, undefined],
+    ["imagem removida da tipologia (volta a null) e item sem imagem: automático", { desenhoDaTipologia: null, desenhoImagem: null }, "automatico", undefined, undefined, undefined],
+    ["imagem removida do item, tipologia com imagem: volta ao desenho da tipologia", { desenhoImagem: null, ...daTipologia }, "imagem", "TIPOLOGIA", imagemTipologia, "NORMAL"],
+  ] as const)("%s", (_nome, entrada, tipo, origem, img, tamanho) => {
+    const r = resolverDesenhoDoItem({ tipoDesenho: "PORTA_GIRO", folhas: 1, ...(entrada as object) });
+    expect(r.tipo).toBe(tipo);
+    if (r.tipo === "imagem") {
+      expect(r.origem).toBe(origem);
+      expect(r.imagem).toEqual(img);
+      expect(r.tamanho).toBe(tamanho);
+    } else {
+      expect(r).toEqual({ tipo: "automatico", tipoDesenho: "PORTA_GIRO", folhas: 1 });
+    }
+  });
+
+  it("tipologia arquivada ou excluída: a decisão é de quem lê; a regra só vê a imagem que recebe (arquivada continua valendo)", () => {
+    // Arquivar (ativo=false) não tira a imagem: o leitor continua passando a imagem e ela resolve igual.
+    expect(resolverDesenhoDoItem({ tipoDesenho: "GENERICO", folhas: null, ...daTipologia }).tipo).toBe("imagem");
+    // Excluir/ficar sem imagem: o leitor passa null e o desenho volta ao automático.
+    expect(resolverDesenhoDoItem({ tipoDesenho: "GENERICO", folhas: null, desenhoDaTipologia: null }).tipo).toBe("automatico");
+  });
+
+  it("proposta enviada: o snapshot já traz a imagem resolvida em desenhoImagem e nada mais é lido da tipologia", () => {
+    const r = resolverDesenhoDoItem({ tipoDesenho: "GENERICO", folhas: null, desenhoImagem: imagemTipologia, tamanhoDesenho: "GRANDE" });
+    expect(r).toEqual({ tipo: "imagem", imagem: imagemTipologia, tamanho: "GRANDE", origem: "ITEM" });
+  });
+});
+
+describe("configDoDesenhoSchema (estrito)", () => {
+  it.each([[null], [{ tamanhoDesenho: "GRANDE" }]])("aceita %j", (c) => expect(configDoDesenhoSchema.safeParse(c).success).toBe(true));
+  it.each([[{}], [{ tamanhoDesenho: "grande" }], [{ tamanhoDesenho: "NORMAL" }], [{ tamanhoDesenho: "ENORME" }], [{ tamanhoDesenho: "GRANDE", outra: 1 }], [{ outra: "GRANDE" }], [[]], ["GRANDE"], [42], [undefined]])("recusa %j", (c) =>
+    expect(configDoDesenhoSchema.safeParse(c).success).toBe(false),
+  );
 });

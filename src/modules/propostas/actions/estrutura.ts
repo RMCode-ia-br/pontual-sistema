@@ -19,7 +19,7 @@ import { medidasParaProposta } from "@/modules/visitas/queries";
 
 import { duplicarOpcaoSchema, grupoSchema, itemSchema, opcaoSchema, type EntradaItem } from "../schemas";
 import { calcularPrecoDoItem, exigirRascunho, type SaidaCalculoItem } from "../servico";
-import { configParaCopia } from "../servico-desenho";
+import { configParaCopia, exigirConfigDoDesenho } from "../servico-desenho";
 import { conferirCatalogos, conferirTeto, duplicarOpcaoNaTransacao } from "../servico-estrutura";
 
 type Tx = Prisma.TransactionClient;
@@ -124,13 +124,13 @@ export async function salvarItem(entrada: EntradaItem): Promise<ResultadoAcao<{ 
         // Trocar de seção/opção leva o item para o fim da nova.
         const mudouDeLugar = atual.opcaoId !== v.opcaoId || atual.grupoId !== v.grupoId;
         const ordem = mudouDeLugar ? ((await tx.itemProposta.aggregate({ where: { propostaId: v.propostaId, opcaoId: v.opcaoId, deletadoEm: null }, _max: { ordem: true } }))._max.ordem ?? -1) + 1 : undefined;
-        const novaConfig = v.tamanhoDesenho === undefined ? undefined : (aplicarTamanhoNaConfig(configAtual, v.tamanhoDesenho) ?? Prisma.DbNull);
+        const novaConfig = v.tamanhoDesenho === undefined ? undefined : (exigirConfigDoDesenho(aplicarTamanhoNaConfig(configAtual, v.tamanhoDesenho)) ?? Prisma.DbNull);
         await tx.itemProposta.update({ where: { id: v.id }, data: { ...dados, ...(ordem === undefined ? {} : { ordem }), ...(novaConfig === undefined ? {} : { desenhoConfig: novaConfig as Prisma.InputJsonValue }), atualizadoPorId: sessao.id } });
         await tx.itemPropostaMedida.updateMany({ where: { itemId: v.id, deletadoEm: null }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
         id = v.id;
       } else {
         const ordem = ((await tx.itemProposta.aggregate({ where: { propostaId: v.propostaId, opcaoId: v.opcaoId, deletadoEm: null }, _max: { ordem: true } }))._max.ordem ?? -1) + 1;
-        const configNova = aplicarTamanhoNaConfig(null, v.tamanhoDesenho);
+        const configNova = exigirConfigDoDesenho(aplicarTamanhoNaConfig(null, v.tamanhoDesenho));
         const novo = await tx.itemProposta.create({ data: { propostaId: v.propostaId, ...dados, ...(configNova ? { desenhoConfig: configNova as Prisma.InputJsonValue } : {}), ordem, criadoPorId: sessao.id, atualizadoPorId: sessao.id }, select: { id: true } });
         id = novo.id;
       }

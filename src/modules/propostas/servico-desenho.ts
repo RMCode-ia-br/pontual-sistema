@@ -3,7 +3,8 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { ErroNegocio } from "@/lib/acoes";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { CATEGORIA_DESENHO_DO_ITEM, ENTIDADE_DO_DESENHO_DO_ITEM } from "@/lib/dominio/desenho-item";
+import { CATEGORIA_DESENHO_DO_ITEM, configDoDesenhoSchema, ENTIDADE_DO_DESENHO_DO_ITEM } from "@/lib/dominio/desenho-item";
+import type { ImagemGravada } from "@/lib/imagem/envio";
 
 import { exigirRascunho } from "./servico";
 
@@ -15,14 +16,7 @@ export function configParaCopia(config: Prisma.JsonValue | null): Prisma.InputJs
 }
 type Usuario = { id: string; nome: string };
 
-export type ImagemGravada = {
-  caminho: string;
-  mime: string;
-  tamanhoBytes: number;
-  sha256: string;
-  larguraPx: number;
-  alturaPx: number;
-};
+export type { ImagemGravada };
 
 /**
  * Trava a proposta (FOR UPDATE, dentro de `exigirRascunho`) e só então confere que ela é rascunho, que não está excluída
@@ -36,13 +30,27 @@ async function itemEditavel(tx: Db, propostaId: string, itemId: string) {
 }
 
 /**
- * O anexo antigo só recebe exclusão lógica quando NENHUM item vivo ainda o usa (revisões e itens duplicados dividem o
- * mesmo arquivo). O objeto no Storage nunca é apagado: snapshots enviados leem o desenho por ele.
+ * Configuração do desenho validada ANTES de gravar (item e tipologia): só `tamanhoDesenho` = "GRANDE"; outra chave ou valor
+ * é recusado. `null` = Normal, sem configuração.
  */
-async function aposentarSeSemUso(tx: Db, anexoId: string | null, usuario: Usuario) {
+export function exigirConfigDoDesenho(config: unknown): { tamanhoDesenho: "GRANDE" } | null {
+  const r = configDoDesenhoSchema.safeParse(config);
+  if (!r.success) throw new ErroNegocio("Configuração do desenho inválida.");
+  return r.data;
+}
+
+/**
+ * O anexo antigo só recebe exclusão lógica quando NENHUM item vivo e NENHUMA tipologia viva ainda o usa (revisões, itens
+ * duplicados e tipologias criadas do item dividem o mesmo arquivo). O objeto no Storage nunca é apagado: snapshots enviados
+ * leem o desenho por ele.
+ */
+export async function aposentarDesenhoSeSemUso(tx: Db, anexoId: string | null, usuario: Usuario) {
   if (!anexoId) return;
-  const emUso = await tx.itemProposta.count({ where: { desenhoAnexoId: anexoId, deletadoEm: null } });
-  if (emUso > 0) return;
+  const [itens, tipologias] = await Promise.all([
+    tx.itemProposta.count({ where: { desenhoAnexoId: anexoId, deletadoEm: null } }),
+    tx.tipologia.count({ where: { desenhoAnexoId: anexoId, deletadoEm: null } }),
+  ]);
+  if (itens > 0 || tipologias > 0) return;
   await tx.anexo.updateMany({ where: { id: anexoId, deletadoEm: null }, data: { deletadoEm: new Date(), atualizadoPorId: usuario.id } });
 }
 
@@ -71,7 +79,7 @@ export async function definirDesenhoDoItem(
     select: { id: true },
   });
   await tx.itemProposta.update({ where: { id: item.id }, data: { desenhoAnexoId: anexo.id, atualizadoPorId: e.usuario.id } });
-  await aposentarSeSemUso(tx, item.desenhoAnexoId, e.usuario);
+  await aposentarDesenhoSeSemUso(tx, item.desenhoAnexoId, e.usuario);
   await registrarAuditoria(tx, {
     usuario: e.usuario,
     entidade: "ItemProposta",
@@ -89,7 +97,7 @@ export async function removerDesenhoDoItem(tx: Db, e: { usuario: Usuario; propos
   const { proposta, item } = await itemEditavel(tx, e.propostaId, e.itemId);
   if (!item.desenhoAnexoId) throw new ErroNegocio("Este item já usa o desenho automático.");
   await tx.itemProposta.update({ where: { id: item.id }, data: { desenhoAnexoId: null, atualizadoPorId: e.usuario.id } });
-  await aposentarSeSemUso(tx, item.desenhoAnexoId, e.usuario);
+  await aposentarDesenhoSeSemUso(tx, item.desenhoAnexoId, e.usuario);
   await registrarAuditoria(tx, {
     usuario: e.usuario,
     entidade: "ItemProposta",

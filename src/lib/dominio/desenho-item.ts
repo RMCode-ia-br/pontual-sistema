@@ -1,7 +1,9 @@
 /**
  * Qual desenho um item da proposta mostra (regra pura, usada pela tela, pelo PDF e pela folha de produção).
- * Prioridade: imagem do item > desenho da tipologia (futuro, Fase 3.6b-3) > desenho automático por tipo.
+ * Prioridade (única, Fase 3.6b-3): imagem do ITEM > imagem da TIPOLOGIA > desenho automático por tipo.
  */
+
+import { z } from "zod";
 
 /** Referência imutável à imagem (vai para o snapshot ao enviar: o arquivo nunca é apagado e o hash confere na leitura). */
 export type ImagemDoDesenho = {
@@ -13,16 +15,35 @@ export type ImagemDoDesenho = {
   alturaPx: number;
 };
 
+/** De onde veio a imagem: do próprio item ou herdada da tipologia (o tamanho segue a origem). */
+export type OrigemDoDesenho = "ITEM" | "TIPOLOGIA";
+
 export type DesenhoDoItem =
-  | { tipo: "imagem"; imagem: ImagemDoDesenho; tamanho: TamanhoDoDesenho }
+  | { tipo: "imagem"; imagem: ImagemDoDesenho; tamanho: TamanhoDoDesenho; origem: OrigemDoDesenho }
   | { tipo: "automatico"; tipoDesenho: string; folhas: number | null };
 
 export const CATEGORIA_DESENHO_DO_ITEM = "desenho-item";
 export const ENTIDADE_DO_DESENHO_DO_ITEM = "ItemProposta";
+export const CATEGORIA_DESENHO_DA_TIPOLOGIA = "desenho-tipologia";
+export const ENTIDADE_DO_DESENHO_DA_TIPOLOGIA = "Tipologia";
 
-export function resolverDesenhoDoItem(item: { tipoDesenho: string; folhas: number | null; desenhoImagem?: ImagemDoDesenho | null; tamanhoDesenho?: TamanhoDoDesenho | null }): DesenhoDoItem {
-  if (item.desenhoImagem) return { tipo: "imagem", imagem: item.desenhoImagem, tamanho: marcaDoTamanho(item) };
-  // Ponto de extensão da 3.6b-3: aqui entraria o desenho salvo na tipologia, antes do automático.
+/** Imagem (e tamanho) guardados na tipologia, já lidos do banco. */
+export type DesenhoDaTipologia = { imagem: ImagemDoDesenho; tamanho?: TamanhoDoDesenho | null };
+
+/**
+ * Regra única do desenho. Quem já tem o item resolvido (PDF de proposta enviada: o snapshot guarda a imagem JÁ resolvida em
+ * `desenhoImagem`) não passa `desenhoDaTipologia`; quem monta o conteúdo de um rascunho ou a tela passa a imagem da tipologia.
+ * Tipologia arquivada continua valendo (quem decide se passa a imagem é o leitor); sem imagem em nenhum dos dois, automático.
+ */
+export function resolverDesenhoDoItem(item: {
+  tipoDesenho: string;
+  folhas: number | null;
+  desenhoImagem?: ImagemDoDesenho | null;
+  tamanhoDesenho?: TamanhoDoDesenho | null;
+  desenhoDaTipologia?: DesenhoDaTipologia | null;
+}): DesenhoDoItem {
+  if (item.desenhoImagem) return { tipo: "imagem", imagem: item.desenhoImagem, tamanho: marcaDoTamanho(item), origem: "ITEM" };
+  if (item.desenhoDaTipologia) return { tipo: "imagem", imagem: item.desenhoDaTipologia.imagem, tamanho: marcaDoTamanho({ tamanhoDesenho: item.desenhoDaTipologia.tamanho }), origem: "TIPOLOGIA" };
   return { tipo: "automatico", tipoDesenho: item.tipoDesenho, folhas: item.folhas };
 }
 
@@ -58,6 +79,12 @@ export function aplicarTamanhoNaConfig(config: unknown, tamanho: TamanhoDoDesenh
   }
   return Object.keys(atual).length > 0 ? atual : null;
 }
+
+/**
+ * Configuração do desenho (item e tipologia), validada no servidor ANTES de gravar: só a chave "tamanhoDesenho" com "GRANDE"
+ * (Normal = sem configuração). Qualquer outra chave ou valor é recusado.
+ */
+export const configDoDesenhoSchema = z.object({ tamanhoDesenho: z.literal("GRANDE") }).strict().nullable();
 
 /** Marca do tamanho para comparar revisões ("NORMAL" quando o snapshot não tem o campo). */
 export function marcaDoTamanho(item: { tamanhoDesenho?: TamanhoDoDesenho | null }): TamanhoDoDesenho {
