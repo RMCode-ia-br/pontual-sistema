@@ -16,6 +16,8 @@ export async function listarTipologias(situacao: "ativas" | "inativas" | "todas"
       cobrancaPadrao: true,
       categoriaMarkup: true,
       revisarTexto: true,
+      revisarCadastro: true,
+      desenhoAnexoId: true,
       exemplo: true,
       ativo: true,
       _count: { select: { insumos: { where: { deletadoEm: null } }, maoDeObra: { where: { deletadoEm: null } }, precos: { where: { deletadoEm: null } } } },
@@ -42,6 +44,9 @@ export async function obterTipologia(id: string) {
       exigeEsquadria: true,
       exemplo: true,
       ativo: true,
+      revisarCadastro: true,
+      desenhoConfig: true,
+      desenhoAnexo: { select: { id: true, caminho: true, larguraPx: true, alturaPx: true } },
       insumos: {
         where: { deletadoEm: null },
         orderBy: { ordem: "asc" },

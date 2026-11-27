@@ -59,6 +59,8 @@ export default async function PaginaTipologias({ searchParams }: { searchParams:
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {t.exemplo ? <Badge variant="outline">Exemplo — validar</Badge> : null}
+                  {t.revisarCadastro ? <Badge variant="outline">Criada de uma proposta — revisar</Badge> : null}
+                  {t.desenhoAnexoId ? <Badge variant="outline">Com desenho</Badge> : null}
                   {t.revisarTexto ? <Badge variant="outline">Revisar texto</Badge> : null}
                   {t.ativo ? null : <Badge variant="destructive">Inativa</Badge>}
                 </div>

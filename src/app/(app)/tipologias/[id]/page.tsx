@@ -6,10 +6,14 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { lerTamanhoDoDesenho } from "@/lib/dominio/desenho-item";
+import { criarUrlDeDownload } from "@/lib/storage";
 import { combinacoesSemPreco } from "@/lib/dominio/composicao";
 import { dataParaInput, hojeCalendario } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { excluirTipologias, inativarTipologias, reativarTipologias } from "@/modules/tipologias/actions/tipologias";
+import { DesenhoDaTipologia } from "@/modules/tipologias/components/desenho-da-tipologia";
+import { AvisoCriadaDeProposta } from "@/modules/tipologias/components/marcar-revisada";
 import { EditorComposicao } from "@/modules/tipologias/components/editor-composicao";
 import { FormTipologia } from "@/modules/tipologias/components/form-tipologia";
 import { PainelPrecos, type PrecoSerializado } from "@/modules/tipologias/components/painel-precos";
@@ -19,6 +23,7 @@ export const metadata: Metadata = { title: "Tipologia" };
 
 const ABAS = [
   { valor: "dados", titulo: "Dados" },
+  { valor: "desenho", titulo: "Desenho" },
   { valor: "composicao", titulo: "Composição de custo" },
   { valor: "precos", titulo: "Tabela de preços" },
 ] as const;
@@ -56,9 +61,13 @@ export default async function PaginaTipologia({ params, searchParams }: { params
       />
       <div className="mb-4 flex flex-wrap gap-2">
         {tipologia.exemplo ? <Badge variant="outline">EXEMPLO — validar com o Marcelo</Badge> : null}
+        {tipologia.revisarCadastro ? <Badge variant="outline">Criada de uma proposta — revisar</Badge> : null}
+        {tipologia.desenhoAnexo ? <Badge variant="outline">Com desenho</Badge> : null}
         {tipologia.revisarTexto ? <Badge variant="outline">Revisar texto da descrição</Badge> : null}
         {tipologia.ativo ? null : <Badge variant="destructive">Inativa</Badge>}
       </div>
+
+      {tipologia.revisarCadastro ? <AvisoCriadaDeProposta tipologiaId={tipologia.id} /> : null}
 
       <nav aria-label="Seções da tipologia" className="mb-6 flex gap-1 overflow-x-auto border-b">
         {ABAS.map((a) => (
@@ -78,10 +87,25 @@ export default async function PaginaTipologia({ params, searchParams }: { params
 
       <div className={aba === "dados" ? "max-w-3xl" : "max-w-5xl"}>
         {aba === "dados" ? <FormTipologia tipologia={tipologia} /> : null}
+        {aba === "desenho" ? <Desenho tipologia={tipologia} /> : null}
         {aba === "composicao" ? <Composicao tipologia={tipologia} /> : null}
         {aba === "precos" ? <Precos tipologia={tipologia} /> : null}
       </div>
     </>
+  );
+}
+
+/** Link do desenho para a prévia (curto e só para esta tela); se o Storage falhar, a tela diz que a prévia não está disponível. */
+async function Desenho({ tipologia }: { tipologia: NonNullable<Awaited<ReturnType<typeof obterTipologia>>> }) {
+  const anexo = tipologia.desenhoAnexo;
+  const url = anexo ? await criarUrlDeDownload(anexo.caminho, 1800).catch(() => null) : null;
+  return (
+    <DesenhoDaTipologia
+      tipologiaId={tipologia.id}
+      tipoDesenho={tipologia.tipoDesenho}
+      desenhoInicial={anexo ? { anexoId: anexo.id, url } : null}
+      tamanhoInicial={lerTamanhoDoDesenho(tipologia.desenhoConfig)}
+    />
   );
 }
 

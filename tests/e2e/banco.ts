@@ -50,6 +50,8 @@ async function limpar(c: Client): Promise<void> {
     await removerObjetos(anexos.rows.map((a) => a.caminho));
     // Desenho personalizado de item (Fase 3.6b-1): o item aponta para o anexo (Restrict); desliga antes de apagar o anexo.
     await c.query(`UPDATE "ItemProposta" SET "desenhoAnexoId" = NULL WHERE "desenhoAnexoId" IN (SELECT id FROM "Anexo" WHERE "criadoPorId" = ANY($1))`, [ids]);
+    // Desenho da tipologia (Fase 3.6b-3): a tipologia também aponta para o anexo (Restrict). Ordem de limpeza: itens, tipologias, anexos.
+    await c.query(`UPDATE "Tipologia" SET "desenhoAnexoId" = NULL WHERE "desenhoAnexoId" IN (SELECT id FROM "Anexo" WHERE "criadoPorId" = ANY($1))`, [ids]);
     await c.query(`DELETE FROM "Anexo" WHERE "criadoPorId" = ANY($1)`, [ids]);
   }
 
@@ -983,4 +985,38 @@ export async function caminhoDoDesenhoDoItem(propostaId: string): Promise<string
 /** Apaga UM objeto do bucket (para simular o arquivo que sumiu do Storage); o registro no banco fica. */
 export async function removerObjetoDoStorage(caminho: string): Promise<void> {
   await removerObjetos([caminho]);
+}
+
+/** Estado do desenho de uma tipologia de teste (pelo nome): referência, tamanho, marca de revisão e caminho do arquivo. */
+export async function dadosDoDesenhoDaTipologia(nome: string): Promise<{ desenhoAnexoId: string | null; desenhoConfig: unknown; revisarCadastro: boolean; caminho: string | null; categoria: string | null; usarNoPortfolio: boolean | null }> {
+  return comConexao(async (c) => {
+    const r = await c.query(
+      `SELECT t."desenhoAnexoId", t."desenhoConfig", t."revisarCadastro", a.caminho, a.categoria, a."usarNoPortfolio"
+         FROM "Tipologia" t LEFT JOIN "Anexo" a ON a.id = t."desenhoAnexoId" WHERE t.nome = $1 AND t."deletadoEm" IS NULL`,
+      [nome],
+    );
+    return r.rows[0];
+  });
+}
+
+/** Marca a tipologia de teste como "criada de uma proposta, revisar" (o que o botão da proposta faz, sem passar por ele). */
+export async function marcarTipologiaParaRevisar(nome: string): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Tipologia" SET "revisarCadastro" = true WHERE nome = $1`, [nome]));
+}
+
+/** Registros de auditoria de uma tipologia de teste (ação ATUALIZAR) cujo "depois" contém o trecho dado. */
+export async function auditoriasDaTipologia(nome: string, trecho: string): Promise<number> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "LogAuditoria" l JOIN "Tipologia" t ON t.id = l."entidadeId"
+        WHERE l.entidade = 'Tipologia' AND t.nome = $1 AND l.acao = 'ATUALIZAR' AND l.depois::text LIKE $2`,
+      [nome, `%${trecho}%`],
+    );
+    return r.rows[0].n;
+  });
+}
+
+/** Id de uma tipologia de teste pelo nome. */
+export async function idDaTipologiaDeTeste(nome: string): Promise<string> {
+  return comConexao(async (c) => (await c.query<{ id: string }>(`SELECT id FROM "Tipologia" WHERE nome = $1 AND "deletadoEm" IS NULL`, [nome])).rows[0].id);
 }
