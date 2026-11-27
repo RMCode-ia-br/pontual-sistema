@@ -347,6 +347,7 @@ model Anexo {
   alturaPx        Int?
   /// Itens de proposta que usam este anexo como desenho personalizado (o mesmo arquivo pode servir a várias revisões).
   itensComDesenho ItemProposta[]
+  tipologiasComDesenho Tipologia[]
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1328,7 +1329,18 @@ model Tipologia {
   insumos   ComposicaoInsumo[]
   maoDeObra ComposicaoMaoDeObra[]
   precos    TabelaPreco[]
-  itens     ItemProposta[]
+  itens     ItemProposta[] @relation("ItemDaTipologia")
+
+  /// Desenho personalizado da tipologia (imagem do Word); vazio = desenho automático por tipo. O item sem imagem própria herda esta.
+  desenhoAnexoId  String?
+  desenhoAnexo    Anexo?        @relation(fields: [desenhoAnexoId], references: [id], onDelete: Restrict)
+  /// Só a chave tamanhoDesenho ("GRANDE"); vazio = Normal (validado no servidor).
+  desenhoConfig   Json?
+  /// Criada a partir do desenho de um item da proposta: precisa de revisão (composição, preços etc.).
+  revisarCadastro Boolean       @default(false)
+  /// Item de origem ("Salvar este desenho como nova tipologia"): rastro e idempotência.
+  criadaDeItemId  String?
+  criadaDeItem    ItemProposta? @relation("TipologiaCriadaDoItem", fields: [criadaDeItemId], references: [id], onDelete: SetNull)
 
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
@@ -1337,6 +1349,8 @@ model Tipologia {
   deletadoEm      DateTime?
 
   @@index([deletadoEm, ativo, ordem])
+  @@index([desenhoAnexoId])
+  @@index([criadaDeItemId])
 }
 
 /// Insumo da composição: quantidade por fórmula em função de L, A, F, Q (interpretador seguro).
@@ -1619,7 +1633,7 @@ model ItemProposta {
   /// A numeração do item é automática (posição dentro da opção).
   ordem                 Int                  @default(0)
   tipologiaId           String?
-  tipologia             Tipologia?           @relation(fields: [tipologiaId], references: [id], onDelete: Restrict)
+  tipologia             Tipologia?           @relation("ItemDaTipologia", fields: [tipologiaId], references: [id], onDelete: Restrict)
   linhaId               String?
   linha                 LinhaAluminio?       @relation(fields: [linhaId], references: [id], onDelete: Restrict)
   acabamentoId          String?
@@ -1640,6 +1654,7 @@ model ItemProposta {
   /// Desenho personalizado (imagem colada ou enviada pelo usuário); vazio = desenho automático da tipologia.
   desenhoAnexoId        String?
   desenhoAnexo          Anexo?               @relation(fields: [desenhoAnexoId], references: [id], onDelete: Restrict)
+  tipologiasCriadasDoDesenho Tipologia[]     @relation("TipologiaCriadaDoItem")
   modoPreco             ModoPreco            @default(MANUAL)
   cobranca              TipoCobranca?
   /// Valor digitado (modo MANUAL).
