@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { lerTamanhoDoDesenho } from "@/lib/dominio/desenho-item";
+import type { ConteudoProposta } from "./conteudo";
 import { criarUrlsDeDownload } from "@/lib/storage";
 import { idsDePropostas } from "@/modules/busca/ids-por-busca";
 import { situacaoDasRevisoes } from "@/lib/dominio/desfazer-aprovacao";
@@ -114,9 +115,18 @@ export type PropostaDoEditor = NonNullable<Awaited<ReturnType<typeof obterPropos
  * devolve vazio: a tela mostra "prévia indisponível" em vez de quebrar a proposta inteira.
  */
 export async function urlsDosDesenhosDoEditor(p: PropostaDoEditor): Promise<Record<string, string>> {
-  // Só as imagens que a tela pode mostrar: a do item e a da tipologia DOS ITENS desta proposta (a da tipologia também vale
-  // quando o item tem imagem própria: "Voltar ao desenho da tipologia" a mostra na hora, sem pedir outro link).
-  const caminhos = [...new Set(p.itens.flatMap((i) => [...(i.desenhoAnexo ? [i.desenhoAnexo.caminho] : []), ...(i.tipologia?.desenhoAnexo ? [i.tipologia.desenhoAnexo.caminho] : [])]))];
+  // Só as imagens que a tela pode mostrar. Rascunho: a do item e a da tipologia DOS ITENS desta proposta (a da tipologia também
+  // vale quando o item tem imagem própria: "Voltar ao desenho da tipologia" a mostra na hora, sem pedir outro link).
+  // Proposta enviada: a do item e as que foram CONGELADAS no snapshot (nunca a da tipologia de hoje).
+  const doSnapshot = p.status !== "RASCUNHO" && p.snapshot ? (p.snapshot as unknown as ConteudoProposta) : null;
+  const caminhos = [
+    ...new Set(
+      p.itens.flatMap((i) => [
+        ...(i.desenhoAnexo ? [i.desenhoAnexo.caminho] : []),
+        ...(!doSnapshot && i.tipologia?.desenhoAnexo ? [i.tipologia.desenhoAnexo.caminho] : []),
+      ]).concat(doSnapshot ? doSnapshot.opcoes.flatMap((o) => o.secoes.flatMap((sec) => sec.itens.flatMap((i) => (i.desenhoImagem ? [i.desenhoImagem.caminho] : [])))) : []),
+    ),
+  ];
   if (caminhos.length === 0) return {};
   try {
     return Object.fromEntries(await criarUrlsDeDownload(caminhos, 1800));

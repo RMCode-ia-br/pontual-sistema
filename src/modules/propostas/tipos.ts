@@ -1,6 +1,9 @@
 /** Formas simples (só dados, sem Date) que o servidor entrega aos componentes do editor. */
 import { lerTamanhoDoDesenho, type TamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 
+import { montarSecoes } from "@/lib/dominio/estrutura-proposta";
+
+import type { ConteudoProposta } from "./conteudo";
 import type { PropostaDoEditor } from "./queries";
 
 export type MedidaSer = { larguraMm: number; alturaMm: number; quantidade: number; local: string | null };
@@ -106,7 +109,27 @@ export type PropostaSer = {
 
 const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
+/**
+ * Desenho herdado que a tela mostra para cada item SEM imagem própria de uma proposta JÁ ENVIADA: o que foi congelado no snapshot
+ * (por opção e número do item, a mesma numeração do PDF), nunca a imagem que a tipologia tem hoje.
+ */
+function herdadoDoSnapshot(p: PropostaDoEditor, urls: Record<string, string>): Map<string, NonNullable<ItemSer["desenhoDaTipologia"]>> {
+  const mapa = new Map<string, NonNullable<ItemSer["desenhoDaTipologia"]>>();
+  if (p.status === "RASCUNHO" || !p.snapshot) return mapa;
+  const snapshot = p.snapshot as unknown as ConteudoProposta;
+  for (const opcao of p.opcoes) {
+    const doSnapshot = snapshot.opcoes.find((o) => o.id === opcao.id)?.secoes.flatMap((s) => s.itens) ?? [];
+    for (const { numero, item } of montarSecoes(opcao.id, p.grupos, p.itens).flatMap((s) => s.itens)) {
+      const congelado = item.desenhoAnexo ? undefined : doSnapshot.find((x) => x.numero === numero)?.desenhoImagem;
+      if (congelado) mapa.set(item.id, { anexoId: congelado.anexoId, larguraPx: congelado.larguraPx, alturaPx: congelado.alturaPx, url: urls[congelado.caminho] ?? null, tamanho: doSnapshot.find((x) => x.numero === numero)?.tamanhoDesenho === "GRANDE" ? "GRANDE" : "NORMAL" });
+    }
+  }
+  return mapa;
+}
+
 export function serializarProposta(p: PropostaDoEditor, urlsDosDesenhos: Record<string, string> = {}): PropostaSer {
+  const enviada = p.status !== "RASCUNHO";
+  const congeladas = herdadoDoSnapshot(p, urlsDosDesenhos);
   return {
     id: p.id,
     numero: p.numero,
@@ -176,7 +199,10 @@ export function serializarProposta(p: PropostaDoEditor, urlsDosDesenhos: Record<
       calculadoEm: i.calculadoEm ? i.calculadoEm.toISOString() : null,
       tamanhoDesenho: lerTamanhoDoDesenho(i.desenhoConfig),
       desenho: i.desenhoAnexo ? { anexoId: i.desenhoAnexo.id, larguraPx: i.desenhoAnexo.larguraPx, alturaPx: i.desenhoAnexo.alturaPx, url: urlsDosDesenhos[i.desenhoAnexo.caminho] ?? null } : null,
-      desenhoDaTipologia: i.tipologia?.desenhoAnexo
+      // Rascunho: a imagem da tipologia ao vivo. Enviada: a que foi congelada (ou nenhuma).
+      desenhoDaTipologia: enviada
+        ? (congeladas.get(i.id) ?? null)
+        : i.tipologia?.desenhoAnexo
         ? { anexoId: i.tipologia.desenhoAnexo.id, larguraPx: i.tipologia.desenhoAnexo.larguraPx, alturaPx: i.tipologia.desenhoAnexo.alturaPx, url: urlsDosDesenhos[i.tipologia.desenhoAnexo.caminho] ?? null, tamanho: lerTamanhoDoDesenho(i.tipologia.desenhoConfig) }
         : null,
       medidas: i.medidas.map((m) => ({ larguraMm: m.larguraMm, alturaMm: m.alturaMm, quantidade: m.quantidade, local: m.local })),

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { aguardarAvisosSumirem, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { auditoriasDaTipologia, criarTipologiaDeTeste, dadosDoDesenhoDaTipologia, idDaTipologiaDeTeste, marcarTipologiaParaRevisar, prepararUsuarioE2E } from "./banco";
+import { auditoriasDaTipologia, criarTipologiaDeTeste, dadosDoDesenhoDaTipologia, idDaTipologiaDeTeste, marcarTipologiaParaRevisar, prepararUsuarioE2E, tirarDesenhoDaTipologiaPorFora } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 import { desenho, disparar } from "./desenho-ajudantes";
 
@@ -160,4 +160,19 @@ test("selo 'Criada de uma proposta — revisar' na lista e no cadastro; 'Marcar 
   await page.goto("/tipologias");
   await expect(linhaDaLista(page, REVISAR)).toBeVisible();
   await expect(linhaDaLista(page, REVISAR).getByText("Criada de uma proposta — revisar")).toHaveCount(0);
+});
+
+test("tamanho: se o servidor recusar, o seletor volta ao valor anterior e a tela avisa (nada muda no banco)", async ({ page }) => {
+  await abrirDesenho(page);
+  await disparar(area(page), "paste", { buffer: await desenho(700, 500, "#5522aa"), nome: "image.png", mime: "image/png" });
+  await expect(toast(page, "Desenho da tipologia salvo")).toBeVisible({ timeout: 40_000 });
+  await aguardarAvisosSumirem(page);
+  await expect(page.getByRole("radio", { name: "Normal" })).toBeChecked();
+
+  await tirarDesenhoDaTipologiaPorFora(TIPOLOGIA); // outra pessoa tirou o desenho: a tela aberta ainda não sabe
+  await page.getByRole("radio", { name: "Grande" }).check();
+  await expect(toast(page, "Envie um desenho antes de escolher o tamanho")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Normal" })).toBeChecked(); // voltou ao valor anterior
+  await expect(page.getByRole("radio", { name: "Grande" })).not.toBeChecked();
+  expect((await dadosDoDesenhoDaTipologia(TIPOLOGIA)).desenhoConfig).toBeNull();
 });

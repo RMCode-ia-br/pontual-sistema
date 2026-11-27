@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { CAIXAS_DA_IMAGEM } from "../../src/modules/propostas/pdf/imagens";
 import { aguardarAvisosSumirem, entrarEEsperarPainel, semRolagemHorizontal, toast } from "./ajudantes";
-import { caminhoDoDesenhoDoItem, composicaoDaTipologia, contarAnexosComCaminho, contarTipologiasComNome, criarCondicaoDePagamentoDeTeste, criarTipologiaDeTeste, dadosDoDesenhoDaTipologia, idDaTipologiaDeTeste, prepararUsuarioE2E } from "./banco";
+import { caminhoDoDesenhoDoItem, composicaoDaTipologia, contarAnexosComCaminho, contarAnexosDeDesenhoDoE2E, contarTipologiasComNome, criarCondicaoDePagamentoDeTeste, criarTipologiaDeTeste, dadosDoDesenhoDaTipologia, idDaTipologiaDeTeste, prepararUsuarioE2E, removerObjetoDoStorage } from "./banco";
 import { ipFalso, USUARIO_E2E } from "./dados";
 import { desenho, disparar, imagensDoPdf, type ImagemNoPdf } from "./desenho-ajudantes";
 
@@ -19,6 +19,7 @@ test.use({ extraHTTPHeaders: { "x-forwarded-for": ipFalso(99) } });
 const COM = "E2E Janela Com Desenho Herdado";
 const SEM = "E2E Janela Sem Desenho Herdado";
 const NOVA = "E2E Janela Salva do Item";
+const SEM_ARQUIVO = "E2E Janela Sem Arquivo no Storage";
 const CONDICAO = "E2E condição do desenho herdado";
 const CLIENTE = "E2E Cliente do Desenho Herdado";
 const PROJETO = "E2E Obra do Desenho Herdado";
@@ -298,4 +299,93 @@ test("usar a nova tipologia numa segunda proposta: o item herda a imagem e o PDF
   const imagens = await imagensDoPdf(await baixarPdf(page, idSegunda, "pdf", "pdf-nova-tipologia"));
   expect(nossas(imagens, V)).toHaveLength(1);
   dentroDaCaixa(nossas(imagens, V)[0], CAIXAS_DA_IMAGEM.NORMAL.proposta, V);
+});
+
+test("item NOVO ainda não salvo: trocar de tipologia mostra a imagem de cada uma (link sob demanda) e NADA é gravado antes de salvar", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto(`/propostas/${idSegunda}`);
+  const cartoes = page.locator("article[aria-label^='Item ']");
+  await expect(cartoes).toHaveCount(1);
+  const anexosAntes = await contarAnexosDeDesenhoDoE2E();
+
+  await page.getByRole("button", { name: "Adicionar item" }).click();
+  const dialogo = page.getByRole("dialog");
+  const previa = dialogo.getByTestId("previa-desenho-herdado");
+  await expect(dialogo.getByRole("button", { name: "Colar ou escolher imagem" })).toBeVisible();
+  await expect(previa).toHaveCount(0);
+
+  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: COM });
+  await expect(previa).toBeVisible({ timeout: 20_000 });
+  const srcCom = await previa.getAttribute("src");
+  await expect(dialogo.getByTestId("tamanho-da-tipologia")).toContainText("Tamanho definido na tipologia");
+
+  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: NOVA });
+  await expect(previa).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => previa.getAttribute("src"), { message: "a prévia deve passar a ser a da outra tipologia" }).not.toBe(srcCom);
+
+  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: SEM });
+  await expect(previa).toHaveCount(0);
+  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: COM });
+  await expect(previa).toBeVisible({ timeout: 20_000 });
+  await expect(dialogo.getByRole("button", { name: "Salvar este desenho como nova tipologia" })).toHaveCount(0); // sem imagem própria
+
+  expect(await contarAnexosDeDesenhoDoE2E(), "nada gravado antes de salvar").toBe(anexosAntes);
+  await page.keyboard.press("Escape");
+  await expect(cartoes).toHaveCount(1); // o item não foi criado
+  expect(await contarAnexosDeDesenhoDoE2E()).toBe(anexosAntes);
+});
+
+test("proposta ENVIADA (somente leitura): o cartão mostra a imagem congelada, mesmo depois da tipologia mudar", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto(`/propostas/${idSegunda}`);
+  await page.getByRole("button", { name: "Marcar como enviada" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Marcar como enviada" }).click();
+  await expect(toast(page, "marcada como enviada")).toBeVisible({ timeout: 30_000 });
+  await aguardarAvisosSumirem(page);
+  await expect(page.getByText("Conteúdo congelado")).toBeVisible();
+  await expect(cartao(page, 1, "Desenho da tipologia")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Editar o item 1" })).toHaveCount(0); // somente leitura
+
+  // A tipologia NOVA perde a imagem depois do envio: a enviada continua mostrando (e imprimindo) a congelada.
+  await page.goto(`/tipologias/${await idDaTipologiaDeTeste(NOVA)}?aba=desenho`);
+  await page.getByRole("button", { name: "Voltar ao desenho automático" }).click();
+  await expect(toast(page, "Voltou ao desenho automático")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+  expect((await dadosDoDesenhoDaTipologia(NOVA)).desenhoAnexoId).toBeNull();
+
+  await page.goto(`/propostas/${idSegunda}`);
+  await expect(cartao(page, 1, "Desenho da tipologia")).toBeVisible({ timeout: 20_000 });
+  const imagens = await imagensDoPdf(await baixarPdf(page, idSegunda, "pdf"));
+  expect(nossas(imagens, V)).toHaveLength(1);
+});
+
+test("Storage indisponível: a prévia diz 'indisponível' (cadastro, diálogo sob demanda e cartão) e o desenho continua salvo", async ({ page }) => {
+  test.setTimeout(180_000);
+  await criarTipologiaDeTeste(SEM_ARQUIVO);
+  const id = await idDaTipologiaDeTeste(SEM_ARQUIVO);
+  await page.goto(`/tipologias/${id}?aba=desenho`);
+  await disparar(area(page), "paste", { buffer: await desenho(T.l, T.a, "#884422"), nome: "image.png", mime: "image/png" });
+  await expect(toast(page, "Desenho da tipologia salvo")).toBeVisible({ timeout: 40_000 });
+  await aguardarAvisosSumirem(page);
+  const caminho = (await dadosDoDesenhoDaTipologia(SEM_ARQUIVO)).caminho!;
+  await removerObjetoDoStorage(caminho); // o arquivo some do Storage; a linha no banco continua
+
+  await page.reload();
+  await expect(page.getByText("Prévia indisponível agora. O desenho está salvo.")).toBeVisible();
+  expect((await dadosDoDesenhoDaTipologia(SEM_ARQUIVO)).desenhoAnexoId).toBeTruthy();
+
+  await page.goto(`/propostas/${idProposta}`);
+  await page.getByRole("button", { name: "Adicionar item" }).click();
+  const dialogo = page.getByRole("dialog");
+  await dialogo.getByLabel("Tipologia", { exact: true }).selectOption({ label: SEM_ARQUIVO }); // link pedido sob demanda: sem link
+  await expect(dialogo.getByText("Prévia indisponível agora. O desenho da tipologia está salvo.")).toBeVisible({ timeout: 20_000 });
+  await expect(dialogo.getByTestId("tamanho-da-tipologia")).toContainText("Tamanho definido na tipologia");
+  await dialogo.getByLabel("Largura da medida 1").fill("1500");
+  await dialogo.getByLabel("Altura da medida 1").fill("1200");
+  await dialogo.getByLabel("Valor do item").fill("1500");
+  await expect(dialogo.getByText(/Preço:/)).toBeVisible();
+  await dialogo.getByRole("button", { name: "Adicionar item" }).click();
+  await expect(toast(page, "Item adicionado")).toBeVisible();
+  await aguardarAvisosSumirem(page);
+  await expect(page.getByText("Desenho da tipologia (prévia indisponível agora)")).toBeVisible({ timeout: 20_000 });
 });

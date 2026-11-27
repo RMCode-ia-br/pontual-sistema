@@ -1044,3 +1044,19 @@ export async function composicaoDaTipologia(nome: string): Promise<{ insumos: nu
     return { insumos: r.rows[0].insumos, maoDeObra: r.rows[0].mao, precos: r.rows[0].precos };
   });
 }
+
+/** Anexos de desenho (item ou tipologia) criados pelos usuários de teste: serve para provar que "nada foi gravado" antes de salvar. */
+export async function contarAnexosDeDesenhoDoE2E(): Promise<number> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "Anexo" WHERE categoria IN ('desenho-item', 'desenho-tipologia') AND "criadoPorId" IN (SELECT id FROM "Usuario" WHERE login = ANY($1))`,
+      [LOGINS_E2E],
+    );
+    return r.rows[0].n;
+  });
+}
+
+/** Tira o desenho da tipologia de teste direto no banco (simula a imagem sumir por fora da tela aberta). */
+export async function tirarDesenhoDaTipologiaPorFora(nome: string): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Tipologia" SET "desenhoAnexoId" = NULL, "desenhoConfig" = NULL WHERE nome = $1`, [nome]));
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aplicarTamanhoNaConfig, configDoDesenhoSchema, lerTamanhoDoDesenho, marcaDoDesenho, marcaDoTamanho, resolverDesenhoDoItem, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
+import { aplicarTamanhoNaConfig, configDoDesenhoSchema, motivoDeRecusaDeExclusaoDoAnexo, lerTamanhoDoDesenho, marcaDoDesenho, marcaDoTamanho, resolverDesenhoDoItem, type ImagemDoDesenho } from "@/lib/dominio/desenho-item";
 
 const imagem: ImagemDoDesenho = { anexoId: "a1", caminho: "ItemProposta/i1/x.png", sha256: "abc", mime: "image/png", larguraPx: 800, alturaPx: 600 };
 
@@ -110,4 +110,21 @@ describe("configDoDesenhoSchema (estrito)", () => {
   it.each([[{}], [{ tamanhoDesenho: "grande" }], [{ tamanhoDesenho: "NORMAL" }], [{ tamanhoDesenho: "ENORME" }], [{ tamanhoDesenho: "GRANDE", outra: 1 }], [{ outra: "GRANDE" }], [[]], ["GRANDE"], [42], [undefined]])("recusa %j", (c) =>
     expect(configDoDesenhoSchema.safeParse(c).success).toBe(false),
   );
+});
+
+describe("motivoDeRecusaDeExclusaoDoAnexo (a exclusão genérica nunca apaga o desenho do item nem o da tipologia)", () => {
+  it.each([
+    [{ categoria: "desenho-item", entidadeTipo: "ItemProposta" }, "Este desenho pertence a um item da proposta. Remova-o pelo próprio item."],
+    [{ categoria: "desenho-item", entidadeTipo: "Qualquer" }, "Este desenho pertence a um item da proposta. Remova-o pelo próprio item."],
+    [{ categoria: "outra", entidadeTipo: "ItemProposta" }, "Este desenho pertence a um item da proposta. Remova-o pelo próprio item."],
+    [{ categoria: "desenho-tipologia", entidadeTipo: "Tipologia" }, "Este desenho pertence a uma tipologia. Remova-o pelo cadastro da tipologia."],
+    [{ categoria: "desenho-tipologia", entidadeTipo: "Qualquer" }, "Este desenho pertence a uma tipologia. Remova-o pelo cadastro da tipologia."],
+    [{ categoria: null, entidadeTipo: "Tipologia" }, "Este desenho pertence a uma tipologia. Remova-o pelo cadastro da tipologia."],
+  ])("recusa %j", (anexo, mensagem) => expect(motivoDeRecusaDeExclusaoDoAnexo(anexo)).toBe(mensagem));
+  it.each([
+    [{ categoria: "foto-obra", entidadeTipo: "Projeto" }],
+    [{ categoria: "documento", entidadeTipo: "Cliente" }],
+    [{ categoria: null, entidadeTipo: null }],
+    [{}],
+  ])("deixa excluir %j", (anexo) => expect(motivoDeRecusaDeExclusaoDoAnexo(anexo)).toBeNull());
 });

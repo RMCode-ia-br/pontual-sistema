@@ -11,7 +11,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { extrairIp } from "@/lib/auth/autenticar";
 import { exigirSessao } from "@/lib/auth/sessao";
 import { prisma } from "@/lib/db";
-import { CATEGORIA_DESENHO_DA_TIPOLOGIA, CATEGORIA_DESENHO_DO_ITEM, ENTIDADE_DO_DESENHO_DA_TIPOLOGIA, ENTIDADE_DO_DESENHO_DO_ITEM } from "@/lib/dominio/desenho-item";
+import { motivoDeRecusaDeExclusaoDoAnexo } from "@/lib/dominio/desenho-item";
 import { can } from "@/lib/permissoes";
 import { criarUrlDeDownload, criarUrlDeUpload, infoDoObjeto, lerPrimeirosBytes, removerObjeto } from "@/lib/storage";
 import { assinaturaConfere, ENTIDADES_COM_ANEXO, sanitizarNomeArquivo, validarArquivo } from "@/lib/storage/regras";
@@ -182,14 +182,9 @@ export async function excluirAnexo(idBruto: string): Promise<ResultadoAcao> {
         select: { id: true, nome: true, entidadeTipo: true, entidadeId: true, categoria: true },
       });
       if (!antes) throw new ErroNegocio("Arquivo não encontrado.");
-      // O desenho do item é controlado pelo item da proposta (trocar/remover lá): a exclusão genérica nunca o apaga.
-      if (antes.categoria === CATEGORIA_DESENHO_DO_ITEM || antes.entidadeTipo === ENTIDADE_DO_DESENHO_DO_ITEM) {
-        throw new ErroNegocio("Este desenho pertence a um item da proposta. Remova-o pelo próprio item.");
-      }
-      // O desenho da tipologia também: trocar/remover só pelo cadastro da tipologia (o arquivo pode estar em uso em outros lugares).
-      if (antes.categoria === CATEGORIA_DESENHO_DA_TIPOLOGIA || antes.entidadeTipo === ENTIDADE_DO_DESENHO_DA_TIPOLOGIA) {
-        throw new ErroNegocio("Este desenho pertence a uma tipologia. Remova-o pelo cadastro da tipologia.");
-      }
+      // O desenho do item e o da tipologia têm dono próprio (trocar/remover lá): a exclusão genérica nunca os apaga.
+      const recusa = motivoDeRecusaDeExclusaoDoAnexo(antes);
+      if (recusa) throw new ErroNegocio(recusa);
       await tx.anexo.update({ where: { id: antes.id }, data: { deletadoEm: new Date(), atualizadoPorId: sessao.id } });
       await registrarAuditoria(tx, { usuario: sessao, entidade: "Anexo", entidadeId: antes.id, acao: "EXCLUIR", antes, ip });
     });

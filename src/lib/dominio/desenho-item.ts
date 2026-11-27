@@ -28,6 +28,16 @@ export const ENTIDADE_DO_DESENHO_DO_ITEM = "ItemProposta";
 export const CATEGORIA_DESENHO_DA_TIPOLOGIA = "desenho-tipologia";
 export const ENTIDADE_DO_DESENHO_DA_TIPOLOGIA = "Tipologia";
 
+/**
+ * A exclusão genérica de anexos NUNCA apaga o desenho do item nem o da tipologia: quem os controla é o item (trocar/remover) ou
+ * o cadastro da tipologia, que conferem se o arquivo ainda está em uso. Devolve a mensagem de recusa, ou null se pode excluir.
+ */
+export function motivoDeRecusaDeExclusaoDoAnexo(anexo: { categoria?: string | null; entidadeTipo?: string | null }): string | null {
+  if (anexo.categoria === CATEGORIA_DESENHO_DO_ITEM || anexo.entidadeTipo === ENTIDADE_DO_DESENHO_DO_ITEM) return "Este desenho pertence a um item da proposta. Remova-o pelo próprio item.";
+  if (anexo.categoria === CATEGORIA_DESENHO_DA_TIPOLOGIA || anexo.entidadeTipo === ENTIDADE_DO_DESENHO_DA_TIPOLOGIA) return "Este desenho pertence a uma tipologia. Remova-o pelo cadastro da tipologia.";
+  return null;
+}
+
 /** Imagem (e tamanho) guardados na tipologia, já lidos do banco. */
 export type DesenhoDaTipologia<I = ImagemDoDesenho> = { imagem: I; tamanho?: TamanhoDoDesenho | null };
 

@@ -340,3 +340,4 @@ Corrigidos na própria revisão: número negativo saindo do CSV como texto com a
 ## Da Fase 3.6b-3 (desenho na tipologia)
 - [ ] **Item com imagem herdada da tipologia não tem tamanho próprio (Fase 3.6b-3):** o tamanho (Normal/Grande) é o da tipologia; só o item com imagem PRÓPRIA escolhe o seu. Se o Marcelo quiser tamanho por item mesmo com a imagem herdada, decidir depois do uso real.
 - [ ] **Teste da recusa de `excluirAnexo` para o desenho da tipologia (Fase 3.6b-3):** a ação exige sessão e não tem teste de integração direto; cobrir no E2E do Bloco 4.
+- [ ] **"Salvar este desenho como nova tipologia" só existe no diálogo de edição de rascunho (Fase 3.6b-3):** não há o botão no cartão do item nem em proposta enviada. Se o Marcelo quiser criar a tipologia a partir de uma proposta já enviada, decidir depois do uso real (a ação do servidor já aceita qualquer item vivo com imagem própria).
