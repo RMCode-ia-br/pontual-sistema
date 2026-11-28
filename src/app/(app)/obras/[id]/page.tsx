@@ -10,10 +10,11 @@ import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
 import { prisma } from "@/lib/db";
 import { semValoresNaLinhaDoTempo } from "@/lib/dominio/texto-sem-valores";
-import { permissoesDe, podeVerModulo } from "@/lib/permissoes";
+import { can, permissoesDe, podeVerModulo } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { LinhaDoTempo } from "@/modules/clientes/components/linha-do-tempo";
 import { listarInteracoesDoVinculo } from "@/modules/clientes/queries";
+import { CancelarObra } from "@/modules/obras/components/cancelar-obra";
 import { BotaoGerarEtapas } from "@/modules/obras/components/botao-gerar-etapas";
 import { CartaoPrazo } from "@/modules/obras/components/cartao-prazo";
 import { EtapasDaObra } from "@/modules/obras/components/etapas-da-obra";
@@ -55,6 +56,8 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
   const permissoes = permissoesDe(sessao);
   const { verValores, verCustoMargem } = permissoes;
   const verComercial = podeVerModulo(permissoes, "COMERCIAL") && verValores;
+  // Cancelar uma obra já aprovada é destrutivo de Obras (Dono e Escritório); só aparece para obra aprovada ou em execução.
+  const podeCancelar = can(sessao, "cancelar", "obra");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
@@ -89,11 +92,14 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
         titulo={obra.titulo}
         descricao={`${obra.codigo} · ${obra.cliente.nome}`}
         acoes={
-          verComercial ? (
-            <Link href={`/projetos/${obra.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
-              Ver projeto
-            </Link>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            {verComercial ? (
+              <Link href={`/projetos/${obra.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
+                Ver projeto
+              </Link>
+            ) : null}
+            {podeCancelar && (obra.status === "APROVADO" || obra.status === "EM_EXECUCAO") ? <CancelarObra projetoId={obra.id} codigo={obra.codigo} /> : null}
+          </div>
         }
       />
 

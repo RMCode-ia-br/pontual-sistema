@@ -13,8 +13,8 @@ import { limitesEmInstantes, type Periodo } from "@/lib/periodo";
  * Isto NÃO é a "aprovação desfeita" da Fase 7A.1: desfazer uma aprovação deixa a proposta de ser aprovada (deixa de
  * contar como venda), então o projeto não tem mais proposta aprovada e não entra aqui.
  *
- * Hoje nenhuma tela do sistema leva uma obra aprovada a "Cancelado" (PENDENCIAS); a linha fica pronta e testada (o teste
- * grava o histórico direto) para quando esse caminho existir.
+ * O caminho existe desde a Fase 7C (decisão 183): "Cancelar a obra" na página da obra (`cancelarObraAprovada`, em
+ * `src/modules/obras/servico-cancelar.ts`) leva o projeto a CANCELADO pela função de fases, o que grava este histórico.
  */
 export function ondeCanceladosDepoisDeAprovados(p: Periodo): Prisma.ProjetoWhereInput {
   const { inicio, fimExclusivo } = limitesEmInstantes(p);
