@@ -1,0 +1,101 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { NIVEL_DO_VERBO, RECURSO } from "@/lib/dominio/permissoes";
+
+/**
+ * Varredura (Fase 7C): todo `can(sessao, "verbo", "recurso")` do código tem verbo e recurso mapeados.
+ * Como a regra falha fechada, um par sem mapeamento negaria até o administrador: esta varredura impede que isso chegue ao ar.
+ */
+
+const RAIZ = join(process.cwd(), "src");
+
+function arquivos(dir: string, saida: string[] = []): string[] {
+  for (const nome of readdirSync(dir)) {
+    const caminho = join(dir, nome);
+    if (nome === "generated") continue;
+    const s = statSync(caminho);
+    if (s.isDirectory()) arquivos(caminho, saida);
+    else if (/\.(ts|tsx)$/.test(nome)) saida.push(caminho);
+  }
+  return saida;
+}
+
+/** Divide por vírgula só no nível de fora de parênteses e de aspas. */
+function argumentos(texto: string): string[] {
+  const partes: string[] = [];
+  let nivel = 0;
+  let aspas: string | null = null;
+  let atual = "";
+  for (const ch of texto) {
+    if (aspas) {
+      atual += ch;
+      if (ch === aspas) aspas = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") { aspas = ch; atual += ch; continue; }
+    if (ch === "(" || ch === "[" || ch === "{") nivel++;
+    if (ch === ")" || ch === "]" || ch === "}") nivel--;
+    if (ch === "," && nivel === 0) { partes.push(atual.trim()); atual = ""; continue; }
+    atual += ch;
+  }
+  if (atual.trim()) partes.push(atual.trim());
+  return partes;
+}
+
+type Uso = { arquivo: string; verbos: string[]; recursos: string[]; recursoDinamico: boolean };
+
+function usosDeCan(): Uso[] {
+  const usos: Uso[] = [];
+  for (const arquivo of arquivos(RAIZ)) {
+    if (arquivo.replace(/\\/g, "/").includes("/src/lib/permissoes/") || arquivo.replace(/\\/g, "/").endsWith("/src/lib/dominio/permissoes.ts")) continue;
+    const texto = readFileSync(arquivo, "utf8");
+    for (const m of texto.matchAll(/(?<![\w.])can\(/g)) {
+      let i = (m.index ?? 0) + m[0].length;
+      let nivel = 1;
+      let aspas: string | null = null;
+      const inicio = i;
+      for (; i < texto.length && nivel > 0; i++) {
+        const ch = texto[i];
+        if (aspas) { if (ch === aspas) aspas = null; continue; }
+        if (ch === '"' || ch === "'" || ch === "`") aspas = ch;
+        else if (ch === "(") nivel++;
+        else if (ch === ")") nivel--;
+      }
+      const args = argumentos(texto.slice(inicio, i - 1));
+      if (args.length < 2) continue;
+      const literais = (s: string) => [...s.matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
+      usos.push({
+        arquivo: arquivo.replace(process.cwd(), "").replace(/\\/g, "/"),
+        verbos: literais(args[1]!),
+        recursos: args[2] ? literais(args[2]) : [],
+        recursoDinamico: !!args[2] && literais(args[2]).length === 0,
+      });
+    }
+  }
+  return usos;
+}
+
+describe("varredura de can() no código", () => {
+  const usos = usosDeCan();
+
+  it("encontra os usos (a varredura não está vazia)", () => {
+    expect(usos.length).toBeGreaterThan(100);
+  });
+
+  it("todo verbo usado tem nível", () => {
+    const faltam = usos.flatMap((u) => u.verbos.filter((v) => !(v in NIVEL_DO_VERBO)).map((v) => `${u.arquivo}: verbo "${v}"`));
+    expect(faltam).toEqual([]);
+  });
+
+  it("todo recurso usado tem módulo", () => {
+    const faltam = usos.flatMap((u) => u.recursos.filter((r) => !(r in RECURSO)).map((r) => `${u.arquivo}: recurso "${r}"`));
+    expect(faltam).toEqual([]);
+  });
+
+  it("recurso dinâmico só na lixeira (e os tipos que ela aceita estão mapeados)", () => {
+    const dinamicos = usos.filter((u) => u.recursoDinamico).map((u) => u.arquivo);
+    expect(dinamicos).toEqual(["/src/modules/lixeira/actions.ts"]);
+    for (const tipo of ["cliente", "fornecedor", "funcionario", "produto", "equipe", "projeto"]) expect(RECURSO[tipo], tipo).toBeDefined();
+  });
+});

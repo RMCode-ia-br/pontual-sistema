@@ -6,9 +6,9 @@ Plano aprovado pelo Régis em 2026-11-27 (arquivo de plano da sessão; decisões
 
 | Bloco | Situação | Commit |
 |---|---|---|
-| 0 Inventário, decisões, CLAUDE.md | concluído | (este commit) |
-| 1 Migração `20261128000000_permissoes_perfis` | SQL e validação BEGIN/ROLLBACK prontos (não aplicada, não commitada); aguardando o OK do Régis, depois `npm run db:deploy` e commit separado | — |
-| 2 Regra pura, sessão com permissões, seed | pendente | — |
+| 0 Inventário, decisões, CLAUDE.md | concluído, `verificar` e Vercel verdes | `979d772` |
+| 1 Migração `20261128000000_permissoes_perfis` | concluído: aplicada no banco de São Paulo com OK do Régis; `papel: ADMIN` explícito em `criarUsuario`, seed e nos dois helpers de teste que inserem em SQL cru; `verificar` e Vercel verdes | `8d42985` |
+| 2 Regra pura, sessão com permissões, seed | concluído (aguardando commit): `src/lib/dominio/permissoes.ts`, `can` real, `UsuarioSessao.permissoes`, 93 testes novos | — |
 | 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | pendente | — |
 | 4 Server Actions | pendente (parada obrigatória ao fim, relatório parcial) | — |
 | 5 Rotas, anexos, busca, CSV | pendente | — |
@@ -50,3 +50,11 @@ ALTER TABLE "Usuario" DROP COLUMN "ajustesPermissao", ALTER COLUMN "papel" SET D
 **Validação BEGIN/ROLLBACK no banco compartilhado** (nada gravado): migração aplicada dentro da transação sem erro; `papel` ficou `NOT NULL` sem padrão e `ajustesPermissao` `jsonb` nulável; usuários antes e depois: 4 `ADMIN` (acesso total preservado); **usar `CAMPO` na mesma transação foi RECUSADO** (erro `55P04 unsafe use of new value`), confirmando que a migração só cria os valores e nada os usa; após o ROLLBACK a coluna não existe e o enum tem só `ADMIN`.
 
 **Efeito no código:** com o padrão removido, `criarUsuario` (hoje sem `papel`) e `prisma/seed.ts` passam a exigir perfil; o Bloco 2 corrige os dois e regenera o cliente. Entre a aplicação da migração e o deploy do código novo, só `criarUsuario` falharia (ninguém cria usuário nesse intervalo).
+
+## Bloco 2 — Regra pura e sessão
+
+- `src/lib/dominio/permissoes.ts` (pura): módulos, perfis prontos, `permissoesEfetivas(papel, ajustes)` com Zod estrito (falha fechada: papel ≠ ADMIN sem acesso a nada, ADMIN perfil puro, sempre com `ajustesInvalidos`), normalização (Painel só "ver", destrutivo só com alterar, custo exige valores), `decidir` com tabelas `NIVEL_DO_VERBO` e `RECURSO` (módulo, `tambem`, `exige` transversais; verbo, recurso ou perfil desconhecido = negado).
+- `src/lib/permissoes/index.ts`: `can(usuario, acao, recurso)` calcula pelo papel quando a sessão não traz permissões já calculadas (ponto de extensão da Parte A: ator com `permissoes` próprias).
+- `obterUsuarioAtual` lê `ajustesPermissao` na mesma consulta e devolve `permissoes`; ajuste inválido vai para o log com o id do usuário (nunca o conteúdo).
+- Recursos de nome ambíguo (`projeto`, `configuracao`, `interacao`) ficam mapeados de forma provisória e conservadora; o Bloco 4 os troca por `visita`, `mao-de-obra`, `interacao-cliente`/`interacao-projeto` e a varredura passa a proibir os antigos.
+- Testes: `tests/unit/permissoes.test.ts` (tabela esperada escrita à mão, perfil × módulo × nível, transversais, ajustes acima e abaixo do perfil, falha fechada com 8 tipos de ajuste inválido) e `tests/unit/permissoes-varredura.test.ts` (todo `can(` do código tem verbo e recurso mapeados; recurso dinâmico só na lixeira).

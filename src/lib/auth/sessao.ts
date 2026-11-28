@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
 
+import { permissoesEfetivas, type Papel, type PermissoesEfetivas } from "@/lib/dominio/permissoes";
 import { auth } from "./index";
 
 export type UsuarioSessao = {
@@ -10,7 +11,9 @@ export type UsuarioSessao = {
   nome: string;
   login: string;
   email: string | null;
-  papel: "ADMIN" | "ESCRITORIO" | "CAMPO";
+  papel: Papel;
+  /** Permissões efetivas (perfil + ajustes), calculadas a cada requisição. Quem monta uma sessão à mão (teste) pode omitir: `can` calcula pelo papel. */
+  permissoes?: PermissoesEfetivas;
   precisaTrocarSenha: boolean;
 };
 
@@ -33,6 +36,7 @@ export const obterUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> =
       login: true,
       email: true,
       papel: true,
+      ajustesPermissao: true,
       ativo: true,
       deletadoEm: true,
       versaoSessao: true,
@@ -46,12 +50,19 @@ export const obterUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> =
   if (usuario.versaoSessao !== sessao.user.versaoSessao) return null;
   if (usuario.sessoesRevogadas && usuario.sessoesRevogadas.length > 0) return null;
 
+  const permissoes = permissoesEfetivas(usuario.papel, usuario.ajustesPermissao);
+  if (permissoes.ajustesInvalidos) {
+    // Ajuste guardado fora do formato (edição manual no banco): falha fechada. Só o id vai para o log, nunca o conteúdo.
+    console.error(`[permissoes] ajustesPermissao inválido para o usuário ${usuario.id} (papel ${usuario.papel}): ${usuario.papel === "ADMIN" ? "perfil puro aplicado" : "acesso fechado"}`);
+  }
+
   return {
     id: usuario.id,
     nome: usuario.nome,
     login: usuario.login,
     email: usuario.email,
     papel: usuario.papel,
+    permissoes,
     precisaTrocarSenha: usuario.precisaTrocarSenha,
   };
 });
