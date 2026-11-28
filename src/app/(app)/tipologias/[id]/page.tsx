@@ -36,7 +36,9 @@ export default async function PaginaTipologia({ params, searchParams }: { params
 
   const tipologia = await obterTipologia(id);
   if (!tipologia) notFound();
-  const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "dados";
+  // Composição de custo exige "ver custo e margem"; a tabela de preços exige "ver valores" (a aba some e o endereço direto cai em Dados).
+  const abasVisiveis = ABAS.filter((a) => (a.valor !== "composicao" || can(sessao, "ver", "custo")) && (a.valor !== "precos" || can(sessao, "ver", "valores")));
+  const aba = abasVisiveis.find((a) => a.valor === abaBruta)?.valor ?? "dados";
 
   return (
     <>
@@ -71,7 +73,7 @@ export default async function PaginaTipologia({ params, searchParams }: { params
       {tipologia.revisarCadastro ? <AvisoCriadaDeProposta tipologiaId={tipologia.id} /> : null}
 
       <nav aria-label="Seções da tipologia" className="mb-6 flex gap-1 overflow-x-auto border-b">
-        {ABAS.map((a) => (
+        {abasVisiveis.map((a) => (
           <Link
             key={a.valor}
             href={`/tipologias/${tipologia.id}?aba=${a.valor}`}

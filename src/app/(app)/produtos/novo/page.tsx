@@ -3,13 +3,14 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { FormProduto } from "@/modules/produtos/components/form-produto";
 import { listarOpcoesDeProduto } from "@/modules/produtos/queries";
 
 export const metadata: Metadata = { title: "Novo produto" };
 
 export default async function PaginaNovoProduto() {
-  await exigirModulo("ESTOQUE", { nivel: "alterar" });
+  const sessaoDoProduto = await exigirModulo("ESTOQUE", { nivel: "alterar" });
   const opcoes = await listarOpcoesDeProduto();
   return (
     <>
@@ -20,7 +21,7 @@ export default async function PaginaNovoProduto() {
       </p>
       <CabecalhoPagina titulo="Novo produto" descricao="Só o código, a descrição e a unidade são obrigatórios. O custo pode ficar vazio até você saber o valor." />
       <div className="max-w-3xl">
-        <FormProduto opcoes={opcoes} />
+        <FormProduto mostrarCusto={can(sessaoDoProduto, "ver", "custo")} opcoes={opcoes} />
       </div>
     </>
   );

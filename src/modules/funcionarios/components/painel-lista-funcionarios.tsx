@@ -26,7 +26,7 @@ const COLUNAS: ColunaLista[] = [
   { id: "salario", rotulo: "Salário base", escondidaPorPadrao: true },
 ];
 
-function paraLinha(f: FuncionarioDaLista): LinhaLista {
+function paraLinha(f: FuncionarioDaLista, verCusto: boolean): LinhaLista {
   return {
     id: f.id,
     href: `/funcionarios/${f.id}`,
@@ -37,12 +37,12 @@ function paraLinha(f: FuncionarioDaLista): LinhaLista {
       contato: f.telefone || f.email ? { texto: f.telefone ? formatarTelefone(f.telefone) : (f.email ?? ""), sub: f.telefone && f.email ? f.email : undefined } : null,
       equipes: f.equipes.length ? { texto: "", marcas: f.equipes.map((e) => ({ texto: e, variante: "outline" as const })) } : null,
       admissao: f.admissaoEm ? formatarDataCalendario(f.admissaoEm) : null,
-      salario: f.salarioBaseCentavos !== null ? { texto: formatarMoeda(f.salarioBaseCentavos), direita: false } : null,
+      salario: !verCusto ? null : f.salarioBaseCentavos !== null ? { texto: formatarMoeda(f.salarioBaseCentavos), direita: false } : null,
     },
   };
 }
 
-export async function PainelListaFuncionarios({ brutos, usuarioId, permitidas }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista }) {
+export async function PainelListaFuncionarios({ brutos, usuarioId, permitidas, verCusto }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista; verCusto: boolean }) {
   const { parametros, filtros } = lerListaFuncionarios(brutos);
   const [{ linhas, paginacao }, salvos] = await Promise.all([listarFuncionarios(parametros, filtros), listarFiltrosSalvos(usuarioId, "funcionarios")]);
 
@@ -105,8 +105,8 @@ export async function PainelListaFuncionarios({ brutos, usuarioId, permitidas }:
             atuais={{ ...atuais, pagina: undefined }}
             ordem={parametros.ordem}
             direcao={parametros.direcao}
-            colunas={COLUNAS}
-            linhas={linhas.map(paraLinha)}
+            colunas={verCusto ? COLUNAS : COLUNAS.filter((c) => c.id !== "salario")}
+            linhas={linhas.map((f) => paraLinha(f, verCusto))}
             acoes={acoesPermitidas([
               { rotulo: "Inativar", executar: inativarFuncionarios, confirmar: { titulo: "Inativar os funcionários marcados?", descricao: "Eles saem das escolhas (agenda, equipes), mas nada é apagado. Dá para reativar depois.", botao: "Inativar" } },
               { rotulo: "Reativar", executar: reativarFuncionarios },

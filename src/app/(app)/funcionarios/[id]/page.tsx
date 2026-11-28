@@ -29,8 +29,11 @@ export default async function PaginaFuncionario({ params, searchParams }: { para
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
-  const funcionario = await obterFuncionario(id);
-  if (!funcionario) notFound();
+  // Fase 7C: sem "ver custo e margem", salário e custo por hora nem saem do servidor.
+  const verCusto = can(sessao, "ver", "custo");
+  const funcionarioCompleto = await obterFuncionario(id);
+  if (!funcionarioCompleto) notFound();
+  const funcionario = verCusto ? funcionarioCompleto : { ...funcionarioCompleto, salarioBaseCentavos: null, custoHoraCentavos: null };
   const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "dados";
 
   const descricao = [
@@ -89,7 +92,7 @@ export default async function PaginaFuncionario({ params, searchParams }: { para
       </nav>
 
       <div className="max-w-3xl">
-        {aba === "dados" ? <FormFuncionario funcionario={funcionario} usuarios={await listarUsuariosParaVinculo(funcionario.id)} /> : null}
+        {aba === "dados" ? <FormFuncionario mostrarCusto={verCusto} funcionario={funcionario} usuarios={await listarUsuariosParaVinculo(funcionario.id)} /> : null}
         {aba === "anexos" ? <Anexos entidadeTipo="Funcionario" entidadeId={funcionario.id} anexos={await listarAnexos("Funcionario", funcionario.id)} titulo="Arquivos do funcionário" /> : null}
       </div>
     </>

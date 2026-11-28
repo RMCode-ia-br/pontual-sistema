@@ -135,9 +135,12 @@ function DialogoDeEstorno({
 export function ListaDeMovimentos({
   movimentos,
   mostrarProduto = true,
+  mostrarCusto,
 }: {
   movimentos: MovimentoDaLista[];
   mostrarProduto?: boolean;
+  /** Só com "ver custo e margem": o custo congelado de cada movimento. */
+  mostrarCusto: boolean;
 }) {
   const [estornando, setEstornando] = useState<MovimentoDaLista | null>(null);
   return (
@@ -210,7 +213,7 @@ export function ListaDeMovimentos({
                   {formatarQuantidade(Math.abs(m.quantidadeMilesimos))}{" "}
                   {sigla(m.unidade)}
                 </span>
-                {m.custoUnitarioCentavos !== null ? (
+                {!mostrarCusto ? null : m.custoUnitarioCentavos !== null ? (
                   <span className="text-muted-foreground text-xs">
                     a {formatarMoeda(m.custoUnitarioCentavos)}
                   </span>

@@ -33,7 +33,7 @@ export default async function PaginaFuncionarios({
         }
       />
       <SubnavFuncionarios atual="funcionarios" />
-      <PainelListaFuncionarios
+      <PainelListaFuncionarios verCusto={can(usuario, "ver", "custo")}
         brutos={brutos}
         usuarioId={usuario.id}
         permitidas={permissoesDaLista(usuario, "funcionario")}

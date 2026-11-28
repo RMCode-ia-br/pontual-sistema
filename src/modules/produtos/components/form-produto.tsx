@@ -22,13 +22,15 @@ import { COMPRIMENTO_BARRA_PADRAO_MM, ROTULO_UNIDADE, UNIDADES } from "../schema
 type Opcao = { id: string; nome: string };
 type Props = {
   produto?: ProdutoDetalhe;
+  /** Só com "ver custo e margem": sem isso a seção de custo (e o custo original) nem existe na tela. */
+  mostrarCusto: boolean;
   opcoes: { categorias: Opcao[]; linhas: Opcao[]; acabamentos: Opcao[]; fornecedores: Opcao[] };
 };
 
 /** "6.000" → "6000": o campo mostra o número como o servidor guardou. */
 const numeroNoCampo = (n: number | string | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
 
-export function FormProduto({ produto, opcoes }: Props) {
+export function FormProduto({ produto, opcoes, mostrarCusto }: Props) {
   const router = useRouter();
   const editando = !!produto;
   const [sujo, setSujo] = useState(false);
@@ -51,7 +53,7 @@ export function FormProduto({ produto, opcoes }: Props) {
   return (
     <form onSubmit={aoEnviar} onChange={() => setSujo(true)} className="grid gap-5">
       {produto ? <input type="hidden" name="id" value={produto.id} /> : null}
-      {produto ? <input type="hidden" name="custoOriginal" value={produto.custoUnitarioCentavos ?? ""} /> : null}
+      {produto && mostrarCusto ? <input type="hidden" name="custoOriginal" value={produto.custoUnitarioCentavos ?? ""} /> : null}
 
       <section aria-labelledby="sec-produto" className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
         <h2 id="sec-produto" className="font-medium sm:col-span-2">
@@ -114,7 +116,8 @@ export function FormProduto({ produto, opcoes }: Props) {
         </Campo>
       </section>
 
-      <section aria-labelledby="sec-custo-produto" className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
+      {mostrarCusto ? (
+        <section aria-labelledby="sec-custo-produto" className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
         <h2 id="sec-custo-produto" className="font-medium sm:col-span-2">
           Custo
         </h2>
@@ -148,6 +151,7 @@ export function FormProduto({ produto, opcoes }: Props) {
           <Input id="estoqueMinimo" name="estoqueMinimo" inputMode="decimal" maxLength={20} defaultValue={numeroNoCampo(produto?.estoqueMinimo)} autoComplete="off" {...ariaDoCampo("estoqueMinimo", erros.estoqueMinimo, "Vazio = sem alerta de estoque baixo.")} />
         </Campo>
       </section>
+      ) : null}
 
       <section aria-labelledby="sec-medidas" className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
         <h2 id="sec-medidas" className="font-medium sm:col-span-2">

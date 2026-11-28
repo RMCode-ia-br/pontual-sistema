@@ -159,12 +159,14 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
         const antes = await tx.produto.findFirst({ where: { id, deletadoEm: null }, select: campos });
         if (!antes) throw new ErroNegocio("Produto não encontrado.");
 
+        // Sem "ver custo e margem" a tela nem mostra o custo: o custo e o "por kg" guardados são PRESERVADOS (campo ausente não é "apagar").
+        const verCusto = can(sessao, "ver", "custo");
         // O formulário traz o custo que mostrava ao abrir. Se a pessoa não mexeu no campo, o custo do banco
         // vale (um reajuste em lote aplicado no meio-tempo não pode ser desfeito por um formulário velho).
         const original = v.custoOriginal === undefined || v.custoOriginal === "" ? null : Number(v.custoOriginal);
         const digitado = v.custo ?? null;
         // Perfil por kg: o campo de custo fica desligado na tela e o custo vem do preço do kg.
-        const pessoaMexeuNoCusto = v.custoPorKg ? false : v.custoOriginal === undefined ? digitado !== antes.custoUnitarioCentavos : digitado !== original;
+        const pessoaMexeuNoCusto = !verCusto || v.custoPorKg ? false : v.custoOriginal === undefined ? digitado !== antes.custoUnitarioCentavos : digitado !== original;
         if (pessoaMexeuNoCusto) {
           if (v.custoOriginal !== undefined && original !== antes.custoUnitarioCentavos) {
             throw new ErroNegocio("O custo deste produto foi alterado por outra pessoa enquanto você editava. Recarregue a página e confira o valor.", { custo: "Mudou enquanto você editava. Recarregue a página." });
@@ -179,6 +181,7 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
           where: { id },
           data: {
             ...paraBanco(v),
+            ...(verCusto ? {} : { custoPorKg: antes.custoPorKg }),
             comprimentoBarraMm: v.comprimentoBarraMm ?? null,
             custoUnitarioCentavos: novoCusto,
             ...(custoMudou ? { custoAtualizadoEm: novoCusto === null ? null : new Date() } : {}),

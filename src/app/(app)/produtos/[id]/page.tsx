@@ -37,13 +37,17 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
-  const produto = await obterProduto(id);
-  if (!produto) notFound();
-  const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "dados";
+  // Fase 7C: sem "ver custo e margem" o custo sai do servidor (cabeçalho, formulário, estoque) e a aba de histórico de preço some.
+  const verCusto = can(sessao, "ver", "custo");
+  const produtoCompleto = await obterProduto(id);
+  if (!produtoCompleto) notFound();
+  const produto = verCusto ? produtoCompleto : { ...produtoCompleto, custoUnitarioCentavos: null, custoAtualizadoEm: null };
+  const abasVisiveis = ABAS.filter((a) => a.valor !== "historico" || verCusto);
+  const aba = abasVisiveis.find((a) => a.valor === abaBruta)?.valor ?? "dados";
 
   const descricao = [
     produto.codigo,
-    produto.custoUnitarioCentavos !== null ? `${formatarMoeda(produto.custoUnitarioCentavos)} por ${SIGLA_UNIDADE[produto.unidade]}` : "Sem custo informado",
+    !verCusto ? null : produto.custoUnitarioCentavos !== null ? `${formatarMoeda(produto.custoUnitarioCentavos)} por ${SIGLA_UNIDADE[produto.unidade]}` : "Sem custo informado",
     produto.custoAtualizadoEm ? `custo atualizado em ${formatarData(produto.custoAtualizadoEm)}` : null,
   ]
     .filter(Boolean)
@@ -79,7 +83,7 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
       )}
 
       <nav aria-label="Seções do produto" className="mb-6 flex gap-1 overflow-x-auto border-b">
-        {ABAS.map((a) => (
+        {abasVisiveis.map((a) => (
           <Link
             key={a.valor}
             href={`/produtos/${produto.id}?aba=${a.valor}`}
@@ -95,8 +99,8 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
       </nav>
 
       <div className="max-w-3xl">
-        {aba === "dados" ? <FormProduto produto={produto} opcoes={await listarOpcoesDeProduto()} /> : null}
-        {aba === "estoque" ? <AbaDeEstoque produtoId={produto.id} nome={produto.descricao} unidade={produto.unidade} custoCentavos={produto.custoUnitarioCentavos} ativo={produto.ativo} comprimentoBarraMm={produto.comprimentoBarraMm} pesoKgPorMetro={produto.pesoKgPorMetro} /> : null}
+        {aba === "dados" ? <FormProduto mostrarCusto={verCusto} produto={produto} opcoes={await listarOpcoesDeProduto()} /> : null}
+        {aba === "estoque" ? <AbaDeEstoque verCusto={verCusto} produtoId={produto.id} nome={produto.descricao} unidade={produto.unidade} custoCentavos={produto.custoUnitarioCentavos} ativo={produto.ativo} comprimentoBarraMm={produto.comprimentoBarraMm} pesoKgPorMetro={produto.pesoKgPorMetro} /> : null}
         {aba === "historico" ? <HistoricoDePreco itens={await listarHistoricoDePreco(produto.id)} /> : null}
         {aba === "anexos" ? <Anexos entidadeTipo="Produto" entidadeId={produto.id} anexos={await listarAnexos("Produto", produto.id)} titulo="Arquivos do produto" /> : null}
       </div>
@@ -104,7 +108,7 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
   );
 }
 
-async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo, comprimentoBarraMm, pesoKgPorMetro }: { produtoId: string; nome: string; unidade: keyof typeof SIGLA_UNIDADE; custoCentavos: number | null; ativo: boolean; comprimentoBarraMm: number | null; pesoKgPorMetro: string | null }) {
+async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo, comprimentoBarraMm, pesoKgPorMetro, verCusto }: { verCusto: boolean; produtoId: string; nome: string; unidade: keyof typeof SIGLA_UNIDADE; custoCentavos: number | null; ativo: boolean; comprimentoBarraMm: number | null; pesoKgPorMetro: string | null }) {
   const [e, cfg] = await Promise.all([estoqueDoProduto(produtoId), unidade === "BARRA" ? prisma.configuracaoEmpresa.findUnique({ where: { id: "singleton" }, select: { retalhoMinimoMm: true } }) : null]);
   if (!e) return null;
   const sigla = SIGLA_UNIDADE[unidade];
@@ -123,9 +127,13 @@ async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo, co
           {abaixo ? <Badge variant="destructive">Abaixo do mínimo ({formatarQuantidade(e.minimoMilesimos ?? 0)})</Badge> : e.minimoMilesimos === null ? <p className="text-muted-foreground text-xs">Sem estoque mínimo definido: sem alerta.</p> : null}
         </div>
         <div className="rounded-xl border p-4">
-          <p className="text-muted-foreground text-sm">Custo unitário atual</p>
+          {verCusto ? (
+            <>
+              <p className="text-muted-foreground text-sm">Custo unitário atual</p>
           <p className="text-2xl font-semibold tabular-nums">{custoCentavos !== null ? formatarMoeda(custoCentavos) : "Sem custo"}</p>
           {custoCentavos === null ? <p className="text-muted-foreground text-xs">Sem custo, as saídas deste produto deixam a margem da obra incompleta.</p> : null}
+            </>
+          ) : null}
         </div>
         <div className="rounded-xl border p-4">
           <p className="text-muted-foreground text-sm">Retalhos disponíveis</p>
@@ -157,7 +165,7 @@ async function AbaDeEstoque({ produtoId, nome, unidade, custoCentavos, ativo, co
         {e.movimentos.length === 0 ? (
           <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">Nenhum movimento ainda. O saldo parte de zero: registre uma entrada ou faça a contagem inicial (opcional).</p>
         ) : (
-          <ListaDeMovimentos movimentos={e.movimentos} mostrarProduto={false} />
+          <ListaDeMovimentos mostrarCusto={verCusto} movimentos={verCusto ? e.movimentos : e.movimentos.map((m) => ({ ...m, custoUnitarioCentavos: null }))} mostrarProduto={false} />
         )}
         {e.totalDeMovimentos > e.movimentos.length ? <p className="text-muted-foreground text-xs">Mostrando os {e.movimentos.length} mais recentes de {e.totalDeMovimentos}. Veja todos em Movimentações.</p> : null}
       </div>

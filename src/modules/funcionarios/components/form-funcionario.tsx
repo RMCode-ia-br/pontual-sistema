@@ -20,9 +20,9 @@ import { criarFuncionario, editarFuncionario } from "../actions/funcionarios";
 import type { FuncionarioDetalhe } from "../queries";
 import { FUNCOES, ROTULO_FUNCAO } from "../schemas";
 
-type Props = { funcionario?: FuncionarioDetalhe; usuarios: { id: string; nome: string; login: string }[] };
+type Props = { funcionario?: FuncionarioDetalhe; usuarios: { id: string; nome: string; login: string }[]; /** Só com "ver custo e margem": salário e custo por hora. */ mostrarCusto: boolean };
 
-export function FormFuncionario({ funcionario, usuarios }: Props) {
+export function FormFuncionario({ funcionario, usuarios, mostrarCusto }: Props) {
   const router = useRouter();
   const editando = !!funcionario;
   const [sujo, setSujo] = useState(false);
@@ -100,6 +100,7 @@ export function FormFuncionario({ funcionario, usuarios }: Props) {
         </Campo>
       </section>
 
+      {mostrarCusto ? (
       <section aria-labelledby="sec-custo" className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
         <h2 id="sec-custo" className="font-medium sm:col-span-2">
           Custo
@@ -107,7 +108,7 @@ export function FormFuncionario({ funcionario, usuarios }: Props) {
         <p role="note" className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm sm:col-span-2">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
           <span>
-            Salário e custo por hora são dados sensíveis. Por enquanto, <strong>todos os usuários do sistema enxergam estes valores</strong>; quando houver perfis de acesso, eles serão restritos.
+            Salário e custo por hora são dados sensíveis: só quem tem a permissão de ver custo e margem enxerga e altera estes valores.
           </span>
         </p>
         <Campo id="salarioBase" rotulo="Salário base (R$)" erro={erros.salarioBase}>
@@ -120,6 +121,7 @@ export function FormFuncionario({ funcionario, usuarios }: Props) {
           <AreaTexto id="observacoes" name="observacoes" maxLength={4000} rows={3} defaultValue={funcionario?.observacoes ?? ""} />
         </Campo>
       </section>
+    ) : null}
 
       {estado && !estado.ok && Object.keys(erros).length === 0 ? (
         <p role="alert" className="text-destructive text-sm">

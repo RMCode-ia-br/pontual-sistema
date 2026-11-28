@@ -121,7 +121,10 @@ export async function editarFuncionario(_anterior: ResultadoAcao<{ id: string }>
       await prisma.$transaction(async (tx) => {
         const antes = await tx.funcionario.findFirst({ where: { id, deletadoEm: null }, select: campos });
         if (!antes) throw new ErroNegocio("Funcionário não encontrado.");
-        const depois = await tx.funcionario.update({ where: { id }, data: { ...paraBanco(dados.data), atualizadoPorId: sessao.id }, select: campos });
+        // Sem "ver custo e margem" a tela nem mostra salário e custo por hora: os valores guardados são PRESERVADOS.
+        const { salarioBaseCentavos, custoHoraCentavos, ...semCusto } = paraBanco(dados.data);
+        const dadosDoFuncionario = can(sessao, "ver", "custo") ? { salarioBaseCentavos, custoHoraCentavos, ...semCusto } : semCusto;
+        const depois = await tx.funcionario.update({ where: { id }, data: { ...dadosDoFuncionario, atualizadoPorId: sessao.id }, select: campos });
         await registrarAuditoria(tx, { usuario: sessao, entidade: "Funcionario", entidadeId: id, acao: "ATUALIZAR", antes, depois, ip });
       });
       revalidar(id);

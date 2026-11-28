@@ -165,7 +165,7 @@ Princípio: valor ou custo é REMOVIDO NO SERVIDOR antes de chegar à tela (nada
 - **Decisão 151:** o aviso com números de propostas só aparece em telas e blocos que exigem valores (painel, vendas, faturamento) ou custo (aba e relatório de margem); quem não os abre nem chega a ele.
 - **Testes novos:** `tests/unit/valores-nas-telas.test.ts` (acesso dos relatórios × página × CSV, blocos do painel, sanitizadores de obra, ações em lote por perfil), `tests/unit/texto-sem-valores.test.ts`; a matriz de ações passou a ler só `!can(` como guarda (um `can` que decide um detalhe não é guarda).
 
-**Pendência deste bloco (vai para PENDENCIAS):** as telas de produto, funcionário (salário) e tipologia (composição) mostram custo a quem tem o módulo mas não "ver custo e margem" POR AJUSTE; os perfis prontos não são afetados (Escritório tem custo, Campo não tem esses módulos). As ações, o CSV e o relatório de estoque já estão fechados; o painel monta todos os dados no servidor e esconde o bloco (só otimização pendente).
+**Pendência deste bloco:** só a otimização do painel (os carregadores rodam para todos e o bloco é escondido na tela). O custo nas telas de produto, funcionário e tipologia foi fechado depois (seção abaixo).
 
 ## Bloco 7 — Configurações > Usuários
 
@@ -196,3 +196,10 @@ Princípio: valor ou custo é REMOVIDO NO SERVIDOR antes de chegar à tela (nada
 - **O último administrador** não é provado por E2E porque o banco compartilhado tem administradores reais (não dá para deixar só um sem mexer em gente de verdade): fica provado por `tests/unit/usuarios-permissoes.test.ts` (banco em memória) e pela leitura `tests/integration/usuarios-administrador.test.ts`.
 
 **Próximo passo (depende do Régis):** (1) revisão sênior com subagente de contexto limpo e as correções dela; (2) o aviso "pode rodar a suíte" (Marcelo e Luan fora do sistema) para a rodada completa uma vez só sobre o código congelado (meta: zero falha e zero não rodado; base da 3.6b-3: 1.614 unitários, 588 de integração, E2E 757 passaram e 19 ignorados); (3) relatório final, CLAUDE.md (Estado), APRENDIZADOS, PENDENCIAS, remoção do `PROMPT_7C.md`, commit, push e conferência do `verificar` e da Vercel.
+
+## Custo nas telas de cadastro (fechamento da pendência do Bloco 6)
+
+Mesmo mecanismo do Bloco 6 (o dado sai do servidor e a ação preserva o valor guardado), com teste (`tests/unit/custo-nos-cadastros.test.ts`):
+- **Produto:** sem "ver custo e margem" somem, no servidor, o custo no cabeçalho e no formulário (a seção de custo e o "custo original" nem existem), o card de custo da aba Estoque, o custo congelado de cada movimento (aba e `/estoque/movimentacoes`), a aba Histórico de preço, a coluna, o filtro e a ordem por custo na lista, o "Reajuste em lote"; `editarProduto` PRESERVA o custo e o "perfil por kg" guardados (campo ausente não é "apagar"; antes daria erro de "custo não pode ser apagado").
+- **Funcionário:** sem custo somem o salário e o custo por hora (lista, ficha e formulário; o aviso antigo "todos veem" saiu); `editarFuncionario` preserva os valores guardados.
+- **Tipologia:** a aba Composição de custo exige "ver custo e margem" e a Tabela de preços exige "ver valores" (a aba some e o endereço direto cai em Dados).

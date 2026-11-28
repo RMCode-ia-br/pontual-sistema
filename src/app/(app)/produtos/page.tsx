@@ -34,7 +34,7 @@ export default async function PaginaProdutos({
       <PainelListaProdutos
         brutos={brutos}
         usuarioId={usuario.id}
-        permitidas={permissoesDaLista(usuario, "produto")}
+        permitidas={permissoesDaLista(usuario, "produto")} verCusto={can(usuario, "ver", "custo")}
       />
     </>
   );

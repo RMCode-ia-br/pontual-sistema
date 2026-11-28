@@ -3,13 +3,14 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { FormFuncionario } from "@/modules/funcionarios/components/form-funcionario";
 import { listarUsuariosParaVinculo } from "@/modules/funcionarios/queries";
 
 export const metadata: Metadata = { title: "Novo funcionário" };
 
 export default async function PaginaNovoFuncionario() {
-  await exigirModulo("CADASTROS", { nivel: "alterar" });
+  const sessaoNovo = await exigirModulo("CADASTROS", { nivel: "alterar" });
   const usuarios = await listarUsuariosParaVinculo();
   return (
     <>
@@ -20,7 +21,7 @@ export default async function PaginaNovoFuncionario() {
       </p>
       <CabecalhoPagina titulo="Novo funcionário" descricao="Só o nome e a função são obrigatórios." />
       <div className="max-w-3xl">
-        <FormFuncionario usuarios={usuarios} />
+        <FormFuncionario usuarios={usuarios} mostrarCusto={can(sessaoNovo, "ver", "custo")} />
       </div>
     </>
   );

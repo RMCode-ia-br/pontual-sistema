@@ -30,7 +30,7 @@ const COLUNAS: ColunaLista[] = [
   { id: "atualizadoEm", rotulo: "Atualizado em", ordenavel: "atualizadoEm", escondidaPorPadrao: true },
 ];
 
-function paraLinha(p: ProdutoDaLista): LinhaLista {
+function paraLinha(p: ProdutoDaLista, verCusto: boolean): LinhaLista {
   return {
     id: p.id,
     href: `/produtos/${p.id}`,
@@ -40,8 +40,9 @@ function paraLinha(p: ProdutoDaLista): LinhaLista {
       codigo: p.codigo,
       categoria: p.categoria,
       fornecedor: p.fornecedor,
-      custo:
-        p.custoUnitarioCentavos !== null
+      custo: !verCusto
+        ? null
+        : p.custoUnitarioCentavos !== null
           ? { texto: `${formatarMoeda(p.custoUnitarioCentavos)} / ${SIGLA_UNIDADE[p.unidade]}`, sub: p.custoAtualizadoEm ? `em ${formatarData(p.custoAtualizadoEm)}` : undefined }
           : { texto: "", marcas: [{ texto: "Sem custo", variante: "outline" as const }] },
       saldo: {
@@ -56,8 +57,11 @@ function paraLinha(p: ProdutoDaLista): LinhaLista {
   };
 }
 
-export async function PainelListaProdutos({ brutos, usuarioId, permitidas }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista }) {
-  const { parametros, filtros } = lerListaProdutos(brutos);
+export async function PainelListaProdutos({ brutos, usuarioId, permitidas, verCusto }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista; verCusto: boolean }) {
+  const lido = lerListaProdutos(brutos);
+  // Sem "ver custo e margem": nem ordena nem filtra por custo (o resultado denunciaria o valor).
+  const parametros = verCusto || lido.parametros.ordem !== "custo" ? lido.parametros : { ...lido.parametros, ordem: "descricao" as typeof lido.parametros.ordem };
+  const filtros = verCusto ? lido.filtros : { ...lido.filtros, custo: undefined };
   const [{ linhas, paginacao }, opcoes, salvos] = await Promise.all([
     listarProdutos(parametros, filtros),
     listarOpcoesDeProduto(),
@@ -88,14 +92,16 @@ export async function PainelListaProdutos({ brutos, usuarioId, permitidas }: { b
           <FiltroSelect nome="fornecedor" rotulo="Fornecedor" valor={filtros.fornecedor} opcoes={opcoes.fornecedores.map((f) => ({ valor: f.id, rotulo: f.nome }))} />
           <FiltroSelect nome="linha" rotulo="Linha" valor={filtros.linha} opcoes={opcoes.linhas.map((l) => ({ valor: l.id, rotulo: l.nome }))} />
           <FiltroSelect nome="estoque" rotulo="Estoque" valor={filtros.estoque} opcoes={[{ valor: "abaixo", rotulo: "Abaixo do mínimo" }]} />
-          <FiltroSelect nome="custo" rotulo="Custo" valor={filtros.custo} opcoes={[{ valor: "sem", rotulo: "Sem custo informado" }, { valor: "com", rotulo: "Com custo" }, { valor: "antigo", rotulo: "Custo desatualizado (+90 dias)" }]} />
+          {verCusto ? <FiltroSelect nome="custo" rotulo="Custo" valor={filtros.custo} opcoes={[{ valor: "sem", rotulo: "Sem custo informado" }, { valor: "com", rotulo: "Com custo" }, { valor: "antigo", rotulo: "Custo desatualizado (+90 dias)" }]} /> : null}
           <FiltroSelect nome="situacao" rotulo="Situação" valor={filtros.situacao === "ativos" ? undefined : filtros.situacao} todos="Ativos" opcoes={[{ valor: "inativos", rotulo: "Inativos" }, { valor: "todos", rotulo: "Todos" }]} />
         </FiltrosDaLista>
         <div className="flex flex-wrap items-center gap-2">
           <FiltrosSalvos tela="produtos" base="/produtos" consultaAtual={consultaDoFiltro} salvos={salvos} />
+          {verCusto ? (
           <Link href="/produtos/reajuste" className={buttonVariants({ variant: "outline", className: "h-9" })}>
             <TrendingUp aria-hidden /> Reajuste em lote
           </Link>
+          ) : null}
           <a href={`/api/exportar/produtos${montarConsulta(atuais)}`} className={buttonVariants({ variant: "outline", className: "h-9" })}>
             <Download aria-hidden /> Exportar CSV
           </a>
@@ -139,8 +145,8 @@ export async function PainelListaProdutos({ brutos, usuarioId, permitidas }: { b
             atuais={{ ...atuais, pagina: undefined }}
             ordem={parametros.ordem}
             direcao={parametros.direcao}
-            colunas={COLUNAS}
-            linhas={linhas.map(paraLinha)}
+            colunas={verCusto ? COLUNAS : COLUNAS.filter((c) => c.id !== "custo")}
+            linhas={linhas.map((p) => paraLinha(p, verCusto))}
             acoes={acoesPermitidas([
               { rotulo: "Inativar", executar: inativarProdutos, confirmar: { titulo: "Inativar os produtos marcados?", descricao: "Eles saem das listas padrão e das escolhas, mas nada é apagado. Dá para reativar depois.", botao: "Inativar" } },
               { rotulo: "Reativar", executar: reativarProdutos },

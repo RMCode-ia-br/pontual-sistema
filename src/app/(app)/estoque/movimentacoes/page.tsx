@@ -9,6 +9,7 @@ import { PaginacaoLista } from "@/components/lista/paginacao-lista";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { ROTULO_TIPO_DE_MOVIMENTO, type TipoDeMovimento } from "@/lib/dominio/estoque";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { ListaDeMovimentos } from "@/modules/estoque/components/lista-de-movimentos";
@@ -17,7 +18,8 @@ import { lerListaMovimentos, listarMovimentos } from "@/modules/estoque/queries"
 export const metadata: Metadata = { title: "Movimentações de estoque" };
 
 export default async function PaginaMovimentacoes({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo("ESTOQUE");
+  const sessao = await exigirModulo("ESTOQUE");
+  const verCusto = can(sessao, "ver", "custo");
   const brutos = await searchParams;
   const { parametros, filtros } = lerListaMovimentos(brutos);
   const { linhas, paginacao } = await listarMovimentos(parametros, filtros);
@@ -99,7 +101,7 @@ export default async function PaginaMovimentacoes({ searchParams }: { searchPara
         )
       ) : (
         <>
-          <ListaDeMovimentos movimentos={linhas} />
+          <ListaDeMovimentos mostrarCusto={verCusto} movimentos={verCusto ? linhas : linhas.map((m) => ({ ...m, custoUnitarioCentavos: null }))} />
           <PaginacaoLista base="/estoque/movimentacoes" atuais={atuais} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>
       )}
