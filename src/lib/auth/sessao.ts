@@ -10,7 +10,7 @@ export type UsuarioSessao = {
   nome: string;
   login: string;
   email: string | null;
-  papel: "ADMIN";
+  papel: "ADMIN" | "ESCRITORIO" | "CAMPO";
   precisaTrocarSenha: boolean;
 };
 

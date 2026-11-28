@@ -49,6 +49,8 @@ export async function criarUsuario(_anterior: ResultadoAcao<SenhaTemporaria> | n
             login: dados.data.login,
             email: dados.data.email ?? null,
             senhaHash,
+            // Provisório (Bloco 1 da 7C): o perfil escolhido na tela entra nos Blocos 2 e 7.
+            papel: "ADMIN",
             precisaTrocarSenha: true,
             criadoPorId: sessao.id,
             atualizadoPorId: sessao.id,

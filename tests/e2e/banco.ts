@@ -201,8 +201,8 @@ export async function prepararUsuarioE2E(opcoes: OpcoesUsuario = {}): Promise<vo
   await comConexao(async (c) => {
     await limpar(c);
     await c.query(
-      `INSERT INTO "Usuario" (id, nome, login, "senhaHash", "precisaTrocarSenha", "atualizadoEm")
-       VALUES ($1, $2, $3, $4, $5, now())`,
+      `INSERT INTO "Usuario" (id, nome, login, "senhaHash", papel, "precisaTrocarSenha", "atualizadoEm")
+       VALUES ($1, $2, $3, $4, 'ADMIN', $5, now())`,
       [randomUUID(), USUARIO_E2E.nome, USUARIO_E2E.login, senhaHash, !opcoes.senhaDefinitiva],
     );
   });

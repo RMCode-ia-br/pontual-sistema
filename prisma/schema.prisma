@@ -14,7 +14,10 @@ datasource db {
 // ===================== Enums =====================
 
 enum PapelUsuario {
+  /// Exibido como "Dono/Gestão" (Fase 7C).
   ADMIN
+  ESCRITORIO
+  CAMPO
 }
 
 enum TipoDias {
@@ -157,7 +160,10 @@ model Usuario {
   email              String?          @unique
   senhaHash          String
   ativo              Boolean          @default(true)
-  papel              PapelUsuario     @default(ADMIN)
+  /// Sem padrão desde a Fase 7C: usuário novo só nasce escolhendo um perfil.
+  papel              PapelUsuario
+  /// Ajustes por módulo sobre o perfil (Fase 7C). Vazio = perfil puro. Validado de forma estrita (src/lib/permissoes).
+  ajustesPermissao   Json?
   precisaTrocarSenha Boolean          @default(true)
   /// Incrementada ao trocar/redefinir senha ou desativar: invalida sessões antigas.
   versaoSessao       Int              @default(1)

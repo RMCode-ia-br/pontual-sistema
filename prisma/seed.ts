@@ -59,6 +59,7 @@ async function criarAdminInicial(): Promise<string> {
       nome: "Administrador",
       login: "admin",
       senhaHash: await gerarHashSenha(informada || "admin"),
+      papel: "ADMIN",
       precisaTrocarSenha: true,
     },
   });

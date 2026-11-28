@@ -24,8 +24,8 @@ export async function criarUsuarioDeTeste(login: string, senha: string, email?: 
   const senhaHash = await gerarHashSenha(senha);
   await comConexao((c) =>
     c.query(
-      `INSERT INTO "Usuario" (id, nome, login, email, "senhaHash", "precisaTrocarSenha", "atualizadoEm")
-       VALUES ($1, $2, $3, $4, $5, false, now())`,
+      `INSERT INTO "Usuario" (id, nome, login, email, "senhaHash", papel, "precisaTrocarSenha", "atualizadoEm")
+       VALUES ($1, $2, $3, $4, $5, 'ADMIN', false, now())`,
       [randomUUID(), `Integração ${login}`, login, email ?? null, senhaHash],
     ),
   );
