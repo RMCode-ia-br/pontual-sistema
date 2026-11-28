@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -35,6 +36,9 @@ const TEMPOS: ColunaDeCsv<VisitaAteProposta>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "proposta"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const parametros = Object.fromEntries(requisicao.nextUrl.searchParams);
   const hoje = dataLocalDoInstante(new Date());
@@ -43,12 +47,12 @@ export async function GET(requisicao: NextRequest) {
   if (parametros.tabela === "tempo") {
     const t = await tempoVisitaAteProposta(periodo);
     await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "fechamento-tempo", acao: "EXPORTAR", depois: { linhas: t.linhas.length, periodo } });
-    return respostaDeCsv(csvDoRelatorio(TEMPOS, t.linhas, { podeVerInterno: false }), "visita-ate-proposta.csv");
+    return respostaDeCsv(csvDoRelatorio(TEMPOS, t.linhas, { ...acesso }), "visita-ate-proposta.csv");
   }
 
   const janela = janelaDeFechamento(periodo, hoje);
   const { linhas, truncado } = await listarDecisoes(janela);
-  const csv = csvDoRelatorio(DECISOES, linhas, { podeVerInterno: false, aviso: truncado ? `exportação limitada às ${LIMITE_DE_DECISOES} decisões mais recentes.` : null });
+  const csv = csvDoRelatorio(DECISOES, linhas, { ...acesso, aviso: truncado ? `exportação limitada às ${LIMITE_DE_DECISOES} decisões mais recentes.` : null });
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "fechamento", acao: "EXPORTAR", depois: { linhas: linhas.length, janela } });
   return respostaDeCsv(csv, "fechamento.csv");
 }

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -27,6 +28,9 @@ const linhasDe = (grupo: string, aging: ResultadoDeAging): Linha[] => aging.linh
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["contaReceber"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const tipo = requisicao.nextUrl.searchParams.get("tipo") === "pagar" ? "pagar" : "receber";
   const hoje = dataLocalDoInstante(new Date());
@@ -38,5 +42,5 @@ export async function GET(requisicao: NextRequest) {
     registros = [...linhasDe("Fornecedor", r.porFornecedor), ...linhasDe("Categoria", r.porCategoria)];
   }
   await registrarAuditoria(prisma, { usuario, entidade: tipo === "receber" ? "ContaReceber" : "ContaPagar", entidadeId: `exportacao-aging-${tipo}`, acao: "EXPORTAR", depois: { linhas: registros.length } });
-  return respostaDeCsv(csvDoRelatorio(COLUNAS, registros, { podeVerInterno: false }), `${tipo}-por-idade.csv`);
+  return respostaDeCsv(csvDoRelatorio(COLUNAS, registros, { ...acesso }), `${tipo}-por-idade.csv`);
 }

@@ -61,7 +61,7 @@ describe("csvDoRelatorio", () => {
   const ler = (csv: string) => lerCsv(csv);
 
   it("gera o arquivo com BOM, cabeçalho, acentos e valores no padrão brasileiro", () => {
-    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: true });
+    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: true, podeVerValores: true });
     expect(csv.startsWith("﻿")).toBe(true);
     expect(csv.endsWith("\r\n")).toBe(true);
     const p = ler(csv);
@@ -70,13 +70,13 @@ describe("csvDoRelatorio", () => {
   });
 
   it("neutraliza fórmula em texto e deixa vazio o que não tem valor", () => {
-    const p = ler(csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: true }));
+    const p = ler(csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: true, podeVerValores: true }));
     expect(p.linhas[1][0]).toBe("'=SOMA(A1)");
     expect(p.linhas[1].slice(4)).toEqual(["", "", ""]); // custo, margem e metros sem valor: vazio, não zero
   });
 
   it("sem permissão para ver custo, a coluna interna NÃO sai (nem o título)", () => {
-    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: false });
+    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: false, podeVerValores: true });
     const p = ler(csv);
     expect(p.cabecalho).toEqual(["Obra", "Fechada em", "Aprovada em", "Valor (R$)", "Metros"]);
     expect(csv).not.toContain("Custo");
@@ -85,8 +85,15 @@ describe("csvDoRelatorio", () => {
     expect(csv).not.toContain("44,3");
   });
 
+  it("sem 'ver valores', TODA coluna de dinheiro some (título e conteúdo), mesmo a não interna", () => {
+    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: false, podeVerValores: false });
+    expect(ler(csv).cabecalho).toEqual(["Obra", "Fechada em", "Aprovada em", "Metros"]);
+    expect(csv).not.toContain("Valor");
+    expect(csv).not.toContain("50000,50");
+  });
+
   it("exportação truncada leva o aviso na primeira linha, antes do cabeçalho", () => {
-    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: true, aviso: "mostrando só as 5.000 primeiras linhas; use o filtro." });
+    const csv = csvDoRelatorio(COLUNAS, LINHAS, { podeVerInterno: true, podeVerValores: true, aviso: "mostrando só as 5.000 primeiras linhas; use o filtro." });
     const linhas = csv.replace("﻿", "").split("\r\n");
     // O aviso tem ";" (o separador do arquivo), então a célula vai entre aspas: o Excel a mostra sem elas.
     expect(linhas[0]).toBe('"AVISO: mostrando só as 5.000 primeiras linhas; use o filtro."');
@@ -101,7 +108,7 @@ describe("csvDoRelatorio", () => {
       { titulo: "Número", tipo: "numero", valor: (l) => l.n },
       { titulo: "Texto", tipo: "texto", valor: (l) => l.t },
     ];
-    const csv = csvDoRelatorio(colunas, [{ r: -1999, p: -12.5, n: -0.125, t: "-cuidado" }, { r: "Incompleta", p: 3, n: 1, t: "=1+1" }], { podeVerInterno: true });
+    const csv = csvDoRelatorio(colunas, [{ r: -1999, p: -12.5, n: -0.125, t: "-cuidado" }, { r: "Incompleta", p: 3, n: 1, t: "=1+1" }], { podeVerInterno: true, podeVerValores: true });
     const linhas = csv.split("\r\n");
     expect(linhas[1]).toBe("-19,99;-12,5;-0,125;'-cuidado");
     expect(csv).not.toContain("'-19,99");
@@ -110,7 +117,7 @@ describe("csvDoRelatorio", () => {
   });
 
   it("o texto do aviso com $ e aspas não quebra o arquivo", () => {
-    const csv = csvDoRelatorio(COLUNAS, [], { podeVerInterno: true, aviso: 'custo "R$ 1,00" $& teste' });
+    const csv = csvDoRelatorio(COLUNAS, [], { podeVerInterno: true, podeVerValores: true, aviso: 'custo "R$ 1,00" $& teste' });
     expect(csv.split("\r\n")[0]).toContain('"AVISO: custo ""R$ 1,00"" $& teste"');
   });
   it("número com 0 casas não perde zeros do inteiro (100 continua 100)", () => {

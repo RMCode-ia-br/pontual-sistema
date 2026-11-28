@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada, semColunas } from "@/lib/csv/acesso";
 import { gerarCsv } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { formatarData } from "@/lib/formatadores";
@@ -15,6 +16,9 @@ export async function GET(requisicao: NextRequest) {
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["produto"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const { parametros, filtros } = lerListaProdutos(Object.fromEntries(requisicao.nextUrl.searchParams));
   const { linhas, truncado } = await listarProdutosParaExportar(parametros, filtros);
@@ -34,7 +38,9 @@ export async function GET(requisicao: NextRequest) {
     p.ativo ? "Ativo" : "Inativo",
   ]);
   if (truncado) registros.push([`AVISO: exportação limitada aos primeiros ${LIMITE_EXPORTACAO_PRODUTOS} produtos. Use os filtros para obter o restante.`]);
-  const csv = gerarCsv(["Código", "Descrição", "Categoria", "Unidade", "Fornecedor", "Custo unitário (R$)", "Custo atualizado em", "Linha", "Acabamento", "Localização", "Situação"], registros);
+  // Sem a permissão, a coluna some (título e conteúdo): o arquivo nunca leva valor ou custo para quem não pode ver.
+  const saida = semColunas(["Código", "Descrição", "Categoria", "Unidade", "Fornecedor", "Custo unitário (R$)", "Custo atualizado em", "Linha", "Acabamento", "Localização", "Situação"], registros, acesso.podeVerInterno ? [] : [5, 6]);
+  const csv = gerarCsv(saida.cabecalho, saida.linhas);
 
   await registrarAuditoria(prisma, { usuario, entidade: "Produto", entidadeId: "exportacao", acao: "EXPORTAR", depois: { linhas: linhas.length, truncado, filtros, busca: parametros.busca } });
 

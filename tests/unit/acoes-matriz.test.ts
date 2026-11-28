@@ -27,8 +27,11 @@ vi.mock("@/lib/db", () => {
   const bomba = (): unknown =>
     new Proxy(function () {}, {
       get: (_alvo, prop) => (prop === "then" ? undefined : bomba()),
+      // Rejeição JÁ TRATADA: consultas disparadas em paralelo não viram "unhandled rejection" quando outra explode antes.
       apply: () => {
-        throw new Error("BANCO_TOCADO");
+        const rejeitada = Promise.reject(new Error("BANCO_TOCADO"));
+        rejeitada.catch(() => {});
+        return rejeitada;
       },
     });
   return { prisma: bomba() };

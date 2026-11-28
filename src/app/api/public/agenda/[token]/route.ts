@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { limitesDoDia } from "@/lib/dominio/agenda";
 import { somarDias } from "@/lib/dominio/calendario";
 import { dataLocalDoInstante } from "@/lib/formatadores";
+import { permissoesEfetivas, podeVerModulo } from "@/lib/permissoes";
 import { hashDoToken, tokenComFormatoValido } from "@/lib/tokens";
 import { calendarioDaAgenda } from "@/modules/agenda/ics";
 import { listarEventos } from "@/modules/agenda/queries";
@@ -31,9 +32,11 @@ export async function GET(_requisicao: NextRequest, contexto: { params: Promise<
 
   const feed = await prisma.feedAgenda.findFirst({
     where: { tokenHash: hashDoToken(token), revogadoEm: null, deletadoEm: null, usuario: { ativo: true, deletadoEm: null } },
-    select: { id: true, ultimoAcessoEm: true },
+    select: { id: true, ultimoAcessoEm: true, usuario: { select: { papel: true, ajustesPermissao: true } } },
   });
   if (!feed) return NAO_ENCONTRADO();
+  // O link só vale enquanto o dono dele ainda pode ver a Agenda (perfil trocado ou ajuste retirado = o feed morre na hora).
+  if (!podeVerModulo(permissoesEfetivas(feed.usuario.papel, feed.usuario.ajustesPermissao), "AGENDA")) return NAO_ENCONTRADO();
 
   if (!feed.ultimoAcessoEm || Date.now() - feed.ultimoAcessoEm.getTime() > INTERVALO_DO_ULTIMO_ACESSO_MS) {
     // Falha ao anotar o acesso nunca derruba o feed.

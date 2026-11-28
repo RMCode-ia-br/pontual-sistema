@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { saidaNegada } from "@/lib/csv/acesso";
 import { prisma } from "@/lib/db";
 import { limitesDoDia } from "@/lib/dominio/agenda";
 import { somarDias } from "@/lib/dominio/calendario";
@@ -22,6 +23,8 @@ export async function GET(requisicao: NextRequest) {
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["evento"] });
+  if (negado) return negado;
 
   const parametros = Object.fromEntries(requisicao.nextUrl.searchParams);
   const { nome } = await obterMarca();

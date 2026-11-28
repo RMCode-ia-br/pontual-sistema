@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -33,8 +34,11 @@ const COLUNAS_ANDAMENTO: ColunaDeCsv<ObraEmAndamento>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "obra"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
   const parametros = requisicao.nextUrl.searchParams;
-  const opcoes = { podeVerInterno: false } as const;
+  const opcoes = { ...acesso } as const;
   const auditar = (id: string, linhas: number, extra: object = {}) => registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: id, acao: "EXPORTAR", depois: { linhas, ...extra } });
 
   if (parametros.get("visao") === "mes") {

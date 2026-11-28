@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { saidaNegada } from "@/lib/csv/acesso";
 import { prisma } from "@/lib/db";
 import { ErroDesenhoIndisponivel } from "@/modules/propostas/pdf/imagens";
 import { conteudoParaPdf, gerarPdfDaProposta } from "@/modules/propostas/pdf/gerar";
@@ -17,6 +18,8 @@ export async function GET(_requisicao: NextRequest, contexto: { params: Promise<
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["proposta"], valores: true });
+  if (negado) return negado;
 
   const { id } = await contexto.params;
   if (!IDENTIFICADOR.test(id)) return NextResponse.json({ erro: "Proposta inválida." }, { status: 400 });

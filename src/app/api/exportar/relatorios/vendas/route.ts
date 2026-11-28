@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -77,13 +78,16 @@ const rotuloPorte = (c: string | null) => (c ? (ROTULO_PORTE[c as keyof typeof R
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "proposta"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const hoje = dataLocalDoInstante(new Date());
   const parametros = requisicao.nextUrl.searchParams;
   const { periodo } = lerPeriodo(Object.fromEntries(parametros), hoje);
   const visao = parametros.get("visao") ?? "periodo";
   const auditar = (entidadeId: string, linhas: number) => registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId, acao: "EXPORTAR", depois: { linhas, periodo, visao } });
-  const opcoes = { podeVerInterno: false } as const;
+  const opcoes = { ...acesso } as const;
 
   if (visao === "origem") {
     const l = await vendasPorOrigem(periodo);

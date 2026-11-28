@@ -314,7 +314,10 @@ export const RECURSO: Readonly<Record<string, RegraDoRecurso>> = {
   "preco-tipologia": m("CADASTROS", { exige: ["valores"] }),
   catalogo: m("CADASTROS"),
   "condicao-pagamento": m("CADASTROS"),
+  // Relatórios (cada relatório exige TAMBÉM o módulo de origem e os transversais)
+  relatorio: m("RELATORIOS"),
   // Configurações
+  auditoria: m("CONFIGURACOES"),
   configuracao: m("CONFIGURACOES"), // legado: mão de obra tem recurso próprio
   "mao-de-obra": m("CONFIGURACOES", { exige: ["custo"] }),
   usuario: m("CONFIGURACOES"),

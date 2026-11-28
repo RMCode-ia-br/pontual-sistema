@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -28,6 +29,9 @@ const COLUNAS: ColunaDeCsv<Linha>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["lancamento"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const visao = requisicao.nextUrl.searchParams.get("visao") === "dias" ? "dias" : "meses";
   const hoje = dataLocalDoInstante(new Date());
@@ -40,7 +44,7 @@ export async function GET(requisicao: NextRequest) {
   const projetado = projetarFluxo({ hoje, saldoAtualCentavos: dados.saldoAtualCentavos, periodos, aReceber: dados.aReceber, aPagar: dados.aPagar });
 
   const aviso = dados.contasSemSaldo.length > 0 ? `há conta(s) com saldo NÃO INFORMADO (${dados.contasSemSaldo.join(", ")}): o saldo projetado mostra só a variação do caixa, não o dinheiro disponível.` : null;
-  const csv = csvDoRelatorio(COLUNAS, projetado.linhas, { podeVerInterno: false, aviso });
+  const csv = csvDoRelatorio(COLUNAS, projetado.linhas, { ...acesso, aviso });
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "fluxo-de-caixa", acao: "EXPORTAR", depois: { visao, linhas: projetado.linhas.length } });
   return respostaDeCsv(csv, "fluxo-de-caixa.csv");
 }

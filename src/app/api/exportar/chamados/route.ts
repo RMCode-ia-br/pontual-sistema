@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada, semColunas } from "@/lib/csv/acesso";
 import { gerarCsv } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { formatarNumeroDoChamado, ROTULO_STATUS_CHAMADO, ROTULO_TIPO_PROBLEMA } from "@/lib/dominio/chamados";
@@ -16,6 +17,9 @@ export async function GET(requisicao: NextRequest) {
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["chamado"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const filtros = lerFiltrosDeChamados(Object.fromEntries(requisicao.nextUrl.searchParams));
   const { linhas, truncado } = await listarChamados(filtros);
@@ -38,10 +42,9 @@ export async function GET(requisicao: NextRequest) {
   // Arquivo incompleto precisa dizer que está incompleto.
   if (truncado) registros.push([`AVISO: exportação limitada aos primeiros ${LIMITE_DE_CHAMADOS} chamados. Use os filtros para obter o restante.`]);
 
-  const csv = gerarCsv(
-    ["Número", "Cliente", "Obra", "Tipo do problema", "Descrição", "Garantia", "Situação", "Aberto em", "Resolvido em", "Dias (em aberto ou até resolver)", "Visita cobrada", "Valor da visita", "Cobrança gerada"],
-    registros,
-  );
+  // Sem a permissão, a coluna some (título e conteúdo): o arquivo nunca leva valor ou custo para quem não pode ver.
+  const saida = semColunas(["Número", "Cliente", "Obra", "Tipo do problema", "Descrição", "Garantia", "Situação", "Aberto em", "Resolvido em", "Dias (em aberto ou até resolver)", "Visita cobrada", "Valor da visita", "Cobrança gerada"], registros, acesso.podeVerValores ? [] : [11]);
+  const csv = gerarCsv(saida.cabecalho, saida.linhas);
 
   await registrarAuditoria(prisma, { usuario, entidade: "Chamado", entidadeId: "exportacao-chamados", acao: "EXPORTAR", depois: { linhas: linhas.length, truncado, filtros } });
 

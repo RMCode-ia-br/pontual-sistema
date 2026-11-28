@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -30,6 +31,9 @@ const COLUNAS: ColunaDeCsv<Conta>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["contaPagar"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const hoje = dataLocalDoInstante(new Date());
   const { parametros, filtros } = lerListaAPagar(Object.fromEntries(requisicao.nextUrl.searchParams));
@@ -37,7 +41,7 @@ export async function GET(requisicao: NextRequest) {
   const { linhas, truncado } = await listarContasAPagarParaExportar(parametros, filtros, hoje, config.diasAlertaVencimento);
 
   const aviso = truncado ? `exportação limitada às primeiras ${LIMITE_EXPORTACAO_A_PAGAR} contas. Use os filtros para obter o restante.` : null;
-  const csv = csvDoRelatorio(COLUNAS, linhas, { podeVerInterno: false, aviso });
+  const csv = csvDoRelatorio(COLUNAS, linhas, { ...acesso, aviso });
   await registrarAuditoria(prisma, { usuario, entidade: "ContaPagar", entidadeId: "exportacao-pagar", acao: "EXPORTAR", depois: { linhas: linhas.length, truncado, filtros } });
 
   return respostaDeCsv(csv, "a-pagar.csv");

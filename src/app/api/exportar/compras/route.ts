@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { saidaNegada } from "@/lib/csv/acesso";
 import { gerarCsv } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { ROTULO_STATUS_DA_COMPRA } from "@/lib/dominio/compras";
@@ -17,6 +18,8 @@ const reais = (c: number) => `${Math.floor(c / 100)},${String(c % 100).padStart(
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["compra"], valores: true });
+  if (negado) return negado;
 
   const filtro = lerFiltroDeCompras(Object.fromEntries(requisicao.nextUrl.searchParams));
   const { linhas, temMais } = await listarCompras(filtro, dataLocalDoInstante(new Date()), 5000);

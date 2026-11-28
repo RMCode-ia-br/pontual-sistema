@@ -9,6 +9,7 @@
  * - acentos preservados (BOM UTF-8) e fórmulas neutralizadas (`celulaCsv`);
  * - coluna `interna` (custo, margem...) só sai quando a pessoa pode ver custo: assim nenhum arquivo que possa ir para
  *   o cliente vaza dado interno por esquecimento;
+ * - coluna de dinheiro só sai quando a pessoa pode ver valores (`podeVerValores`, sem padrão);
  * - exportação truncada leva um AVISO na primeira linha (e a tela mostra o mesmo aviso).
  */
 import { formatarDataCalendario, formatarDataHora } from "../formatadores";
@@ -31,6 +32,11 @@ export type ColunaDeCsv<L> = {
 export type OpcoesDoCsv = {
   /** Resultado de `can(usuario, "ver", "custo")`. */
   podeVerInterno: boolean;
+  /**
+   * Resultado de `can(usuario, "ver", "valores")`. OBRIGATÓRIO (sem padrão): toda coluna de dinheiro some sem ele, para
+   * nenhum relatório novo vazar valor por esquecimento (Fase 7C).
+   */
+  podeVerValores: boolean;
   /** Aviso de truncamento ou de dado incompleto, escrito na primeira linha. */
   aviso?: string | null;
 };
@@ -72,8 +78,9 @@ export function valorDeCsv(tipo: TipoDeColuna, valor: string | number | Date | n
 }
 
 /** Monta o CSV do relatório: só as colunas permitidas, na ordem dada, com o aviso (se houver) na primeira linha. */
-export function csvDoRelatorio<L>(colunas: readonly ColunaDeCsv<L>[], linhas: readonly L[], { podeVerInterno, aviso }: OpcoesDoCsv): string {
-  const visiveis = colunas.filter((c) => !c.interna || podeVerInterno);
+export function csvDoRelatorio<L>(colunas: readonly ColunaDeCsv<L>[], linhas: readonly L[], { podeVerInterno, podeVerValores, aviso }: OpcoesDoCsv): string {
+  // Coluna interna exige custo; coluna de dinheiro exige valores (custo já exige valores na regra de permissões).
+  const visiveis = colunas.filter((c) => (!c.interna || podeVerInterno) && (c.tipo !== "dinheiro" || podeVerValores));
   const numerico = (tipo: TipoDeColuna) => tipo === "dinheiro" || tipo === "numero" || tipo === "inteiro" || tipo === "percentual";
   // Número formatado vira NumeroFormatado (o "-" de um valor negativo é sinal, não fórmula); texto continua neutralizado.
   const corpo = linhas.map((l) =>

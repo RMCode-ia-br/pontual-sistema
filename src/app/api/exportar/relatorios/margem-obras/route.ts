@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
-import { can } from "@/lib/permissoes";
 import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
 import { carregarMargemDasObras, lerFiltroDeMargem, type LinhaDeMargem } from "@/modules/relatorios/margem-obras";
 
@@ -32,13 +32,14 @@ const COLUNAS: ColunaDeCsv<LinhaDeMargem>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
-  if (!can(usuario, "ver", "custo")) return NextResponse.json({ erro: "Sem permissão para ver custo e margem." }, { status: 403 });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "obra"], custo: true });
+  if (negado) return negado;
 
   const filtro = lerFiltroDeMargem(Object.fromEntries(requisicao.nextUrl.searchParams));
   const lida = await ouAviso(() => carregarMargemDasObras(filtro));
   if (!lida.ok) return NextResponse.json({ erro: lida.mensagem }, { status: 409 });
   const r = lida.dado;
-  const csv = csvDoRelatorio(COLUNAS, r.linhas, { podeVerInterno: true, aviso: r.truncado ? "exportação limitada às 150 primeiras obras. Use a busca ou o período para obter o restante." : null });
+  const csv = csvDoRelatorio(COLUNAS, r.linhas, { ...acessoDoCsv(usuario), aviso: r.truncado ? "exportação limitada às 150 primeiras obras. Use a busca ou o período para obter o restante." : null });
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "margem-obras", acao: "EXPORTAR", depois: { linhas: r.linhas.length, filtro } });
   return respostaDeCsv(csv, "margem-por-obra.csv");
 }

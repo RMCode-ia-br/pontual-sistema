@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada, semColunas } from "@/lib/csv/acesso";
 import { gerarCsv } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
@@ -17,6 +18,9 @@ export async function GET(requisicao: NextRequest) {
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["projeto"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const brutos = Object.fromEntries(requisicao.nextUrl.searchParams);
   const { parametros, filtros } = lerListaProjetos(brutos);
@@ -38,7 +42,9 @@ export async function GET(requisicao: NextRequest) {
   // Arquivo incompleto precisa dizer que está incompleto.
   if (truncado) registros.push([`AVISO: exportação limitada aos primeiros ${LIMITE_EXPORTACAO_PROJETOS} projetos. Use os filtros para obter o restante.`]);
 
-  const csv = gerarCsv(["Código", "Projeto", "Cliente", "Fase", "Responsável", "Origem", "Porte", "Temperatura", "Valor estimado", "Dias parado", "Criado em"], registros);
+  // Sem a permissão, a coluna some (título e conteúdo): o arquivo nunca leva valor ou custo para quem não pode ver.
+  const saida = semColunas(["Código", "Projeto", "Cliente", "Fase", "Responsável", "Origem", "Porte", "Temperatura", "Valor estimado", "Dias parado", "Criado em"], registros, acesso.podeVerValores ? [] : [8]);
+  const csv = gerarCsv(saida.cabecalho, saida.linhas);
 
   await registrarAuditoria(prisma, {
     usuario,

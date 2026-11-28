@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -31,6 +32,9 @@ const COLUNAS: ColunaDeCsv<Linha>[] = [
 export async function GET(requisicao: NextRequest, contexto: { params: Promise<{ id: string }> }) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["lancamento"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const { id } = await contexto.params;
   const hoje = dataLocalDoInstante(new Date());
@@ -44,5 +48,5 @@ export async function GET(requisicao: NextRequest, contexto: { params: Promise<{
     !conta.saldoInicialInformado ? "saldo inicial não informado; o saldo mostra só o movimento registrado." : null,
   ].filter(Boolean);
   await registrarAuditoria(prisma, { usuario, entidade: "ContaFinanceira", entidadeId: conta.id, acao: "EXPORTAR", depois: { linhas: extrato.linhas.length, de, ate } });
-  return respostaDeCsv(csvDoRelatorio(COLUNAS, extrato.linhas, { podeVerInterno: false, aviso: avisos.length > 0 ? avisos.join(" ") : null }), `extrato-${de}-${ate}.csv`);
+  return respostaDeCsv(csvDoRelatorio(COLUNAS, extrato.linhas, { ...acesso, aviso: avisos.length > 0 ? avisos.join(" ") : null }), `extrato-${de}-${ate}.csv`);
 }

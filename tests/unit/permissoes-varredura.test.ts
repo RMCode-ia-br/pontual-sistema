@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NIVEL_DO_VERBO, RECURSO, decidir, permissoesEfetivas } from "@/lib/dominio/permissoes";
+import { REGRA_DO_ANEXO } from "@/modules/anexos/permissao";
 import { RECURSO_DA_LIXEIRA, TIPOS_DA_LIXEIRA } from "@/modules/lixeira/tipos";
 
 /**
@@ -77,8 +78,27 @@ function usosDeCan(): Uso[] {
   return usos;
 }
 
+/**
+ * Despachantes genéricos: chamam `can(usuario, verbo, recurso)` com verbo e/ou recurso vindos de VARIÁVEL, de propósito.
+ * O que passa por eles é validado por outro caminho (dito ao lado), então a varredura de literais os ignora.
+ */
+const DESPACHANTES: Record<string, string> = {
+  "/src/lib/csv/acesso.ts": "recursos das exigências de cada rota: conferidos por tests/unit/rotas-matriz.test.ts",
+  "/src/modules/anexos/permissao.ts": "recursos de REGRA_DO_ANEXO: conferidos abaixo",
+};
+
 describe("varredura de can() no código", () => {
-  const usos = usosDeCan();
+  const todosOsUsos = usosDeCan();
+  const usos = todosOsUsos.filter((u) => !(u.arquivo in DESPACHANTES));
+
+  it("os despachantes continuam existindo (a lista não apodrece)", () => {
+    for (const arquivo of Object.keys(DESPACHANTES)) expect(todosOsUsos.some((u) => u.arquivo === arquivo), arquivo).toBe(true);
+  });
+
+  it("os recursos de anexo estão no mapeamento", () => {
+    const desconhecidos = Object.entries(REGRA_DO_ANEXO).flatMap(([entidade, r]) => r.algum.filter((x) => !(x in RECURSO)).map((x) => `${entidade}: ${x}`));
+    expect(desconhecidos).toEqual([]);
+  });
 
   it("encontra os usos (a varredura não está vazia)", () => {
     expect(usos.length).toBeGreaterThan(100);

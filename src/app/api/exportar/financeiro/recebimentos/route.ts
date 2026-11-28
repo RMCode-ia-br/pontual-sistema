@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -27,12 +28,15 @@ const COLUNAS: ColunaDeCsv<LinhaDeRecebimento>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["lancamento"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const parametros = Object.fromEntries(requisicao.nextUrl.searchParams);
   const { periodo } = lerPeriodo(parametros, dataLocalDoInstante(new Date()));
   const nota = lerFiltroDeNota(parametros.nota);
   const { linhas, truncado } = await recebimentosParaCsv(periodo, nota);
-  const csv = csvDoRelatorio(COLUNAS, linhas, { podeVerInterno: false, aviso: truncado ? `exportação limitada aos ${LIMITE_DO_CSV_DE_RECEBIMENTOS} recebimentos mais recentes de ${rotuloDoPeriodo(periodo)}. Escolha um período menor.` : null });
+  const csv = csvDoRelatorio(COLUNAS, linhas, { ...acesso, aviso: truncado ? `exportação limitada aos ${LIMITE_DO_CSV_DE_RECEBIMENTOS} recebimentos mais recentes de ${rotuloDoPeriodo(periodo)}. Escolha um período menor.` : null });
   await registrarAuditoria(prisma, { usuario, entidade: "Relatorio", entidadeId: "recebimentos", acao: "EXPORTAR", depois: { linhas: linhas.length, periodo, nota: nota ?? null } });
   return respostaDeCsv(csv, "recebimentos.csv");
 }

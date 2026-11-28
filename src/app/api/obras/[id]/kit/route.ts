@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { saidaNegada } from "@/lib/csv/acesso";
 import { prisma } from "@/lib/db";
 import { CATEGORIA_FOTO_DE_OBRA, MOMENTOS_DA_FOTO, nomeNoKit } from "@/lib/dominio/portfolio";
 import { baixarObjeto } from "@/lib/storage";
@@ -22,6 +23,8 @@ export async function GET(requisicao: NextRequest, { params }: { params: Promise
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["portfolio-obra"] });
+  if (negado) return negado;
 
   const { id } = await params;
   if (!ID.test(id)) return NextResponse.json({ erro: "Obra não encontrada." }, { status: 404 });

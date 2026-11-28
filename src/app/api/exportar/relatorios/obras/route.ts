@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { celulaCsv } from "@/lib/csv";
 import { respostaDeCsv } from "@/lib/csv/resposta";
@@ -15,14 +16,17 @@ export const dynamic = "force-dynamic";
 const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 
 /** Uma seção do arquivo: colunas tipadas, sem o BOM (só o começo do arquivo leva). */
-function secao<L>(colunas: ColunaDeCsv<L>[], linhas: L[]): string {
-  return csvDoRelatorio(colunas, linhas, { podeVerInterno: false }).replace(/^﻿/, "");
+function secao<L>(acesso: ReturnType<typeof acessoDoCsv>, colunas: ColunaDeCsv<L>[], linhas: L[]): string {
+  return csvDoRelatorio(colunas, linhas, acesso).replace(/^﻿/, "");
 }
 
 /** CSV do relatório de obras e assistência, com o MESMO período da tela (seções separadas por uma linha em branco). */
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "obra"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const periodo = lerPeriodoDoRelatorioDeObras(Object.fromEntries(requisicao.nextUrl.searchParams));
   const r = await carregarRelatorioDeObras(periodo);
@@ -31,6 +35,7 @@ export async function GET(requisicao: NextRequest) {
 
   const secoes = [
     secao(
+      acesso,
       [
         { titulo: "Obras avaliadas", tipo: "inteiro", valor: (x: typeof p) => x.concluidas },
         { titulo: "Sem prazo", tipo: "inteiro", valor: (x) => x.semPrazo },
@@ -44,6 +49,7 @@ export async function GET(requisicao: NextRequest) {
       [p],
     ),
     secao(
+      acesso,
       [
         { titulo: "Código", tipo: "texto", valor: (o: (typeof r.obrasConcluidas)[number]) => o.codigo },
         { titulo: "Obra", tipo: "texto", valor: (o) => o.titulo },
@@ -55,6 +61,7 @@ export async function GET(requisicao: NextRequest) {
       r.obrasConcluidas,
     ),
     secao(
+      acesso,
       [
         { titulo: "Etapa", tipo: "texto", valor: (l: (typeof r.atrasosPorEtapa)[number]) => ROTULO_TIPO_ETAPA[l.tipo] },
         { titulo: "Concluídas no período", tipo: "inteiro", valor: (l) => l.concluidasNoPeriodo },
@@ -66,6 +73,7 @@ export async function GET(requisicao: NextRequest) {
       r.atrasosPorEtapa,
     ),
     secao(
+      acesso,
       [
         { titulo: "Motivo da pausa", tipo: "texto", valor: (m: (typeof r.pausasPorMotivo)[number]) => m.motivo },
         { titulo: "Pausas", tipo: "inteiro", valor: (m) => m.quantidade },
@@ -75,6 +83,7 @@ export async function GET(requisicao: NextRequest) {
       r.pausasPorMotivo,
     ),
     secao(
+      acesso,
       [
         { titulo: "Motivo do bloqueio (agora)", tipo: "texto", valor: (b: (typeof r.bloqueadasAgora)[number]) => b.motivo },
         { titulo: "Etapas bloqueadas", tipo: "inteiro", valor: (b) => b.quantidade },
@@ -82,6 +91,7 @@ export async function GET(requisicao: NextRequest) {
       r.bloqueadasAgora,
     ),
     secao(
+      acesso,
       [
         { titulo: "Chamados no período", tipo: "inteiro", valor: (x: { a: typeof a; abertos: number }) => x.a.total },
         { titulo: "Em garantia", tipo: "inteiro", valor: (x) => x.a.emGarantia },
@@ -96,6 +106,7 @@ export async function GET(requisicao: NextRequest) {
       [{ a, abertos: r.chamadosEmAbertoHoje }],
     ),
     secao(
+      acesso,
       [
         { titulo: "Tipo do problema", tipo: "texto", valor: (t: (typeof a.porTipo)[number]) => ROTULO_TIPO_PROBLEMA[t.tipo as TipoDoProblema] ?? t.tipo },
         { titulo: "Chamados", tipo: "inteiro", valor: (t) => t.quantidade },

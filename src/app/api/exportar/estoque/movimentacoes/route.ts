@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada, semColunas } from "@/lib/csv/acesso";
 import { gerarCsv } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { ROTULO_TIPO_DE_MOVIMENTO } from "@/lib/dominio/estoque";
@@ -17,6 +18,9 @@ const quantidade = (m: number) => (m / 1000).toLocaleString("pt-BR", { maximumFr
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["movimentoEstoque"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const { parametros, filtros } = lerListaMovimentos(Object.fromEntries(requisicao.nextUrl.searchParams));
   const { linhas, truncado } = await listarMovimentosParaExportar(parametros, filtros);
@@ -33,7 +37,9 @@ export async function GET(requisicao: NextRequest) {
     m.ehEstorno ? "Estorno" : m.estornado ? "Estornado" : "",
   ]);
   if (truncado) registros.push([`AVISO: exportação limitada às primeiras ${LIMITE_EXPORTACAO_MOVIMENTOS} movimentações. Use os filtros para obter o restante.`]);
-  const csv = gerarCsv(["Data", "Tipo", "Código", "Produto", "Quantidade (com sinal)", "Custo unitário (R$)", "Obra", "Justificativa", "Situação"], registros);
+  // Sem a permissão, a coluna some (título e conteúdo): o arquivo nunca leva valor ou custo para quem não pode ver.
+  const saida = semColunas(["Data", "Tipo", "Código", "Produto", "Quantidade (com sinal)", "Custo unitário (R$)", "Obra", "Justificativa", "Situação"], registros, acesso.podeVerInterno ? [] : [5]);
+  const csv = gerarCsv(saida.cabecalho, saida.linhas);
 
   await registrarAuditoria(prisma, { usuario, entidade: "MovimentoEstoque", entidadeId: "exportacao", acao: "EXPORTAR", depois: { linhas: linhas.length, truncado, filtros, busca: parametros.busca } });
 

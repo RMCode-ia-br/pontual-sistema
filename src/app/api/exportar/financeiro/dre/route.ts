@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada } from "@/lib/csv/acesso";
 import { csvDoRelatorio, type ColunaDeCsv } from "@/lib/csv/colunas";
 import { respostaDeCsv } from "@/lib/csv/resposta";
 import { prisma } from "@/lib/db";
@@ -20,6 +21,9 @@ type Linha = ReturnType<typeof linhasDaDemonstracao>[number];
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["lancamento"], valores: true });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const periodo = lerPeriodoDoDre(Object.fromEntries(requisicao.nextUrl.searchParams), dataLocalDoInstante(new Date()));
   const movimentos = await carregarMovimentosDoDre(periodo);
@@ -32,5 +36,5 @@ export async function GET(requisicao: NextRequest) {
   ];
   const aviso = `Regime de ${periodo.regime === "caixa" ? "caixa" : "competência"}; DRE gerencial (não contábil).`;
   await registrarAuditoria(prisma, { usuario, entidade: "Lancamento", entidadeId: "exportacao-dre", acao: "EXPORTAR", depois: { de: periodo.de, ate: periodo.ate, regime: periodo.regime } });
-  return respostaDeCsv(csvDoRelatorio(colunas, linhas, { podeVerInterno: false, aviso }), `dre-${periodo.de}-${periodo.ate}.csv`);
+  return respostaDeCsv(csvDoRelatorio(colunas, linhas, { ...acesso, aviso }), `dre-${periodo.de}-${periodo.ate}.csv`);
 }

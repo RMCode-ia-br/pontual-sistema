@@ -16,6 +16,8 @@ import { can } from "@/lib/permissoes";
 import { criarUrlDeDownload, criarUrlDeUpload, infoDoObjeto, lerPrimeirosBytes, removerObjeto } from "@/lib/storage";
 import { assinaturaConfere, ENTIDADES_COM_ANEXO, sanitizarNomeArquivo, validarArquivo } from "@/lib/storage/regras";
 
+import { podeNoAnexo } from "./permissao";
+
 const entidadeSchema = z.object({
   entidadeTipo: z.enum(ENTIDADES_COM_ANEXO),
   entidadeId: z.string().min(1).max(64),
@@ -76,6 +78,7 @@ export async function iniciarUploadAnexo(entrada: unknown): Promise<ResultadoAca
 
   const dados = arquivoSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
+  if (!podeNoAnexo(sessao, "criar", dados.data.entidadeTipo)) return falha("Sem permissão.");
 
   const validacao = validarArquivo(dados.data.mime, dados.data.tamanhoBytes);
   if (!validacao.valido) return falha(validacao.motivo);
@@ -98,6 +101,7 @@ export async function concluirUploadAnexo(entrada: unknown): Promise<ResultadoAc
   const dados = concluirSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   const { entidadeTipo, entidadeId, caminho, nome, categoria, momento, usarNoPortfolio, descricao } = dados.data;
+  if (!podeNoAnexo(sessao, "criar", entidadeTipo)) return falha("Sem permissão.");
 
   return executar("anexos.concluir", async () => {
     // O caminho tem que ser exatamente um dos gerados no passo 1 para ESTA entidade.
@@ -160,8 +164,10 @@ export async function urlDeDownloadAnexo(idBruto: string): Promise<ResultadoAcao
   if (!id.success) return falha("Arquivo inválido.");
 
   return executar("anexos.download", async () => {
-    const anexo = await prisma.anexo.findFirst({ where: { id: id.data, deletadoEm: null }, select: { caminho: true, nome: true } });
+    const anexo = await prisma.anexo.findFirst({ where: { id: id.data, deletadoEm: null }, select: { caminho: true, nome: true, entidadeTipo: true } });
     if (!anexo) throw new ErroNegocio("Arquivo não encontrado.");
+    // O módulo da entidade dona decide (comprovante de lançamento é do Financeiro, foto de visita é da Agenda...).
+    if (!podeNoAnexo(sessao, "ver", anexo.entidadeTipo)) throw new ErroNegocio("Sem permissão.");
     return sucesso({ url: await criarUrlDeDownload(anexo.caminho, 60, anexo.nome) });
   });
 }
@@ -182,6 +188,8 @@ export async function excluirAnexo(idBruto: string): Promise<ResultadoAcao> {
         select: { id: true, nome: true, entidadeTipo: true, entidadeId: true, categoria: true },
       });
       if (!antes) throw new ErroNegocio("Arquivo não encontrado.");
+      // Excluir é destrutivo no módulo da entidade dona: o Escritório só apaga anexo de Comercial, Obras e Financeiro.
+      if (!podeNoAnexo(sessao, "excluir", antes.entidadeTipo)) throw new ErroNegocio("Sem permissão.");
       // O desenho do item e o da tipologia têm dono próprio (trocar/remover lá): a exclusão genérica nunca os apaga.
       const recusa = motivoDeRecusaDeExclusaoDoAnexo(antes);
       if (recusa) throw new ErroNegocio(recusa);

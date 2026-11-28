@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { saidaNegada } from "@/lib/csv/acesso";
 import { prisma } from "@/lib/db";
 import { ErroDesenhoIndisponivel } from "@/modules/propostas/pdf/imagens";
 import { conteudoParaPdf, gerarPdfDeProducao } from "@/modules/propostas/pdf/gerar";
@@ -16,6 +17,8 @@ const IDENTIFICADOR = /^[\w-]{1,64}$/;
 export async function GET(_requisicao: NextRequest, contexto: { params: Promise<{ id: string }> }) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { algum: ["obra", "proposta"] });
+  if (negado) return negado;
 
   const { id } = await contexto.params;
   if (!IDENTIFICADOR.test(id)) return NextResponse.json({ erro: "Proposta inválida." }, { status: 400 });

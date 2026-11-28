@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { registrarAuditoria } from "@/lib/auditoria";
 import { sessaoParaApi } from "@/lib/auth/sessao";
+import { acessoDoCsv, saidaNegada, semColunas } from "@/lib/csv/acesso";
 import { gerarCsv } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
@@ -18,6 +19,9 @@ export async function GET(requisicao: NextRequest) {
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
+  const negado = saidaNegada(usuario, { recursos: ["obra"] });
+  if (negado) return negado;
+  const acesso = acessoDoCsv(usuario);
 
   const filtros = lerFiltrosDeObras(Object.fromEntries(requisicao.nextUrl.searchParams));
   const { linhas, truncado } = await listarObras(filtros);
@@ -41,10 +45,9 @@ export async function GET(requisicao: NextRequest) {
   // Arquivo incompleto precisa dizer que está incompleto.
   if (truncado) registros.push([`AVISO: exportação limitada às primeiras ${LIMITE_DE_OBRAS} obras. Use os filtros para obter o restante.`]);
 
-  const csv = gerarCsv(
-    ["Código", "Obra", "Cliente", "Responsável", "Situação", "Etapa atual", "Etapas concluídas", "Prazo prometido", "Dias restantes", "Prazo (semáforo)", "Etapas atrasadas", "Concluída em", "Pontualidade", "Valor fechado"],
-    registros,
-  );
+  // Sem a permissão, a coluna some (título e conteúdo): o arquivo nunca leva valor ou custo para quem não pode ver.
+  const saida = semColunas(["Código", "Obra", "Cliente", "Responsável", "Situação", "Etapa atual", "Etapas concluídas", "Prazo prometido", "Dias restantes", "Prazo (semáforo)", "Etapas atrasadas", "Concluída em", "Pontualidade", "Valor fechado"], registros, acesso.podeVerValores ? [] : [13]);
+  const csv = gerarCsv(saida.cabecalho, saida.linhas);
 
   await registrarAuditoria(prisma, { usuario, entidade: "Projeto", entidadeId: "exportacao-obras", acao: "EXPORTAR", depois: { linhas: linhas.length, truncado, filtros } });
 
