@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ajustesPermissaoSchema, PAPEIS } from "@/lib/dominio/permissoes";
 import { emailValido } from "@/lib/validadores";
 
 export const nomeUsuarioSchema = z.string().trim().min(2, "Informe o nome.").max(120, "Use no máximo 120 caracteres.");
@@ -20,10 +21,21 @@ export const emailOpcionalSchema = z
   .transform((v) => (v === "" ? undefined : v))
   .refine((v) => v === undefined || emailValido(v), "E-mail inválido.");
 
+/** Perfil obrigatório e SEM padrão: usuário novo só nasce escolhendo um perfil (decisão 179). */
+export const papelSchema = z.enum(PAPEIS, { message: "Escolha o perfil da pessoa." });
+
 export const criarUsuarioSchema = z.object({
   nome: nomeUsuarioSchema,
   login: loginUsuarioSchema,
   email: emailOpcionalSchema,
+  papel: papelSchema,
+});
+
+/** Perfil e ajustes por módulo de um usuário (ajuste nulo = perfil puro). Validação ESTRITA: chave desconhecida é recusada. */
+export const alterarPermissoesSchema = z.object({
+  id: z.string().min(1).max(64),
+  papel: papelSchema,
+  ajustes: ajustesPermissaoSchema.nullable(),
 });
 
 export const editarUsuarioSchema = z.object({

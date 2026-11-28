@@ -354,3 +354,47 @@ export function decidir(p: PermissoesEfetivas, acao: string, recurso: string | u
   const principal = [regra.modulo, ...(regra.tambem ?? [])].every((x) => atende(p, x, nivel));
   return principal || (regra.ou ?? []).some((x) => atende(p, x, nivel));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Administradores (decisão 179): nunca ficar sem administrador ativo
+// ---------------------------------------------------------------------------------------------------------------------
+
+export type UsuarioParaAdministracao = { id: string; ativo: boolean; papel: string; ajustesPermissao: unknown };
+
+/**
+ * Quantos administradores ATIVOS existem, depois de aplicar `mudanca` ao usuário de mesmo `id` (se houver). Administrador =
+ * ativo com Configurações em "Pode alterar" (perfil + ajuste). As ações de usuário usam isto, sob o lock dos usuários ativos,
+ * para recusar desativar, rebaixar ou ajustar o ÚLTIMO administrador (inclusive a própria pessoa).
+ */
+export function contarAdministradoresAtivos(
+  usuarios: readonly UsuarioParaAdministracao[],
+  mudanca?: Partial<Omit<UsuarioParaAdministracao, "id">> & { id: string },
+): number {
+  return usuarios.reduce((total, u) => {
+    const x = mudanca && mudanca.id === u.id ? { ...u, ...mudanca } : u;
+    return x.ativo && ehAdministrador(permissoesEfetivas(x.papel, x.ajustesPermissao)) ? total + 1 : total;
+  }, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Tela de usuários: do que a pessoa marcou para o ajuste guardado
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Só o que difere do perfil pronto vira ajuste (nada diferente = nenhum ajuste = perfil puro). É a volta de
+ * `permissoesEfetivas`: `permissoesEfetivas(papel, ajustesDeDiferenca(papel, ...))` devolve o que a pessoa marcou.
+ */
+export function ajustesDeDiferenca(papel: Papel, modulos: Record<Modulo, PermissaoDoModulo>, verValores: boolean, verCustoMargem: boolean): AjustesPermissao | null {
+  const base = permissoesEfetivas(papel);
+  const diferentes: NonNullable<AjustesPermissao["modulos"]> = {};
+  for (const m of MODULOS) {
+    const a = modulos[m];
+    const b = base.modulos[m];
+    if (a.nivel !== b.nivel || a.destrutivo !== b.destrutivo) diferentes[m] = { nivel: a.nivel, destrutivo: a.destrutivo };
+  }
+  const ajustes: AjustesPermissao = {};
+  if (Object.keys(diferentes).length > 0) ajustes.modulos = diferentes;
+  if (verValores !== base.verValores) ajustes.verValores = verValores;
+  if (verCustoMargem !== base.verCustoMargem) ajustes.verCustoMargem = verCustoMargem;
+  return Object.keys(ajustes).length > 0 ? ajustes : null;
+}

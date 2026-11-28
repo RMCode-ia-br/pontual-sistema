@@ -1,10 +1,10 @@
 "use client";
 
-import { Check, Copy, KeyRound, Loader2, MoreHorizontal, Pencil, Plus, UserCheck, UserX } from "lucide-react";
+import { Check, Copy, KeyRound, Loader2, MoreHorizontal, Pencil, Plus, ShieldCheck, UserCheck, UserX } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { Campo, ariaDoCampo } from "@/components/formulario";
+import { Campo, Selecao, ariaDoCampo } from "@/components/formulario";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,15 +20,18 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { PAPEIS, ROTULO_DO_PAPEL } from "@/lib/dominio/permissoes";
 import { formatarDataHora } from "@/lib/formatadores";
 import { useAcaoDeFormulario } from "@/lib/hooks/usar-acao-de-formulario";
 
 import { alternarAtivoUsuario, criarUsuario, editarUsuario, redefinirSenhaUsuario, type SenhaTemporaria } from "../actions/usuarios";
 import type { UsuarioLista } from "../queries";
+import { DialogoPermissoes } from "./permissoes-do-usuario";
 
 type Dialogo =
   | { tipo: "novo" }
   | { tipo: "editar"; usuario: UsuarioLista }
+  | { tipo: "permissoes"; usuario: UsuarioLista }
   | { tipo: "redefinir"; usuario: UsuarioLista }
   | { tipo: "desativar"; usuario: UsuarioLista }
   | { tipo: "senha"; credencial: SenhaTemporaria; titulo: string }
@@ -91,6 +94,8 @@ export function ListaUsuarios({ usuarios, usuarioAtualId }: { usuarios: UsuarioL
               <p className="flex flex-wrap items-center gap-2 font-medium">
                 {u.nome}
                 {u.id === usuarioAtualId ? <Badge variant="secondary">Você</Badge> : null}
+                <Badge variant="outline">{ROTULO_DO_PAPEL[u.papel]}</Badge>
+                {u.permissoes.ajustesInvalidos ? <Badge variant="destructive">Ajuste inválido: acesso fechado</Badge> : u.ajustes ? <Badge variant="secondary">Ajustes personalizados</Badge> : null}
                 {!u.ativo ? <Badge variant="outline">Inativo</Badge> : null}
                 {u.precisaTrocarSenha ? <Badge variant="outline">Troca de senha pendente</Badge> : null}
               </p>
@@ -111,6 +116,9 @@ export function ListaUsuarios({ usuarios, usuarioAtualId }: { usuarios: UsuarioL
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setDialogo({ tipo: "editar", usuario: u })}>
                   <Pencil aria-hidden /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDialogo({ tipo: "permissoes", usuario: u })}>
+                  <ShieldCheck aria-hidden /> Permissões
                 </DropdownMenuItem>
                 {u.id !== usuarioAtualId ? (
                   <DropdownMenuItem onClick={() => setDialogo({ tipo: "redefinir", usuario: u })}>
@@ -138,6 +146,7 @@ export function ListaUsuarios({ usuarios, usuarioAtualId }: { usuarios: UsuarioL
         <DialogoNovo aoFechar={() => setDialogo(null)} aoCriar={(credencial) => setDialogo({ tipo: "senha", credencial, titulo: "Usuário criado" })} />
       ) : null}
       {dialogo?.tipo === "editar" ? <DialogoEditar usuario={dialogo.usuario} aoFechar={() => setDialogo(null)} /> : null}
+      {dialogo?.tipo === "permissoes" ? <DialogoPermissoes usuario={dialogo.usuario} ehVoce={dialogo.usuario.id === usuarioAtualId} aoFechar={() => setDialogo(null)} /> : null}
       {dialogo?.tipo === "senha" ? (
         <DialogoSenha credencial={dialogo.credencial} titulo={dialogo.titulo} aoFechar={() => setDialogo(null)} />
       ) : null}
@@ -226,6 +235,18 @@ function DialogoNovo({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (c:
           </Campo>
           <Campo id="email" rotulo="E-mail (opcional)" erro={campos.email}>
             <Input id="email" name="email" type="email" maxLength={254} autoComplete="off" {...ariaDoCampo("email", campos.email)} />
+          </Campo>
+          <Campo id="papel" rotulo="Perfil" erro={campos.papel} dica="Dono/Gestão faz tudo; Escritório cuida de propostas, obras e dinheiro; Campo só vê agenda, visitas e obras, sem valores." obrigatorio>
+            <Selecao id="papel" name="papel" required defaultValue="" {...ariaDoCampo("papel", campos.papel, "dica")}>
+              <option value="" disabled>
+                Escolha o perfil
+              </option>
+              {PAPEIS.map((p) => (
+                <option key={p} value={p}>
+                  {ROTULO_DO_PAPEL[p]}
+                </option>
+              ))}
+            </Selecao>
           </Campo>
           {estado && !estado.ok && Object.keys(campos).length === 0 ? (
             <p role="alert" className="text-destructive text-sm">

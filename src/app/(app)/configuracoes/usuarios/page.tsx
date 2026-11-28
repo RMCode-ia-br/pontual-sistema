@@ -15,7 +15,7 @@ export default async function PaginaUsuarios() {
     <>
       <CabecalhoPagina
         titulo="Usuários"
-        descricao="Quem pode entrar no sistema. Por enquanto todos veem e fazem tudo."
+        descricao="Quem pode entrar no sistema e o que cada pessoa vê e faz. Escolha o perfil e, se precisar, ajuste área por área."
       />
       <ListaUsuarios usuarios={usuarios} usuarioAtualId={sessao.id} />
     </>

@@ -28,6 +28,7 @@ test("criar usuário mostra a senha temporária uma única vez", async ({ page }
   const dialogo = page.getByRole("dialog");
   await dialogo.getByLabel("Nome").fill(USUARIO_E2E_NOVO.nome);
   await dialogo.getByLabel("Usuário (login)").fill("E2E-Novo"); // maiúsculas viram minúsculas
+  await dialogo.getByLabel("Perfil").selectOption("ADMIN"); // perfil é obrigatório e não vem pré-marcado (decisão 179)
   await dialogo.getByRole("button", { name: "Criar usuário" }).click();
 
   const senha = page.getByTestId("senha-temporaria");
@@ -60,6 +61,7 @@ test("login duplicado é recusado com mensagem clara", async ({ page }) => {
   const dialogo = page.getByRole("dialog");
   await dialogo.getByLabel("Nome").fill("Outro Nome");
   await dialogo.getByLabel("Usuário (login)").fill(USUARIO_E2E_NOVO.login);
+  await dialogo.getByLabel("Perfil").selectOption("ADMIN"); // perfil é obrigatório e não vem pré-marcado (decisão 179)
   await dialogo.getByRole("button", { name: "Criar usuário" }).click();
   await expect(alertaDeFormulario(page)).toContainText("Já existe um usuário com esse login ou e-mail.");
 });
@@ -71,6 +73,7 @@ test("login inválido é validado no formulário", async ({ page }) => {
   const dialogo = page.getByRole("dialog");
   await dialogo.getByLabel("Nome").fill("Fulano");
   await dialogo.getByLabel("Usuário (login)").fill("a b");
+  await dialogo.getByLabel("Perfil").selectOption("ADMIN"); // perfil é obrigatório e não vem pré-marcado (decisão 179)
   await dialogo.getByRole("button", { name: "Criar usuário" }).click();
   await expect(dialogo).toContainText("Use de 3 a 40 caracteres");
 });
