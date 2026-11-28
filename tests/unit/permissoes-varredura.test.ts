@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { NIVEL_DO_VERBO, RECURSO } from "@/lib/dominio/permissoes";
+import { NIVEL_DO_VERBO, RECURSO, decidir, permissoesEfetivas } from "@/lib/dominio/permissoes";
+import { RECURSO_DA_LIXEIRA, TIPOS_DA_LIXEIRA } from "@/modules/lixeira/tipos";
 
 /**
  * Varredura (Fase 7C): todo `can(sessao, "verbo", "recurso")` do código tem verbo e recurso mapeados.
@@ -83,6 +84,10 @@ describe("varredura de can() no código", () => {
     expect(usos.length).toBeGreaterThan(100);
   });
 
+  it("todo can() tem verbo literal (verbo vindo de variável escaparia da varredura)", () => {
+    expect(usos.filter((u) => u.verbos.length === 0).map((u) => u.arquivo)).toEqual([]);
+  });
+
   it("todo verbo usado tem nível", () => {
     const faltam = usos.flatMap((u) => u.verbos.filter((v) => !(v in NIVEL_DO_VERBO)).map((v) => `${u.arquivo}: verbo "${v}"`));
     expect(faltam).toEqual([]);
@@ -96,6 +101,13 @@ describe("varredura de can() no código", () => {
   it("recurso dinâmico só na lixeira (e os tipos que ela aceita estão mapeados)", () => {
     const dinamicos = usos.filter((u) => u.recursoDinamico).map((u) => u.arquivo);
     expect(dinamicos).toEqual(["/src/modules/lixeira/actions.ts"]);
-    for (const tipo of ["cliente", "fornecedor", "funcionario", "produto", "equipe", "projeto"]) expect(RECURSO[tipo], tipo).toBeDefined();
+    // O valor REAL usado pela lixeira é RECURSO_DA_LIXEIRA[tipo] (o tipo vem no plural: "clientes"): cada um tem de estar mapeado
+    // e liberado para o administrador, senão a restauração ficaria negada para todo mundo (falha fechada).
+    const admin = permissoesEfetivas("ADMIN");
+    for (const tipo of TIPOS_DA_LIXEIRA) {
+      const recurso = RECURSO_DA_LIXEIRA[tipo];
+      expect(RECURSO[recurso], `${tipo} -> ${recurso}`).toBeDefined();
+      expect(decidir(admin, "restaurar", recurso), tipo).toBe(true);
+    }
   });
 });

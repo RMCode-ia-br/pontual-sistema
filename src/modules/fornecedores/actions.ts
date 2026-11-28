@@ -131,7 +131,7 @@ export async function editarFornecedor(_anterior: ResultadoAcao<{ id: string }> 
 
 async function mudarSituacao(idsBrutos: string[], ativo: boolean): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "fornecedor")) return falha("Sem permissão.");
+  if (!can(sessao, ativo ? "reativar" : "inativar", "fornecedor")) return falha("Sem permissão.");
   const ids = idsSchema.safeParse(idsBrutos);
   if (!ids.success) return falha(ids.error.issues[0]?.message ?? "Seleção inválida.");
 

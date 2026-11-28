@@ -72,7 +72,7 @@ export async function trocarAprovacaoAcao(entrada: z.input<typeof trocarSchema>)
 /** Reabre uma revisão substituída (só quando nenhuma irmã está aprovada). */
 export async function reabrirRevisaoAcao(propostaIdBruto: string): Promise<ResultadoAcao<ResultadoReabrir>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "reabrir", "aprovacao")) return falha("Sem permissão.");
   const id = idSchema.safeParse(propostaIdBruto);
   if (!id.success) return falha("Proposta inválida.");
   return executar("propostas.reabrirRevisao", async () => {

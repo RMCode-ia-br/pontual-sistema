@@ -54,7 +54,7 @@ async function tipologiaViva(id: string) {
 /** Passo 1 do envio: confere a tipologia, limita tipo e tamanho DECLARADOS e devolve a URL assinada do original. */
 export async function iniciarUploadDesenhoDaTipologia(entrada: unknown): Promise<ResultadoAcao<{ url: string; caminho: string }>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "desenho-tipologia")) return falha("Sem permissão.");
   const dados = iniciarSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   const extensao = TIPOS_DE_IMAGEM_ACEITOS[dados.data.mime];
@@ -72,7 +72,7 @@ export async function iniciarUploadDesenhoDaTipologia(entrada: unknown): Promise
 /** Passo 2: processa no servidor (mesmo processamento do item) e registra como o desenho da tipologia. */
 export async function concluirUploadDesenhoDaTipologia(entrada: unknown): Promise<ResultadoAcao<DesenhoDaTipologiaEnviado>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "desenho-tipologia")) return falha("Sem permissão.");
   const dados = concluirSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   const { tipologiaId, caminho: caminhoOriginal } = dados.data;
@@ -97,7 +97,7 @@ export async function concluirUploadDesenhoDaTipologia(entrada: unknown): Promis
 
 export async function removerDesenhoDaTipologiaAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "desenho-tipologia")) return falha("Sem permissão.");
   const dados = tipologiaSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return executar("tipologias.desenho.remover", async () => {
@@ -110,7 +110,7 @@ export async function removerDesenhoDaTipologiaAcao(entrada: unknown): Promise<R
 
 export async function mudarTamanhoDoDesenhoDaTipologiaAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "desenho-tipologia")) return falha("Sem permissão.");
   const dados = tamanhoSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return executar("tipologias.desenho.tamanho", async () => {
@@ -123,7 +123,7 @@ export async function mudarTamanhoDoDesenhoDaTipologiaAcao(entrada: unknown): Pr
 
 export async function marcarTipologiaRevisadaAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "desenho-tipologia")) return falha("Sem permissão.");
   const dados = tipologiaSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return executar("tipologias.revisada", async () => {
@@ -137,7 +137,7 @@ export async function marcarTipologiaRevisadaAcao(entrada: unknown): Promise<Res
 /** "Salvar este desenho como nova tipologia" (a partir de um item com desenho personalizado). */
 export async function salvarDesenhoComoTipologiaAcao(entrada: unknown): Promise<ResultadoAcao<{ tipologiaId: string }>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "criar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "criar", "tipologia-de-proposta")) return falha("Sem permissão.");
   const dados = salvarComoSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return executar(
@@ -159,7 +159,8 @@ export type DesenhoDaTipologiaParaTela = { anexoId: string; larguraPx: number | 
  * (o editor só assina as das tipologias já usadas pelos itens). Leitura; exige sessão. Sem desenho ou tipologia fora do ar: null.
  */
 export async function desenhoDaTipologiaParaTelaAcao(entrada: unknown): Promise<ResultadoAcao<DesenhoDaTipologiaParaTela>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "proposta")) return falha("Sem permissão.");
   const dados = tipologiaSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return executar("tipologias.desenho.paraTela", async () => {

@@ -133,7 +133,7 @@ export async function editarItemCatalogo(slugBruto: string, idBruto: string, _an
 
 export async function alternarAtivoItemCatalogo(slugBruto: string, idBruto: string, ativo: boolean): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "catalogo")) return falha("Sem permissão.");
+  if (!can(sessao, ativo ? "reativar" : "inativar", "catalogo")) return falha("Sem permissão.");
   const alvo = definicaoOuFalha(slugBruto);
   const id = idSchema.safeParse(idBruto);
   if (!alvo || !id.success) return falha("Item inválido.");

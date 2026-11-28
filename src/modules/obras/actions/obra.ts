@@ -97,7 +97,8 @@ export async function editarEtapaDaObra(entrada: unknown): Promise<ResultadoAcao
 
 /** Calcula (sem gravar) as datas que o sistema propõe para as etapas abertas. */
 export async function sugerirDatas(entrada: unknown): Promise<ResultadoAcao<{ base: string; itens: SugestaoDeData[] }>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "obra")) return falha("Sem permissão.");
   const lido = projetoIdSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   const r = await sugerirDatasDaObra(prisma, lido.data.projetoId, dataLocalDoInstante(new Date()));
@@ -151,7 +152,7 @@ export async function encerrarPausaDaObra(entrada: unknown): Promise<ResultadoAc
 
 export async function ajustarPausaDaObra(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "obra")) return falha("Sem permissão.");
+  if (!can(sessao, "ajustar", "obra")) return falha("Sem permissão.");
   const lido = ajustarPausaSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   return rodar("obras.ajustar_pausa", async (tx, ip) => {

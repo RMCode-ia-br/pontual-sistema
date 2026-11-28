@@ -17,7 +17,7 @@ import { interacaoSchema } from "../schemas";
 /** Registro manual na linha do tempo do cliente: anotação, ligação, WhatsApp, visita ou e-mail. */
 export async function registrarInteracaoDoCliente(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "criar", "interacao")) return falha("Sem permissão.");
+  if (!can(sessao, "criar", "interacao-cliente")) return falha("Sem permissão.");
 
   const dados = interacaoSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
@@ -50,7 +50,7 @@ export async function registrarInteracaoDoCliente(_anterior: ResultadoAcao | nul
 /** Remove um registro manual (erro de digitação). Eventos do sistema não podem ser apagados. */
 export async function excluirInteracaoDoCliente(idBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "excluir", "interacao")) return falha("Sem permissão.");
+  if (!can(sessao, "excluir", "interacao-cliente")) return falha("Sem permissão.");
   const id = campoIdObrigatorio("Registro inválido.").safeParse(idBruto);
   if (!id.success) return falha("Registro inválido.");
 

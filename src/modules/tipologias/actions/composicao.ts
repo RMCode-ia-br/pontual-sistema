@@ -19,7 +19,7 @@ import { composicaoSchema, lerComposicao, type EntradaComposicao } from "../sche
  */
 export async function salvarComposicao(entrada: EntradaComposicao): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "composicao")) return falha("Sem permissão.");
 
   const bruto = composicaoSchema.safeParse(entrada);
   if (!bruto.success) return falha(bruto.error.issues[0]?.message ?? "Dados inválidos.");

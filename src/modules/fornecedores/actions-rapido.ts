@@ -17,7 +17,8 @@ export type FornecedorParaEscolha = { id: string; nome: string };
 
 /** Busca fornecedores ativos por parte do nome ou do nome fantasia, para o campo de escolha. */
 export async function buscarFornecedoresParaCampo(termo: string): Promise<ResultadoAcao<FornecedorParaEscolha[]>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "fornecedor")) return falha("Sem permissão.");
   const t = termo.trim().slice(0, 80);
   if (t.length < 2) return sucesso([]);
   const lista = await buscarFornecedoresSemAcento(t, 8);

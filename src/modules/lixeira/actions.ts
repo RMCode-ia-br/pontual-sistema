@@ -11,7 +11,7 @@ import { can } from "@/lib/permissoes";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
 
 import { restaurarDaLixeira } from "./restaurar";
-import type { TipoDaLixeira } from "./tipos";
+import { RECURSO_DA_LIXEIRA, type TipoDaLixeira } from "./tipos";
 
 const idsSchema = z.array(campoIdObrigatorio()).min(1, "Escolha ao menos um item.").max(200, "Escolha no máximo 200 de uma vez.");
 
@@ -26,7 +26,7 @@ const CAMINHOS: Record<TipoDaLixeira, string[]> = {
 
 async function restaurar(tipo: TipoDaLixeira, idsBrutos: string[]): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "restaurar", tipo)) return falha("Sem permissão.");
+  if (!can(sessao, "restaurar", RECURSO_DA_LIXEIRA[tipo])) return falha("Sem permissão.");
   const ids = idsSchema.safeParse(idsBrutos);
   if (!ids.success) return falha(ids.error.issues[0]?.message ?? "Seleção inválida.");
 

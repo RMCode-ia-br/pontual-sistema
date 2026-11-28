@@ -91,7 +91,7 @@ export async function excluirMedida(idBruto: string): Promise<ResultadoAcao> {
 /** Dados da obra levantados na visita: fase, arquiteto, prazo, investimento e condomínio (R9). */
 export async function salvarDadosDaObra(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "projeto")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "visita")) return falha("Sem permissão.");
   const lido = dadosDaObraSchema.safeParse(formDataParaObjeto(formData));
   if (!lido.success) return falhaDeValidacao(lido.error);
   const d = lido.data;

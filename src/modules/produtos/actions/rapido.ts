@@ -35,7 +35,8 @@ const paraEscolha = (p: { id: string; codigo: string; descricao: string; unidade
 
 /** Busca produtos ativos por parte do código ou da descrição (sem acento), para o campo de escolha. */
 export async function buscarProdutosParaCampo(termo: string): Promise<ResultadoAcao<ProdutoParaEscolha[]>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "produto")) return falha("Sem permissão.");
   const t = termo.trim().slice(0, 80);
   if (t.length < 2) return sucesso([]);
   const ids = await idsDeProdutosPorBusca(t);
@@ -46,7 +47,8 @@ export async function buscarProdutosParaCampo(termo: string): Promise<ResultadoA
 
 /** Listas do formulário de cadastro rápido (categorias, linhas e acabamentos ativos). */
 export async function opcoesDoCadastroRapidoDeProduto(): Promise<ResultadoAcao<{ categorias: { id: string; nome: string }[]; linhas: { id: string; nome: string }[]; acabamentos: { id: string; nome: string }[] }>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "produto")) return falha("Sem permissão.");
   const ordem = [{ ordem: "asc" as const }, { nome: "asc" as const }];
   const [categorias, linhas, acabamentos] = await Promise.all([
     prisma.categoriaProduto.findMany({ where: { ativo: true, deletadoEm: null }, orderBy: ordem, select: { id: true, nome: true } }),

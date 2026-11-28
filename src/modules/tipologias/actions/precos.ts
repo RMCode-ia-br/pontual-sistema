@@ -44,7 +44,7 @@ async function conferirCatalogos(v: { linhaId?: string; acabamentoId?: string; t
 
 export async function salvarPreco(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "preco-tipologia")) return falha("Sem permissão.");
   const dados = precoSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
   const v = dados.data;
@@ -87,7 +87,7 @@ export async function salvarPreco(_anterior: ResultadoAcao | null, formData: For
 
 export async function excluirPreco(tipologiaIdBruto: string, idBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "excluir", "preco-tipologia")) return falha("Sem permissão.");
   const tipologiaId = campoIdObrigatorio().safeParse(tipologiaIdBruto);
   const id = campoIdObrigatorio().safeParse(idBruto);
   if (!tipologiaId.success || !id.success) return falha("Registro inválido.");
@@ -129,7 +129,7 @@ export type ResultadoImportacaoPrecos = { criados: number; atualizados: number }
  */
 export async function importarPrecos(entrada: { tipologiaId: string; linhas: string[][] }): Promise<ResultadoAcao<ResultadoImportacaoPrecos>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "tipologia")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "preco-tipologia")) return falha("Sem permissão.");
   const lido = importacaoPrecosSchema.safeParse(entrada);
   if (!lido.success) return falha(lido.error.issues[0]?.message ?? "Dados inválidos.");
 

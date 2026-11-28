@@ -36,7 +36,7 @@ export async function usarRetalho(_anterior: ResultadoAcao | null, formData: For
 
 export async function descartarRetalhoAcao(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "retalho")) return falha("Sem permissão.");
+  if (!can(sessao, "descartar", "retalho")) return falha("Sem permissão.");
   const dados = descartarRetalhoSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarEstoque("estoque.retalho.descartar", async (tx, ip) => {
@@ -59,7 +59,7 @@ export async function venderSucataAcao(_anterior: ResultadoAcao | null, formData
 
 export async function ajustarSucataAcao(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "criar", "sucata")) return falha("Sem permissão.");
+  if (!can(sessao, "ajustar", "sucata")) return falha("Sem permissão.");
   const dados = ajusteDeSucataSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarEstoque("estoque.sucata.ajustar", async (tx, ip) => {

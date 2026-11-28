@@ -2,8 +2,9 @@
 
 import { z } from "zod";
 
-import { sucesso, type ResultadoAcao } from "@/lib/acoes";
+import { falha, type ResultadoAcao, sucesso } from "@/lib/acoes";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { can } from "@/lib/permissoes";
 import { prisma } from "@/lib/db";
 import { formatarDataHora, instanteParaInputDataHora } from "@/lib/formatadores";
 import { padraoLike } from "@/lib/listas/parametros";
@@ -14,7 +15,8 @@ export type ProjetoParaEscolha = { id: string; rotulo: string; clienteId: string
 
 /** Busca de projetos enquanto a pessoa digita (campo "Projeto" do compromisso). Ignora acentos e maiúsculas. */
 export async function buscarProjetosParaAgenda(termo: string): Promise<ResultadoAcao<ProjetoParaEscolha[]>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "evento")) return falha("Sem permissão.");
   const texto = z.string().trim().min(2).max(80).safeParse(termo);
   if (!texto.success) return sucesso([]);
   const padrao = padraoLike(texto.data.toLowerCase());
@@ -39,7 +41,8 @@ export type HorarioLivre = { valor: string; rotulo: string };
 
 /** Horários livres do dia (expediente, agenda do responsável/equipe e feriados), para o "Ver horários livres". */
 export async function sugerirHorarios(entrada: unknown): Promise<ResultadoAcao<HorarioLivre[]>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "evento")) return falha("Sem permissão.");
   const lido = entradaHorarios.safeParse(entrada);
   if (!lido.success) return sucesso([]);
   const livres = await horariosLivresDoDia({ ...lido.data, responsavelId: lido.data.responsavelId || null, equipeId: lido.data.equipeId || null });

@@ -55,7 +55,7 @@ export type PreviaDoReajusteKg = { linhas: (Omit<LinhaDoReajusteKg, "id">)[]; pe
 /** Mostra o que o reajuste faria, sem gravar nada. */
 export async function preverReajusteKg(entrada: unknown): Promise<ResultadoAcao<PreviaDoReajusteKg>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "precoKg")) return falha("Sem permissão.");
+  if (!can(sessao, "reajustar", "precoKg")) return falha("Sem permissão.");
   const dados = reajusteSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   const pb = lerPercentualEmPb(dados.data.percentual);
@@ -68,7 +68,7 @@ export async function preverReajusteKg(entrada: unknown): Promise<ResultadoAcao<
 /** Aplica o reajuste (o mesmo percentual em todos os preços do kg preenchidos) e recalcula os perfis. */
 export async function aplicarReajusteDoKg(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "precoKg")) return falha("Sem permissão.");
+  if (!can(sessao, "reajustar", "precoKg")) return falha("Sem permissão.");
   const dados = reajusteSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   const pb = lerPercentualEmPb(dados.data.percentual);

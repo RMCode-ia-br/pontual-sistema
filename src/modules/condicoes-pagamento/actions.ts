@@ -96,7 +96,7 @@ export async function salvarCondicao(entrada: EntradaCondicao): Promise<Resultad
 
 async function mudarSituacao(idsBrutos: string[], ativo: boolean): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "condicao-pagamento")) return falha("Sem permissão.");
+  if (!can(sessao, ativo ? "reativar" : "inativar", "condicao-pagamento")) return falha("Sem permissão.");
   const ids = idsSchema.safeParse(idsBrutos);
   if (!ids.success) return falha("Seleção inválida.");
 

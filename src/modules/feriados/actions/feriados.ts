@@ -78,7 +78,7 @@ export async function criarFeriado(_anterior: ResultadoAcao | null, formData: Fo
 
 export async function alternarAtivoFeriado(idBruto: string, ativo: boolean): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "feriado")) return falha("Sem permissão.");
+  if (!can(sessao, ativo ? "reativar" : "inativar", "feriado")) return falha("Sem permissão.");
   const id = idSchema.safeParse(idBruto);
   if (!id.success) return falha("Item inválido.");
 

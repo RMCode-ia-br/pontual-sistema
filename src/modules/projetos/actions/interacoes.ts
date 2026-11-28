@@ -17,7 +17,7 @@ import { interacaoProjetoSchema } from "../schemas";
 /** Registro manual na linha do tempo do projeto. Também aparece na linha do tempo do cliente. */
 export async function registrarInteracaoDoProjeto(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "criar", "interacao")) return falha("Sem permissão.");
+  if (!can(sessao, "criar", "interacao-projeto")) return falha("Sem permissão.");
 
   const dados = interacaoProjetoSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
@@ -45,7 +45,7 @@ export async function registrarInteracaoDoProjeto(_anterior: ResultadoAcao | nul
 /** Remove um registro manual (erro de digitação). Eventos do sistema não podem ser apagados. */
 export async function excluirInteracaoDoProjeto(idBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "excluir", "interacao")) return falha("Sem permissão.");
+  if (!can(sessao, "excluir", "interacao-projeto")) return falha("Sem permissão.");
   const id = campoIdObrigatorio("Registro inválido.").safeParse(idBruto);
   if (!id.success) return falha("Registro inválido.");
 

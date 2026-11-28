@@ -213,7 +213,7 @@ export async function duplicarItem(propostaIdBruto: string, itemIdBruto: string)
 
 export async function removerItem(propostaIdBruto: string, itemIdBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "excluir", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
   const propostaId = campoIdObrigatorio().safeParse(propostaIdBruto);
   const itemId = campoIdObrigatorio().safeParse(itemIdBruto);
   if (!propostaId.success || !itemId.success) return falha("Registro inválido.");
@@ -293,7 +293,7 @@ export async function salvarOpcao(entrada: { id?: string | null; propostaId: str
 
 export async function removerOpcao(propostaIdBruto: string, opcaoIdBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "excluir", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
   const propostaId = campoIdObrigatorio().safeParse(propostaIdBruto);
   const opcaoId = campoIdObrigatorio().safeParse(opcaoIdBruto);
   if (!propostaId.success || !opcaoId.success) return falha("Registro inválido.");
@@ -396,7 +396,7 @@ export async function moverGrupo(propostaIdBruto: string, grupoIdBruto: string, 
 /** Remove a seção; os itens dela continuam na proposta, sem seção. */
 export async function removerGrupo(propostaIdBruto: string, grupoIdBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "excluir", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
   const propostaId = campoIdObrigatorio().safeParse(propostaIdBruto);
   const grupoId = campoIdObrigatorio().safeParse(grupoIdBruto);
   if (!propostaId.success || !grupoId.success) return falha("Registro inválido.");

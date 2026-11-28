@@ -1,7 +1,8 @@
 "use server";
 
-import { sucesso, type ResultadoAcao } from "@/lib/acoes";
+import { falha, type ResultadoAcao, sucesso } from "@/lib/acoes";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { can } from "@/lib/permissoes";
 import { prisma } from "@/lib/db";
 import { campoIdObrigatorio } from "@/lib/validadores/campos";
 import { resumoDoEndereco } from "@/modules/clientes/schemas";
@@ -10,7 +11,8 @@ export type EnderecoParaEscolha = { id: string; rotulo: string };
 
 /** Endereços do cliente, para escolher o local da obra enquanto o projeto é preenchido. */
 export async function listarEnderecosDoCliente(clienteIdBruto: string): Promise<ResultadoAcao<EnderecoParaEscolha[]>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "cliente")) return falha("Sem permissão.");
   const clienteId = campoIdObrigatorio().safeParse(clienteIdBruto);
   if (!clienteId.success) return sucesso([]);
   const enderecos = await prisma.enderecoCliente.findMany({

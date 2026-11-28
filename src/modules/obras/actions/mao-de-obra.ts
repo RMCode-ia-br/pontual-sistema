@@ -24,14 +24,15 @@ async function calcularSugestaoDeMaoDeObra(): Promise<SugestaoDeMaoDeObra> {
 }
 
 export async function verSugestaoDeMaoDeObra(): Promise<ResultadoAcao<SugestaoDeMaoDeObra>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "mao-de-obra")) return falha("Sem permissão.");
   return sucesso(await calcularSugestaoDeMaoDeObra());
 }
 
 /** Aplica a sugestão em Configurações (o servidor recalcula: nunca confia no valor que a tela mostrou). Auditado. */
 export async function aplicarSugestaoDeMaoDeObra(): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "configuracao")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "mao-de-obra")) return falha("Sem permissão.");
   return executar("obras.mao-de-obra.aplicar", async () => {
     const s = await calcularSugestaoDeMaoDeObra();
     if (!s.ok) return falha(s.motivo);

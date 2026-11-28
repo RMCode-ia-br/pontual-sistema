@@ -9,8 +9,8 @@ Plano aprovado pelo Régis em 2026-11-27 (arquivo de plano da sessão; decisões
 | 0 Inventário, decisões, CLAUDE.md | concluído, `verificar` e Vercel verdes | `979d772` |
 | 1 Migração `20261128000000_permissoes_perfis` | concluído: aplicada no banco de São Paulo com OK do Régis; `papel: ADMIN` explícito em `criarUsuario`, seed e nos dois helpers de teste que inserem em SQL cru; `verificar` e Vercel verdes | `8d42985` |
 | 2 Regra pura, sessão com permissões, seed | concluído, `verificar` e Vercel verdes | `22e3484` |
-| 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | concluído: typecheck, lint, build, E2E `area-logada` e os 1.757 unitários verdes (o primeiro push, `54d7ad1`, quebrou o `verificar` por um teste que mocava `@/lib/permissoes` sem `permissoesDe`; corrigido no commit seguinte) | `54d7ad1` + correção |
-| 4 Server Actions | pendente (parada obrigatória ao fim, relatório parcial) | — |
+| 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | concluído, CI verde (o primeiro push, `54d7ad1`, quebrou o `verificar` por um teste que mocava `@/lib/permissoes` sem `permissoesDe`; corrigido no commit seguinte) | `54d7ad1` + `a999cda` |
+| 4 Server Actions | concluído e aguardando o "continuar" do Régis (parada obrigatória): typecheck, lint, build e os 2.028 unitários verdes | (commit do Bloco 4) |
 | 5 Rotas, anexos, busca, CSV | pendente | — |
 | 6 Valores para o Campo, custo, painel, relatórios | pendente | — |
 | 7 Telas de usuários | pendente | — |
@@ -67,3 +67,31 @@ ALTER TABLE "Usuario" DROP COLUMN "ajustesPermissao", ALTER COLUMN "papel" SET D
 - **Fica para o Bloco 6:** valores DENTRO de telas que o Campo vê (obra, cliente, visita, linha do tempo, lista de obras), o índice `/relatorios` filtrado por link, e custo nas telas de produto, funcionário e tipologia.
 
 **Lição do Bloco 3:** rodei só os unitários da regra antes do push e o `verificar` pegou `permissao-de-custo.test.ts` (mock de `@/lib/permissoes` sem `permissoesDe`). A partir daqui `npm test` completo (unitários, sem banco, ~80 s) roda antes de CADA push, além de typecheck e lint.
+
+## Bloco 4 — Server Actions (relatório parcial, parada obrigatória)
+
+**Resultado:** as 211 ações exportadas (57 arquivos `"use server"`) conferem `can()` além da sessão, com verbo e recurso do mapeamento; typecheck, lint, build e 2.028 unitários verdes (base da 3.6b-3: 1.614).
+
+### Ações renomeadas (verbo ou recurso passou a refletir o que a ação faz)
+- **Destrutivas que estavam como "editar":** cancelar proposta (`cancelar proposta`), encerrar validade por reajuste (`encerrar proposta`), reabrir revisão (`reabrir aprovacao`); ajustar, cancelar e reabrir conta a receber e a pagar; encerrar recorrência; cancelar compra (`cancelar compra`) e estornar recebimento de compra (`estornar compra`); estornar movimento de estoque; descartar retalho; ajustar sucata; ajustar chamado; ajustar pausa da obra; aplicar e prever reajuste de produtos e do kg (`reajustar`); alternar conta financeira ativa (`inativar`); `excluirPreco` da tipologia (`excluir preco-tipologia`).
+- **Inativar e reativar** (clientes, fornecedores, funcionários, produtos, tipologias, condições, catálogos, feriados): `ativo ? "reativar" : "inativar"` (inativar é destrutivo, reativar só altera).
+- **Remover item, opção e grupo de proposta em rascunho:** de `excluir` para `editar proposta` (decisão 177).
+- **Recursos ambíguos separados:** `visita` (dados da obra na visita), `interacao-cliente` e `interacao-projeto`, `mao-de-obra` (exige custo), `cobranca-chamado` (exige valores), `custo-material` (exige custo), `composicao` (exige custo), `preco-tipologia` (exige valores), `desenho-tipologia` (Cadastros), `tipologia-de-proposta` ("salvar como nova tipologia": Cadastros e Comercial). Saíram `interacao` e `baixa-material`.
+- **15 ações que só checavam sessão** ganharam `can(ver, …)`: consultas de agenda, clientes, projetos, fornecedores, produtos, chamados, obra, mão de obra e o desenho da tipologia na tela (`ver proposta`, porque é usado no editor da proposta).
+- **Busca global** filtra por módulo: cada um dos 8 grupos só é consultado se a pessoa pode ver o módulo (quem não pode recebe lista vazia sem tocar o banco). Isto adiantou parte do Bloco 5.
+- **Defeito achado e corrigido:** a lixeira chamava `can(…, "restaurar", tipo)` com o tipo no plural (`"clientes"`), que não existe no mapeamento; com falha fechada negaria a restauração até ao administrador, e a varredura não pegou por ser recurso dinâmico. Agora `RECURSO_DA_LIXEIRA` (`modules/lixeira/tipos.ts`) traduz tipo → recurso e o teste confere que cada tipo está mapeado e liberado ao administrador.
+- Sem exceção por desenho (não conferem módulo): `entrar`, `sair`, `trocarSenha` (a própria senha), `listarNotificacoes` e `marcarNotificacoesComoLidas` (as do próprio usuário).
+
+### Testes novos
+- `tests/unit/sessao-obrigatoria.test.ts` estendido: toda ação exportada precisa conferir `can(` (também por função local que ela chame), com as 5 exceções acima, e a lista de exceções não pode apodrecer.
+- `tests/unit/permissoes-varredura.test.ts`: todo `can(` do código tem verbo literal, verbo com nível e recurso mapeado; a lixeira é conferida pelo valor real.
+- `tests/unit/acoes-matriz.test.ts` (**matriz gerada**): para cada uma das 211 ações × 6 perfis (Dono, Escritório, Campo, Campo com ajuste inválido, Dono sem custo e margem, Dono sem valores) o esperado sai do mapeamento lendo os `can(` do código-fonte; a ação é CHAMADA de verdade com a sessão do perfil e com um banco falso que explode se tocado. Esperado negado: responde "Sem permissão" sem tocar o banco; esperado liberado: não pode responder "Sem permissão". Falha se uma ação não tem `can(` lido. Decisão mista entre alternativas de um verbo ternário fica de fora só para aquele perfil. A `buscaGlobal`, que filtra em vez de negar, tem asserções próprias.
+- Isto substitui os "testes de integração por módulo" planejados: prova a negação chamando a ação direto, e ainda prova que o banco não foi tocado (mais forte que um teste com banco real).
+
+### O que ficou SEM teste (e por quê)
+- A matriz só tem 6 perfis fixos; combinações arbitrárias de ajuste por módulo são cobertas pela regra pura (`permissoes.test.ts`), não ação a ação.
+- A matriz deriva o esperado dos `can(` lidos no texto: um `can(` com recurso certo no lugar errado (depois de efeito colateral) não é pego; todas as ações seguem o padrão sessão → `can` → validação, e a matriz prova que nada toca o banco antes do `can`.
+- Ações com duas chamadas `can` em ramos exclusivos aparecem como "misto" e são puladas por perfil (hoje só ternários de verbo).
+- Ações de ponta a ponta com banco real continuam cobertas pelas suítes de integração existentes (rodam como administrador); elas não foram reexecutadas neste bloco (suíte completa só depois do aviso do Régis).
+- `mudarEtapa` (Obras) pode liberar parcelas por gatilho: o Campo, que altera Obras, concluiria uma etapa que dispara o vencimento (pergunta ao Marcelo em PENDENCIAS; padrão: manter).
+- Leitura de VALORES dentro das telas e consultas (obra, cliente, visita, linha do tempo, CSV, PDF, anexos, painel) é dos Blocos 5 e 6; hoje só o módulo e os transversais das PÁGINAS e das AÇÕES estão fechados.

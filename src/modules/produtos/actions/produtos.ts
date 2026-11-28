@@ -214,7 +214,7 @@ export async function editarProduto(_anterior: ResultadoAcao<{ id: string }> | n
 
 async function mudarSituacao(idsBrutos: string[], ativo: boolean): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "produto")) return falha("Sem permissão.");
+  if (!can(sessao, ativo ? "reativar" : "inativar", "produto")) return falha("Sem permissão.");
   const ids = idsSchema.safeParse(idsBrutos);
   if (!ids.success) return falha(ids.error.issues[0]?.message ?? "Seleção inválida.");
 

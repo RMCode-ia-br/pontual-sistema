@@ -36,7 +36,7 @@ export async function pagar(_anterior: ResultadoAcao | null, formData: FormData)
 
 export async function ajustarContaPagar(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaPagar")) return falha("Sem permissão.");
+  if (!can(sessao, "ajustar", "contaPagar")) return falha("Sem permissão.");
   const dados = ajusteDeContaPagarSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.pagar.ajustar", async (tx, ip) => {
@@ -47,7 +47,7 @@ export async function ajustarContaPagar(_anterior: ResultadoAcao | null, formDat
 
 export async function cancelarContaPagar(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaPagar")) return falha("Sem permissão.");
+  if (!can(sessao, "cancelar", "contaPagar")) return falha("Sem permissão.");
   const dados = cancelarContaPagarSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.pagar.cancelar", async (tx, ip) => {
@@ -58,7 +58,7 @@ export async function cancelarContaPagar(entrada: unknown): Promise<ResultadoAca
 
 export async function reabrirContaPagar(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaPagar")) return falha("Sem permissão.");
+  if (!can(sessao, "reabrir", "contaPagar")) return falha("Sem permissão.");
   const dados = contaPagarIdSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.pagar.reabrir", async (tx, ip) => {
@@ -81,7 +81,7 @@ export async function editarRecorrenciaAcao(_anterior: ResultadoAcao | null, for
 
 export async function encerrarRecorrenciaAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "recorrencia")) return falha("Sem permissão.");
+  if (!can(sessao, "encerrar", "recorrencia")) return falha("Sem permissão.");
   const dados = encerrarRecorrenciaSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.recorrencia.encerrar", async (tx, ip) => {

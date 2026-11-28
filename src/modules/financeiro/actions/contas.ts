@@ -47,7 +47,7 @@ export async function editarConta(_anterior: ResultadoAcao | null, formData: For
 
 export async function alternarAtivaDaConta(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaFinanceira")) return falha("Sem permissão.");
+  if (!can(sessao, "inativar", "contaFinanceira")) return falha("Sem permissão.");
   const dados = ativarContaSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.conta.ativar", async (tx, ip) => {

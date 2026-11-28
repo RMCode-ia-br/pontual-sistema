@@ -19,7 +19,7 @@ export type PreviaParaTela = Omit<Previa, "itens"> & { itens: Previa["itens"]; i
 /** Passo 1: mostra, sem gravar nada, o que o reajuste faria produto a produto. */
 export async function preverReajuste(entrada: unknown): Promise<ResultadoAcao<PreviaParaTela>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "produto")) return falha("Sem permissão.");
+  if (!can(sessao, "reajustar", "produto")) return falha("Sem permissão.");
 
   const dados = reajusteSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
@@ -44,7 +44,7 @@ export async function preverReajuste(entrada: unknown): Promise<ResultadoAcao<Pr
  */
 export async function aplicarReajuste(entrada: unknown): Promise<ResultadoAcao<{ afetados: number }>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "produto")) return falha("Sem permissão.");
+  if (!can(sessao, "reajustar", "produto")) return falha("Sem permissão.");
 
   const dados = aplicarReajusteSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);

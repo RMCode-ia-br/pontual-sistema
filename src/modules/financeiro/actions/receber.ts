@@ -35,7 +35,7 @@ export async function receber(_anterior: ResultadoAcao | null, formData: FormDat
 
 export async function ajustarContaReceber(_anterior: ResultadoAcao | null, formData: FormData): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaReceber")) return falha("Sem permissão.");
+  if (!can(sessao, "ajustar", "contaReceber")) return falha("Sem permissão.");
   const dados = ajusteDeContaSchema.safeParse(formDataParaObjeto(formData));
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.receber.ajustar", async (tx, ip) => {
@@ -58,7 +58,7 @@ export async function prorrogarContaReceber(_anterior: ResultadoAcao | null, for
 
 export async function cancelarContaReceber(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaReceber")) return falha("Sem permissão.");
+  if (!can(sessao, "cancelar", "contaReceber")) return falha("Sem permissão.");
   const dados = cancelarContaSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.receber.cancelar", async (tx, ip) => {
@@ -69,7 +69,7 @@ export async function cancelarContaReceber(entrada: unknown): Promise<ResultadoA
 
 export async function reabrirContaReceber(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "contaReceber")) return falha("Sem permissão.");
+  if (!can(sessao, "reabrir", "contaReceber")) return falha("Sem permissão.");
   const dados = contaReceberIdSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodarFinanceiro("financeiro.receber.reabrir", async (tx, ip) => {

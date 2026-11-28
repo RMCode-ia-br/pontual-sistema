@@ -47,7 +47,8 @@ export async function criarChamado(_anterior: ResultadoAcao<{ id: string }> | nu
 
 /** Obras do cliente que aceitam chamado (já aprovadas), para o seletor do formulário. */
 export async function listarObrasDoClienteParaChamado(clienteIdBruto: string): Promise<ResultadoAcao<{ id: string; rotulo: string }[]>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "chamado")) return falha("Sem permissão.");
   const lido = campoIdObrigatorio().safeParse(clienteIdBruto);
   if (!lido.success) return falha("Cliente inválido.");
   const obras = await prisma.projeto.findMany({
@@ -63,7 +64,8 @@ const previaSchema =z.object({ projetoId: campoIdOpcional, tipoProblema: z.enum(
 
 /** Prévia da classificação enquanto o formulário é preenchido (não grava nada). */
 export async function preverClassificacao(entrada: unknown): Promise<ResultadoAcao<{ classificacao: "EM_GARANTIA" | "FORA_DA_GARANTIA"; motivo: string }>> {
-  await exigirSessao();
+  const sessao = await exigirSessao();
+  if (!can(sessao, "ver", "chamado")) return falha("Sem permissão.");
   const lido = previaSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   const r = await avaliarGarantia(prisma, { projetoId: lido.data.projetoId ?? null, tipoProblema: lido.data.tipoProblema, abertoEm: dataLocalDoInstante(new Date()) });
@@ -82,7 +84,7 @@ const ajusteSchema = z.object({
 /** Sobrescreve a classificação, decide a cobrança, registra o valor ou corrige a descrição. */
 export async function ajustarChamadoAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "chamado")) return falha("Sem permissão.");
+  if (!can(sessao, "ajustar", "chamado")) return falha("Sem permissão.");
   const lido = ajusteSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   const { valorCobrado, ...resto } = lido.data;
@@ -123,7 +125,7 @@ const cobrancaSchema = z.object({ id: idSchema, vencimento: z.string().trim().re
 /** Gera a conta a receber da visita cobrada (uma vez só). */
 export async function gerarCobranca(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "chamado")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "cobranca-chamado")) return falha("Sem permissão.");
   const lido = cobrancaSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   return executar("chamados.cobranca", async () => {

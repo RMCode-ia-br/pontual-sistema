@@ -101,7 +101,7 @@ export async function recusarProposta(entrada: z.input<typeof recusaSchema>): Pr
 
 export async function cancelarProposta(propostaIdBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "cancelar", "proposta")) return falha("Sem permissão.");
   const id = idSchema.safeParse(propostaIdBruto);
   if (!id.success) return falha("Proposta inválida.");
   return executar("propostas.cancelar", async () => {
@@ -151,7 +151,7 @@ export async function criarRevisao(propostaIdBruto: string): Promise<ResultadoAc
 /** R13: o gestor marca a validade como encerrada por reajuste de fornecedor (proposta já enviada). */
 export async function encerrarValidadePorReajuste(propostaIdBruto: string): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "encerrar", "proposta")) return falha("Sem permissão.");
   const id = idSchema.safeParse(propostaIdBruto);
   if (!id.success) return falha("Proposta inválida.");
   return executar("propostas.validade", async () => {

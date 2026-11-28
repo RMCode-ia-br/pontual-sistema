@@ -33,7 +33,7 @@ function lerValor(texto: string): number | null | undefined {
 /** Custo de material informado (programa de corte): só interno, em qualquer status da proposta, sem criar revisão. */
 export async function salvarCustoDeMaterial(entrada: unknown): Promise<ResultadoAcao<{ alterados: number }>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "proposta")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "custo-material")) return falha("Sem permissão.");
   const dados = schema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   const d = dados.data;

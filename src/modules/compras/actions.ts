@@ -67,7 +67,7 @@ export async function fazerPedidoAcao(entrada: unknown): Promise<ResultadoAcao> 
 
 export async function cancelarCompraAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "compra")) return falha("Sem permissão.");
+  if (!can(sessao, "cancelar", "compra")) return falha("Sem permissão.");
   const dados = cancelarCompraSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodar("compras.cancelar", async (tx, ip) => {
@@ -92,7 +92,7 @@ export async function receberCompraAcao(entrada: unknown): Promise<ResultadoAcao
 
 export async function estornarRecebimentoAcao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "compra")) return falha("Sem permissão.");
+  if (!can(sessao, "estornar", "compra")) return falha("Sem permissão.");
   const dados = estornoDeRecebimentoSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);
   return rodar("compras.estornar-recebimento", async (tx, ip) => {

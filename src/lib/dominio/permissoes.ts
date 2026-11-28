@@ -275,16 +275,19 @@ export const RECURSO: Readonly<Record<string, RegraDoRecurso>> = {
   projeto: m("COMERCIAL"), // legado: o Bloco 4 separa a visita (Agenda) do funil
   proposta: m("COMERCIAL"),
   aprovacao: m("COMERCIAL"),
+  /** Custo de material informado e markup da proposta: só interno, exige "ver custo e margem". */
+  "custo-material": m("COMERCIAL", { exige: ["custo"] }),
   "interacao-projeto": m("COMERCIAL"),
   // Clientes
   cliente: m("CLIENTES"),
   contato: m("CLIENTES"),
   endereco: m("CLIENTES"),
   "interacao-cliente": m("CLIENTES"),
-  interacao: m("CLIENTES"), // legado
   // Obras
   obra: m("OBRAS"),
   chamado: m("OBRAS"),
+  /** Gerar a cobrança da visita de assistência: cria dinheiro a receber, então exige "ver valores". */
+  "cobranca-chamado": m("OBRAS", { exige: ["valores"] }),
   // Financeiro
   contaFinanceira: m("FINANCEIRO"),
   lancamento: m("FINANCEIRO"),
@@ -294,7 +297,6 @@ export const RECURSO: Readonly<Record<string, RegraDoRecurso>> = {
   // Estoque e compras
   compra: m("ESTOQUE"),
   movimentoEstoque: m("ESTOQUE"),
-  "baixa-material": m("ESTOQUE", { tambem: ["OBRAS"] }),
   retalho: m("ESTOQUE"),
   sucata: m("ESTOQUE"),
   produto: m("ESTOQUE"),
@@ -306,6 +308,8 @@ export const RECURSO: Readonly<Record<string, RegraDoRecurso>> = {
   tipologia: m("CADASTROS"),
   "desenho-tipologia": m("CADASTROS"),
   "tipologia-de-proposta": m("CADASTROS", { tambem: ["COMERCIAL"] }),
+  composicao: m("CADASTROS", { exige: ["custo"] }),
+  "preco-tipologia": m("CADASTROS", { exige: ["valores"] }),
   catalogo: m("CADASTROS"),
   "condicao-pagamento": m("CADASTROS"),
   // Configurações

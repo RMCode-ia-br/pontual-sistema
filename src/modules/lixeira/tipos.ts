@@ -23,3 +23,13 @@ export const ENTIDADE_AUDITORIA: Record<TipoDaLixeira, string> = {
 export function lerTipoDaLixeira(valor: string | undefined): TipoDaLixeira {
   return (TIPOS_DA_LIXEIRA as readonly string[]).includes(valor ?? "") ? (valor as TipoDaLixeira) : "clientes";
 }
+
+/** Recurso de permissão de cada tipo (`src/lib/dominio/permissoes.ts`): restaurar exige poder alterar o módulo dele. */
+export const RECURSO_DA_LIXEIRA: Record<TipoDaLixeira, string> = {
+  clientes: "cliente",
+  fornecedores: "fornecedor",
+  funcionarios: "funcionario",
+  produtos: "produto",
+  equipes: "equipe",
+  projetos: "projeto",
+};

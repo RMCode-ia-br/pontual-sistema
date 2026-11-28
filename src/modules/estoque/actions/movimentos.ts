@@ -58,7 +58,7 @@ export async function estornarMovimento(
   entrada: unknown,
 ): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "movimentoEstoque"))
+  if (!can(sessao, "estornar", "movimentoEstoque"))
     return falha("Sem permissão.");
   const dados = estornoSchema.safeParse(entrada);
   if (!dados.success) return falhaDeValidacao(dados.error);

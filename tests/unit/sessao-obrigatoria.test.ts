@@ -63,6 +63,51 @@ function exigeSessao(texto: string, corpo: string): boolean {
   return false;
 }
 
+/**
+ * Ações que não passam por `can()`, por motivo explícito (Fase 7C): só mexem em dados do PRÓPRIO usuário logado ou em
+ * quem ainda nem tem sessão. Qualquer outra ação precisa conferir permissão.
+ */
+const ACOES_SEM_PERMISSAO: Record<string, string> = {
+  entrar: "tela de login: ainda não há usuário",
+  sair: "encerra a sessão do próprio usuário",
+  trocarSenha: "o usuário troca a PRÓPRIA senha",
+  listarNotificacoes: "notificações do próprio usuário (e as gerais), sem módulo",
+  marcarNotificacoesComoLidas: "marca como lidas as notificações do próprio usuário",
+};
+
+/** A função (ou uma que ela chame no mesmo arquivo, até 3 níveis) confere `can(`? */
+function conferePermissao(texto: string, corpo: string, nivel = 0, vistos = new Set<string>()): boolean {
+  if (/(?<![\w.])can\(/.test(corpo)) return true;
+  if (nivel >= 3) return false;
+  for (const chamada of corpo.matchAll(/\b(\w+)\(/g)) {
+    const nome = chamada[1];
+    if (vistos.has(nome)) continue;
+    vistos.add(nome);
+    const alvo = corpoDaFuncaoLocal(texto, nome);
+    if (alvo && alvo !== corpo && conferePermissao(texto, alvo, nivel + 1, vistos)) return true;
+  }
+  return false;
+}
+
+describe("Server Actions conferem permissão (Fase 7C, camada 3)", () => {
+  const arquivosDeAcoes = todos.filter((f) => /^\s*["']use server["']/.test(fs.readFileSync(f, "utf8")));
+
+  for (const arquivo of arquivosDeAcoes) {
+    it(`${relativo(arquivo)}: toda ação confere can() além da sessão`, () => {
+      const texto = fs.readFileSync(arquivo, "utf8");
+      const semPermissao = funcoesExportadas(texto)
+        .filter((f) => !ACOES_SEM_PERMISSAO[f.nome] && !conferePermissao(texto, f.corpo))
+        .map((f) => f.nome);
+      expect(semPermissao, `ações sem can() em ${relativo(arquivo)}`).toEqual([]);
+    });
+  }
+
+  it("as exceções sem permissão existem de verdade (a lista não apodrece)", () => {
+    const todasAsFuncoes = arquivosDeAcoes.flatMap((f) => funcoesExportadas(fs.readFileSync(f, "utf8")).map((x) => x.nome));
+    for (const nome of Object.keys(ACOES_SEM_PERMISSAO)) expect(todasAsFuncoes, nome).toContain(nome);
+  });
+});
+
 describe("Server Actions exigem sessão", () => {
   const arquivosDeAcoes = todos.filter((f) => /^\s*["']use server["']/.test(fs.readFileSync(f, "utf8")));
 
