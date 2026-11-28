@@ -18,6 +18,8 @@ const { sessaoParaApi, exigirSessao, can, carregarMargemDasObras } = vi.hoisted(
 
 vi.mock("@/lib/auth/sessao", () => ({ sessaoParaApi, exigirSessao }));
 vi.mock("@/lib/permissoes", () => ({ can }));
+// A página agora entra por exigirModulo (Bloco 3 da 7C); aqui ele só devolve a sessão, como o exigirSessao simulado.
+vi.mock("@/lib/auth/modulo", () => ({ exigirModulo: exigirSessao }));
 vi.mock("@/lib/db", () => ({ prisma: {} }));
 vi.mock("@/lib/auditoria", () => ({ registrarAuditoria: vi.fn() }));
 vi.mock("@/modules/relatorios/margem-obras", () => ({

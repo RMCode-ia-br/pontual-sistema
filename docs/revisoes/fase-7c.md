@@ -9,7 +9,7 @@ Plano aprovado pelo Régis em 2026-11-27 (arquivo de plano da sessão; decisões
 | 0 Inventário, decisões, CLAUDE.md | concluído, `verificar` e Vercel verdes | `979d772` |
 | 1 Migração `20261128000000_permissoes_perfis` | concluído: aplicada no banco de São Paulo com OK do Régis; `papel: ADMIN` explícito em `criarUsuario`, seed e nos dois helpers de teste que inserem em SQL cru; `verificar` e Vercel verdes | `8d42985` |
 | 2 Regra pura, sessão com permissões, seed | concluído, `verificar` e Vercel verdes | `22e3484` |
-| 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | concluído (aguardando commit): typecheck, lint, build, 246 unitários da área e E2E `area-logada` verdes | — |
+| 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | concluído: typecheck, lint, build, E2E `area-logada` e os 1.757 unitários verdes (o primeiro push, `54d7ad1`, quebrou o `verificar` por um teste que mocava `@/lib/permissoes` sem `permissoesDe`; corrigido no commit seguinte) | `54d7ad1` + correção |
 | 4 Server Actions | pendente (parada obrigatória ao fim, relatório parcial) | — |
 | 5 Rotas, anexos, busca, CSV | pendente | — |
 | 6 Valores para o Campo, custo, painel, relatórios | pendente | — |
@@ -65,3 +65,5 @@ ALTER TABLE "Usuario" DROP COLUMN "ajustesPermissao", ALTER COLUMN "papel" SET D
 - **Páginas:** `exigirModulo(modulos, { nivel, exige })` (`src/lib/auth/modulo.ts`) nas 90 páginas, aplicado por script com tabela explícita rota → módulo; telas de cadastro novo, edição, reajuste e inventário inicial exigem "alterar"; telas de dinheiro (propostas, financeiro, compras e relatórios financeiros e de vendas) exigem também "ver valores"; preço do kg, reajuste de produtos e margem por obra exigem "ver custo e margem"; cada relatório exige Relatórios mais o módulo de origem. Sem acesso: `/sem-acesso` ("Você não tem acesso a esta área. Fale com o administrador."), que só pede sessão para não haver laço.
 - **Testes:** `tests/unit/paginas-e-menu-permissao.test.ts` (toda página chama `exigirModulo`, exceções com motivo; cada item do menu aponta para uma página que exige o mesmo módulo; menu de cada perfil e do ajuste inválido). Único ajuste num E2E existente: `area-logada.spec.ts` abre "Agenda e tarefas" para achar "Tarefas".
 - **Fica para o Bloco 6:** valores DENTRO de telas que o Campo vê (obra, cliente, visita, linha do tempo, lista de obras), o índice `/relatorios` filtrado por link, e custo nas telas de produto, funcionário e tipologia.
+
+**Lição do Bloco 3:** rodei só os unitários da regra antes do push e o `verificar` pegou `permissao-de-custo.test.ts` (mock de `@/lib/permissoes` sem `permissoesDe`). A partir daqui `npm test` completo (unitários, sem banco, ~80 s) roda antes de CADA push, além de typecheck e lint.
