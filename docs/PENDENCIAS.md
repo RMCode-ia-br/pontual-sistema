@@ -352,3 +352,12 @@ Corrigidos na própria revisão: número negativo saindo do CSV como texto com a
 - [ ] **Sondas de PDF cobrem a janela de ~10 pt por amostragem, não de forma exaustiva (3.6b-3):** a grade determinística e a varredura fina aleatória (600 amostras por tipo de PDF) não provam ausência total de caso-limite; a regressão em `tests/unit/pdf-paginacao.test.ts` varre a altura do cabeçalho e da observação do item 1, mas só com 1 opção. A grade determinística não mede "última página vazia" (só a varredura fina e o teste de regressão medem).
 - [ ] **Estouros de 30 s no projeto celular em duas rodadas completas seguidas (3.6b-1 e 3.6b-3):** na 3.6b-1 foram 8 estouros em 9 arquivos na 1ª rodada (causa não identificada), na 3.6b-3 foi 1 (`configuracoes.spec.ts`, logo). Na 3.6b-3 o trace mostrou a causa: o teste escolheu o arquivo antes de a página hidratar (ver o relatório da fase; corrigido só nesse arquivo com `aguardarHidratado`). **Outros testes podem ter a mesma corrida** (agem logo depois do `goto` sem esperar a hidratação): os que usam `setInputFiles` em `importacao`, `obras-fotos`, `propostas-desenho-item`, `propostas-desenho-novo-item`, `tarefas` e `visita`, e os que disparam colar/soltar logo depois do `goto` (`tipologias-desenho`, `propostas-desenho-tipologia`). Se voltarem estouros no celular, usar `aguardarHidratado` nesses pontos.
 - [ ] **Rodada completa com horário em cada linha (sugestão):** o reporter `list` do Playwright não traz a hora de cada teste, o que dificultou ligar as falhas ao relógio. Nas rodadas da 3.6b-3 o roteiro prefixou a hora em cada linha (`ForEach-Object` com `Get-Date`) e gravou o início e o fim de cada etapa; vale um reporter próprio (ou esse prefixo) como padrão da rodada completa e a guarda do `trace.zip` das falhas.
+
+## Fase 7C: perguntas ao Marcelo (padrão aplicado, não bloqueia)
+- [ ] Escritório acessa Configurações? Padrão: não.
+- [ ] Campo dá baixa de material do estoque na obra? Padrão: não.
+- [ ] Campo pode criar cliente? Padrão: não, só vê (nome, telefone, endereço).
+- [ ] Campo vê relatórios sem valores (obras, produção)? Padrão: não.
+- [ ] Campo concluir uma etapa que dispara o vencimento da parcela: hoje já é assim. Padrão: manter.
+- [ ] Escritório com "excluir e desfazer" só em Comercial, Obras e Financeiro (Estoque e compras, Cadastros e Agenda e tarefas só alterar): confirmar com o Marcelo.
+- [ ] Cancelar obra aprovada (Bloco 8): devolver dinheiro já recebido segue como estorno manual separado; compras e saídas de estoque da obra não são desfeitas, só avisadas.
