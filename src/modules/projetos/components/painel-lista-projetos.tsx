@@ -1,6 +1,7 @@
 import { Download, FolderKanban, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { acoesPermitidas, type PermissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { FiltrosSalvos } from "@/components/lista/filtros-salvos";
@@ -50,7 +51,7 @@ function paraLinha(p: ProjetoDaLista): LinhaLista {
 }
 
 /** Lista de projetos: busca, filtros, ordenação, paginação, colunas, filtros salvos e CSV (spec 7.3, visão em lista). */
-export async function PainelListaProjetos({ brutos, usuarioId }: { brutos: ParametrosBrutos; usuarioId: string }) {
+export async function PainelListaProjetos({ brutos, usuarioId, permitidas }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista }) {
   const { parametros, filtros } = lerListaProjetos(brutos);
   const [{ linhas, paginacao }, salvos, usuarios] = await Promise.all([
     listarProjetos(parametros, filtros),
@@ -117,13 +118,13 @@ export async function PainelListaProjetos({ brutos, usuarioId }: { brutos: Param
             direcao={parametros.direcao}
             colunas={COLUNAS}
             linhas={linhas.map(paraLinha)}
-            acoes={[
+            acoes={acoesPermitidas([
               {
                 rotulo: "Enviar à lixeira",
                 executar: excluirProjetos,
                 confirmar: { titulo: "Enviar os projetos marcados para a lixeira?", descricao: "Eles saem das listas, do funil e da busca, e podem ser restaurados depois na Lixeira.", botao: "Enviar à lixeira" },
               },
-            ]}
+            ], permitidas)}
           />
           <PaginacaoLista base="/projetos" atuais={atuais} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>

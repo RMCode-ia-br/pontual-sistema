@@ -85,6 +85,7 @@ function usosDeCan(): Uso[] {
 const DESPACHANTES: Record<string, string> = {
   "/src/lib/csv/acesso.ts": "recursos das exigências de cada rota: conferidos por tests/unit/rotas-matriz.test.ts",
   "/src/modules/anexos/permissao.ts": "recursos de REGRA_DO_ANEXO: conferidos abaixo",
+  "/src/components/lista/acoes-permitidas.ts": "recurso de cada lista vem da página; as ações em lote são conferidas por tests/unit/valores-nas-telas.test.ts e pela matriz de ações",
 };
 
 describe("varredura de can() no código", () => {

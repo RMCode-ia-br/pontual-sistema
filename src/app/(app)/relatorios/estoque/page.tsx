@@ -8,6 +8,7 @@ import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { permissoesDe } from "@/lib/permissoes";
 import { CORTES_ABC_PADRAO, lerCortesAbc, type CortesAbc } from "@/lib/dominio/relatorio-estoque";
 import { formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
@@ -39,10 +40,14 @@ const th = "px-3 py-2";
 const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function PaginaRelatorioDeEstoque({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo(["RELATORIOS", "ESTOQUE"]);
+  const sessao = await exigirModulo(["RELATORIOS", "ESTOQUE"]);
+  // Fase 7C: sem "ver custo e margem" só a posição (quantidades, mínimo, retalhos e sucata). Valor do estoque, custo, compras por
+  // fornecedor, curva ABC e variação de custo ficam escondidos (a visão pedida pelo endereço cai na posição).
+  const verCusto = permissoesDe(sessao).verCustoMargem;
+  const visoesVisiveis = verCusto ? VISOES : VISOES.filter((v) => v.valor === "posicao");
   const brutos = await searchParams;
   const periodo = lerPeriodoDoRelatorioDeEstoque(brutos);
-  const visao = lerVisao(brutos.visao, VISOES);
+  const visao = lerVisao(brutos.visao, visoesVisiveis);
   const cortes = lerCortesAbc(um(brutos.a), um(brutos.b));
   const doPeriodo = { de: periodo.de, ate: periodo.ate };
   const extras: Record<string, string> = visao === "abc" ? { a: String(cortes.a), b: String(cortes.b) } : {};
@@ -67,8 +72,8 @@ export default async function PaginaRelatorioDeEstoque({ searchParams }: { searc
           </>
         }
       />
-      <NavegacaoDeVisoes visoes={VISOES} atual={visao} parametros={{ ...doPeriodo, ...extras }} rotulo="Visões do relatório de estoque" />
-      {visao === "posicao" ? <VisaoPosicao periodo={periodo} /> : null}
+      {visoesVisiveis.length > 1 ? <NavegacaoDeVisoes visoes={visoesVisiveis} atual={visao} parametros={{ ...doPeriodo, ...extras }} rotulo="Visões do relatório de estoque" /> : null}
+      {visao === "posicao" ? <VisaoPosicao periodo={periodo} verCusto={verCusto} /> : null}
       {visao === "fornecedores" ? <VisaoFornecedores periodo={periodo} /> : null}
       {visao === "abc" ? <VisaoAbc periodo={periodo} cortes={cortes} /> : null}
       {visao === "custos" ? <VisaoCustos periodo={periodo} /> : null}
@@ -96,7 +101,7 @@ function FiltroDePeriodo({ periodo, visao, extras }: { periodo: PeriodoDeCompras
   );
 }
 
-async function VisaoPosicao({ periodo }: { periodo: PeriodoDeCompras }) {
+async function VisaoPosicao({ periodo, verCusto }: { periodo: PeriodoDeCompras; verCusto: boolean }) {
   const r = await carregarRelatorioDeEstoque(periodo);
   const comSaldo = r.linhas.filter((l) => l.saldoMilesimos !== 0);
   const abaixoSemSaldo = r.linhas.filter((l) => l.abaixoDoMinimo && l.saldoMilesimos === 0);
@@ -109,6 +114,8 @@ async function VisaoPosicao({ periodo }: { periodo: PeriodoDeCompras }) {
       ) : null}
 
       <section aria-label="Resumo do estoque" className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {verCusto ? (
+          <>
         <div className="rounded-xl border p-4" title="Como é calculado: soma de saldo × custo unitário (último custo) dos produtos com saldo positivo E custo informado. Produto inativo que ainda tem saldo entra, marcado “Inativo”.">
           <p className="text-muted-foreground text-sm">Estoque valorizado</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{formatarMoeda(r.posicao.valorCentavos)}</p>
@@ -121,6 +128,8 @@ async function VisaoPosicao({ periodo }: { periodo: PeriodoDeCompras }) {
           <p className="mt-1 text-2xl font-semibold tabular-nums">{r.posicao.semCusto}</p>
           <p className="text-muted-foreground mt-1 text-xs">{r.posicao.semCusto > 0 ? "O valor do estoque está incompleto" : "Todos com custo"}</p>
         </div>
+          </>
+        ) : null}
         <div className="rounded-xl border p-4" title="Só conta produto ativo que tem estoque mínimo definido; campo vazio = sem alerta.">
           <p className="text-muted-foreground text-sm">Abaixo do mínimo</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{r.posicao.abaixoDoMinimo}</p>
@@ -164,14 +173,14 @@ async function VisaoPosicao({ periodo }: { periodo: PeriodoDeCompras }) {
                   <p className="text-muted-foreground text-xs">
                     Saldo {qtd(l.saldoMilesimos)} {SIGLA_UNIDADE[l.unidade as (typeof UNIDADES)[number]]}
                     {l.estoqueMinimoMilesimos !== null && l.ativo ? ` · mínimo ${qtd(l.estoqueMinimoMilesimos)}` : ""}
-                    {l.custoUnitarioCentavos !== null ? ` · custo ${formatarMoeda(l.custoUnitarioCentavos)}` : ""}
+                    {verCusto && l.custoUnitarioCentavos !== null ? ` · custo ${formatarMoeda(l.custoUnitarioCentavos)}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 sm:justify-end">
                   {!l.ativo ? <Badge variant="outline">Inativo</Badge> : null}
                   {l.abaixoDoMinimo ? <Badge variant="destructive">Abaixo do mínimo</Badge> : null}
                   {l.saldoMilesimos < 0 ? <Badge variant="outline">Saldo negativo</Badge> : null}
-                  {l.valorCentavos !== null ? <span className="font-medium tabular-nums">{formatarMoeda(l.valorCentavos)}</span> : l.saldoMilesimos > 0 ? <Badge variant="outline">Sem custo</Badge> : null}
+                  {!verCusto ? null : l.valorCentavos !== null ? <span className="font-medium tabular-nums">{formatarMoeda(l.valorCentavos)}</span> : l.saldoMilesimos > 0 ? <Badge variant="outline">Sem custo</Badge> : null}
                 </div>
               </li>
             ))}
@@ -181,7 +190,9 @@ async function VisaoPosicao({ periodo }: { periodo: PeriodoDeCompras }) {
           <p className="text-muted-foreground text-xs">Também abaixo do mínimo, sem saldo: {abaixoSemSaldo.map((l) => `${l.codigo} ${l.descricao}`).join("; ")}.</p>
         ) : null}
       </section>
+      {verCusto ? (
       <ComoECalculado texto="Estoque valorizado = saldo × último custo de cada produto com saldo positivo e custo informado. Produto sem custo fica fora do valor e é contado à parte; produto inativo que ainda tem saldo entra, marcado “Inativo”, e não gera alerta de mínimo." />
+      ) : null}
     </>
   );
 }

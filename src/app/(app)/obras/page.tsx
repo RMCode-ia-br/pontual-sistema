@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_TIPO_ETAPA, TIPOS_DE_ETAPA } from "@/lib/dominio/etapas";
 import { ROTULO_SEMAFORO } from "@/lib/dominio/semaforo";
+import { can } from "@/lib/permissoes";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { cn } from "@/lib/utils";
 import { listarEquipesAtivas } from "@/modules/obras/queries";
@@ -25,13 +26,17 @@ type Busca = Record<string, string | string[] | undefined>;
 const numero = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 export default async function PaginaObras({ searchParams }: { searchParams: Promise<Busca> }) {
-  await exigirModulo("OBRAS");
+  const sessao = await exigirModulo("OBRAS");
   const brutos = await searchParams;
   const filtros = lerFiltrosDeObras(brutos);
   const andamento = filtros.situacao === "andamento";
   const visao = andamento && (Array.isArray(brutos.visao) ? brutos.visao[0] : brutos.visao) === "quadro" ? "quadro" : "lista";
 
-  const [{ linhas, truncado, totalNoBanco, resumo, pontualidade }, usuarios, equipes] = await Promise.all([listarObras(filtros), listarUsuariosAtivos(), listarEquipesAtivas()]);
+  const [{ linhas: linhasCompletas, truncado, totalNoBanco, resumo, pontualidade }, usuarios, equipes] = await Promise.all([listarObras(filtros), listarUsuariosAtivos(), listarEquipesAtivas()]);
+
+  // Sem "ver valores" (Campo) o valor fechado de cada obra nem sai do servidor.
+  const verValores = can(sessao, "ver", "valores");
+  const linhas = verValores ? linhasCompletas : linhasCompletas.map((o) => ({ ...o, valorFechadoCentavos: null }));
 
   const consulta = (extra: Record<string, string | undefined>) =>
     montarConsulta({ situacao: filtros.situacao === "concluidas" ? "concluidas" : undefined, visao: visao === "quadro" ? "quadro" : undefined, busca: filtros.busca, etapa: filtros.etapa, semaforo: filtros.semaforo, responsavel: filtros.responsavelId, equipe: filtros.equipeId, de: filtros.de, ate: filtros.ate, ...extra });

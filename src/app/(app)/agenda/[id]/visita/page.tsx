@@ -7,6 +7,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
 import { exigirModulo } from "@/lib/auth/modulo";
 import { formatarDataHora } from "@/lib/formatadores";
+import { can } from "@/lib/permissoes";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
 import { obterEvento } from "@/modules/agenda/queries";
@@ -18,7 +19,9 @@ export const metadata: Metadata = { title: "Visita" };
 
 /** Tela de visita para o celular: medidas-rascunho com foto por vão, dados da obra e condomínio (R9). */
 export default async function PaginaVisita({ params }: { params: Promise<{ id: string }> }) {
-  await exigirModulo("AGENDA");
+  const sessao = await exigirModulo("AGENDA");
+  // O investimento previsto é valor: o Campo não o vê (e a ação preserva o que já está guardado).
+  const verValores = can(sessao, "ver", "valores");
   const { id } = await params;
   const evento = await obterEvento(id);
   if (!evento || !evento.projetoId) notFound();
@@ -76,7 +79,8 @@ export default async function PaginaVisita({ params }: { params: Promise<{ id: s
               faseDaObra: dados.faseDaObra,
               arquiteto: dados.arquiteto,
               prazoDesejado: dados.prazoDesejado,
-              investimentoPrevistoCentavos: dados.investimentoPrevistoCentavos,
+              investimentoPrevistoCentavos: verValores ? dados.investimentoPrevistoCentavos : null,
+              mostrarInvestimento: verValores,
               temEndereco: !!e,
               condominio: e?.condominio ?? false,
               condominioNome: e?.condominioNome ?? null,

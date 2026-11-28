@@ -6,6 +6,7 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { formatarDataCalendario, formatarTelefone } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { formatarCpf } from "@/lib/validadores";
@@ -24,7 +25,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaFuncionario({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirModulo("CADASTROS");
+  const sessao = await exigirModulo("CADASTROS");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
@@ -53,7 +54,7 @@ export default async function PaginaFuncionario({ params, searchParams }: { para
         titulo={funcionario.nome}
         descricao={descricao}
         acoes={
-          <AcoesDoCadastro
+          <AcoesDoCadastro podeInativar={can(sessao, "inativar", "funcionario")} podeExcluir={can(sessao, "excluir", "funcionario")}
             id={funcionario.id}
             nome={funcionario.nome}
             ativo={funcionario.ativo}

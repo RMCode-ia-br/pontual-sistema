@@ -1,6 +1,7 @@
 import { Download, HardHat, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { acoesPermitidas, type PermissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { FiltrosSalvos } from "@/components/lista/filtros-salvos";
@@ -41,7 +42,7 @@ function paraLinha(f: FuncionarioDaLista): LinhaLista {
   };
 }
 
-export async function PainelListaFuncionarios({ brutos, usuarioId }: { brutos: ParametrosBrutos; usuarioId: string }) {
+export async function PainelListaFuncionarios({ brutos, usuarioId, permitidas }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista }) {
   const { parametros, filtros } = lerListaFuncionarios(brutos);
   const [{ linhas, paginacao }, salvos] = await Promise.all([listarFuncionarios(parametros, filtros), listarFiltrosSalvos(usuarioId, "funcionarios")]);
 
@@ -106,11 +107,11 @@ export async function PainelListaFuncionarios({ brutos, usuarioId }: { brutos: P
             direcao={parametros.direcao}
             colunas={COLUNAS}
             linhas={linhas.map(paraLinha)}
-            acoes={[
+            acoes={acoesPermitidas([
               { rotulo: "Inativar", executar: inativarFuncionarios, confirmar: { titulo: "Inativar os funcionários marcados?", descricao: "Eles saem das escolhas (agenda, equipes), mas nada é apagado. Dá para reativar depois.", botao: "Inativar" } },
               { rotulo: "Reativar", executar: reativarFuncionarios },
               { rotulo: "Enviar à lixeira", executar: excluirFuncionarios, confirmar: { titulo: "Enviar os funcionários marcados para a lixeira?", descricao: "Eles saem das listas, da busca e das equipes, e podem ser restaurados depois na Lixeira.", botao: "Enviar à lixeira" } },
-            ]}
+            ], permitidas)}
           />
           <PaginacaoLista base="/funcionarios" atuais={atuais} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>

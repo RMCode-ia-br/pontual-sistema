@@ -29,12 +29,16 @@ type Props = {
   solucao: string | null;
   /** Hoje (aaaa-mm-dd), sugestão de vencimento da cobrança. */
   hoje: string;
+  /** Pode ajustar a classificação da garantia (ação destrutiva de Obras). Sem isso a seção inteira some (o Campo não ajusta). */
+  podeAjustar: boolean;
+  /** Pode ver valores: sem isso somem o "cobrar a visita", o valor e a geração da cobrança. */
+  verValores: boolean;
 };
 
 const centavosParaTexto = (c: number | null) => (c === null ? "" : (c / 100).toFixed(2).replace(".", ","));
 
 /** Andamento, classificação, cobrança da visita e agendamento de um chamado. */
-export function PainelDoChamado({ id, status, classificacao, classificacaoSugerida, cobrarVisita, valorCobradoCentavos, temObra, cobrancaGerada, solucao, hoje }: Props) {
+export function PainelDoChamado({ id, status, classificacao, classificacaoSugerida, cobrarVisita, valorCobradoCentavos, temObra, cobrancaGerada, solucao, hoje, podeAjustar, verValores }: Props) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
@@ -68,7 +72,7 @@ export function PainelDoChamado({ id, status, classificacao, classificacaoSugeri
 
   const mudar = (para: StatusDoChamado) => executar(() => mudarSituacaoDoChamado({ id, para }));
   const resolver = () => executar(() => mudarSituacaoDoChamado({ id, para: "RESOLVIDO", solucao: textoSolucao }), () => setResolvendo(false));
-  const salvarAjuste = () => executar(() => ajustarChamadoAcao({ id, classificacao: classe, ...(cobrancaGerada ? {} : { cobrarVisita: cobrar, valorCobrado: cobrar ? valor : "" }) }));
+  const salvarAjuste = () => executar(() => ajustarChamadoAcao({ id, classificacao: classe, ...(cobrancaGerada || !verValores ? {} : { cobrarVisita: cobrar, valorCobrado: cobrar ? valor : "" }) }));
   const gerar = () => executar(() => gerarCobranca({ id, vencimento }));
 
   const ajusteMudou = classe !== classificacao || (!cobrancaGerada && (cobrar !== cobrarVisita || (cobrar && valor.trim() !== centavosParaTexto(valorCobradoCentavos))));
@@ -116,6 +120,7 @@ export function PainelDoChamado({ id, status, classificacao, classificacaoSugeri
         ) : null}
       </section>
 
+      {podeAjustar ? (
       <section aria-labelledby="sec-garantia" className="grid gap-3 rounded-xl border p-4">
         <h2 id="sec-garantia" className="font-medium">
           Garantia e cobrança
@@ -129,6 +134,8 @@ export function PainelDoChamado({ id, status, classificacao, classificacaoSugeri
             ))}
           </Selecao>
         </Campo>
+        {verValores ? (
+          <>
         <CaixaMarcacao id="cobrarVisita" rotulo="Cobrar a visita" checked={cobrar} onChange={(e) => setCobrar(e.target.checked)} disabled={cobrancaGerada} />
         {cobrar ? (
           <Campo id="valorCobrado" rotulo="Valor da visita (R$)" erro={erros.valorCobradoCentavos} dica="Não há valor padrão: quem decide é o gestor.">
@@ -136,13 +143,15 @@ export function PainelDoChamado({ id, status, classificacao, classificacaoSugeri
           </Campo>
         ) : null}
         {cobrancaGerada ? <p className="text-muted-foreground text-sm">A cobrança já virou conta a receber da obra; ajuste o valor lá (Financeiro).</p> : null}
+          </>
+        ) : null}
         <div>
           <Button type="button" variant="secondary" onClick={salvarAjuste} disabled={pendente || !ajusteMudou}>
             Salvar ajustes
           </Button>
         </div>
 
-        {cobrar && !cobrancaGerada ? (
+        {verValores && cobrar && !cobrancaGerada ? (
           <div className="grid gap-2 border-t pt-3">
             <p className="text-sm font-medium">Gerar cobrança</p>
             {!temObra ? (
@@ -162,6 +171,7 @@ export function PainelDoChamado({ id, status, classificacao, classificacaoSugeri
           </div>
         ) : null}
       </section>
+      ) : null}
 
       {erro ? (
         <p role="alert" className="text-destructive text-sm">

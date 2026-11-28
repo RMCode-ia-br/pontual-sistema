@@ -28,7 +28,7 @@ export function lerMesesDeReativacao(bruto: string | string[] | undefined): numb
 }
 
 export default async function PaginaDeClientes({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo(["RELATORIOS", "CLIENTES"]);
+  await exigirModulo(["RELATORIOS", "CLIENTES"], { exige: ["valores"] });
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const visao = lerVisao(brutos.visao, VISOES);

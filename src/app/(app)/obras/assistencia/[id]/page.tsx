@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { formatarNumeroDoChamado, ROTULO_STATUS_CHAMADO, ROTULO_TIPO_PROBLEMA } from "@/lib/dominio/chamados";
 import { dataLocalDoInstante, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
@@ -17,7 +18,10 @@ import { obterChamado } from "@/modules/obras/queries-chamados";
 export const metadata: Metadata = { title: "Chamado" };
 
 export default async function PaginaChamado({ params }: { params: Promise<{ id: string }> }) {
-  await exigirModulo("OBRAS");
+  const sessao = await exigirModulo("OBRAS");
+  // Sem "ver valores" o chamado não mostra a cobrança nem o valor da visita; sem "ajustar chamado" não mostra o ajuste da garantia.
+  const verValores = can(sessao, "ver", "valores");
+  const podeAjustar = can(sessao, "ajustar", "chamado");
   const { id } = await params;
   const c = await obterChamado(id);
   if (!c) notFound();
@@ -111,7 +115,7 @@ export default async function PaginaChamado({ params }: { params: Promise<{ id: 
             )}
           </section>
 
-          {c.conta ? (
+          {verValores && c.conta ? (
             <section aria-labelledby="sec-cobranca" className="grid gap-1 rounded-xl border p-4 text-sm">
               <h2 id="sec-cobranca" className="font-medium">
                 Cobrança da visita
@@ -137,11 +141,13 @@ export default async function PaginaChamado({ params }: { params: Promise<{ id: 
           classificacao={c.classificacao}
           classificacaoSugerida={c.classificacaoSugerida}
           cobrarVisita={c.cobrarVisita}
-          valorCobradoCentavos={c.valorCobradoCentavos}
+          valorCobradoCentavos={verValores ? c.valorCobradoCentavos : null}
           temObra={c.projeto !== null}
           cobrancaGerada={c.conta !== null}
           solucao={c.solucao}
           hoje={dataLocalDoInstante(new Date())}
+          podeAjustar={podeAjustar}
+          verValores={verValores}
         />
       </div>
     </>

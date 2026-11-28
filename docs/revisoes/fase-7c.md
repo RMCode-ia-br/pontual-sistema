@@ -11,8 +11,8 @@ Plano aprovado pelo Régis em 2026-11-27 (arquivo de plano da sessão; decisões
 | 2 Regra pura, sessão com permissões, seed | concluído, `verificar` e Vercel verdes | `22e3484` |
 | 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | concluído, CI verde (o primeiro push, `54d7ad1`, quebrou o `verificar` por um teste que mocava `@/lib/permissoes` sem `permissoesDe`; corrigido no commit seguinte) | `54d7ad1` + `a999cda` |
 | 4 Server Actions | concluído; o Régis liberou com "continuar"; CI verde | `d0b4aa7` + `5b434ea` (matriz por perfil e correções do Campo) |
-| 5 Rotas, anexos, busca, CSV | concluído (aguardando commit): typecheck, lint, build e os 2.090 unitários verdes | — |
-| 6 Valores para o Campo, custo, painel, relatórios | pendente | — |
+| 5 Rotas, anexos, busca, CSV | concluído, CI verde | `e1468be` |
+| 6 Valores para o Campo, custo, painel, relatórios | concluído (commit deste bloco): typecheck, lint, build e todos os unitários verdes | (commit do Bloco 6) |
 | 7 Telas de usuários | pendente | — |
 | 8 Cancelar obra aprovada | pendente | — |
 | 9 E2E por perfil | pendente (parar antes da revisão sênior e da suíte) | — |
@@ -147,3 +147,22 @@ Gerado da matriz (209 ações; a `buscaGlobal` filtra por módulo em vez de nega
 - **Busca global** por módulo já tinha entrado no Bloco 4.
 - **Testes novos:** `tests/unit/rotas-matriz.test.ts` (matriz gerada: cada rota × 6 perfis, esperado derivado do `saidaNegada` lido no código, banco falso que explode; rota sem `saidaNegada` falha; feed público confere a Agenda do dono), `tests/unit/anexos-e-csv-permissao.test.ts` (regra de anexo por entidade × perfil, `saidaNegada`, `semColunas`), coluna de dinheiro no `csv-colunas.test.ts`. A varredura de `can(` passou a tratar `acesso.ts` e `anexos/permissao.ts` como despachantes (exceções explicadas) e confere os recursos de anexo. A bomba do banco falso passou a rejeitar com promessa já tratada (consultas em paralelo geravam "unhandled rejection").
 - **Fica para o Bloco 6:** valores DENTRO das telas permitidas (obra, cliente, visita, linha do tempo, lista de obras), botões de WhatsApp com saldo, painel por bloco, aviso da decisão 151 e o índice `/relatorios` filtrado por link, e custo nas telas de produto, funcionário e tipologia. Os E2E das exportações rodam como administrador e não foram reexecutados neste bloco (suíte completa só depois do aviso do Régis).
+
+## Bloco 6 — Valores e custo dentro das telas permitidas
+
+Princípio: valor ou custo é REMOVIDO NO SERVIDOR antes de chegar à tela (nada no HTML), não só escondido; botão que sempre responderia "Sem permissão" não aparece.
+
+- **Nota de campo:** o diário da obra (`interacao-projeto`) passou a aceitar Obras **ou** Comercial (`ou` na regra de permissões): o Campo escreve, não apaga. A matriz regerada mantém as invariantes.
+- **Obra (`/obras/[id]`):** sem "ver valores" somem o valor fechado (nem no objeto), a aba Parcelas, o "recebido" das compras e o valor da visita; sem "ver custo e margem" some a aba Custo e margem (o endereço direto cai no resumo) e o aviso "sem custo" dos materiais; o diário tem o R$ trocado por "valor oculto" por função pura (`ocultarValoresDoTexto`); "Ver projeto" e "Voltar para os projetos" só com Comercial (o Campo volta para as obras).
+- **Assistência:** lista e chamado sem valor da visita; o painel do chamado esconde a seção de garantia e cobrança de quem não ajusta, e o "cobrar a visita" e a geração da cobrança de quem não vê valores; a ação não envia nem apaga o valor nesses casos.
+- **Lista de obras:** sem valor fechado.
+- **Cliente (`/clientes/[id]`):** quem só vê Clientes recebe ficha de leitura (nome, telefone, WhatsApp, endereços, contatos), sem CPF/CNPJ, e-mail, origem, observações nem formulário; abas Projetos (Comercial e valores), Financeiro (Financeiro e valores), Arquivos e Linha do tempo (quem altera Clientes) e Assistência (Obras); botões de inativar e de lixeira só com a permissão destrutiva.
+- **Visita:** o "Investimento previsto" some sem valores e `salvarDadosDaObra` PRESERVA o valor guardado (campo ausente não vira "apagar").
+- **Comercial exige valores:** Funil, Projetos e Propostas (páginas, menu, atalho do celular, busca global, aba Projetos do cliente) mostram dinheiro por natureza, então exigem também "ver valores".
+- **Ações em lote e botões:** `AcoesDoCadastro` e as cinco listas (clientes, fornecedores, funcionários, produtos, projetos) só oferecem inativar, reativar e lixeira a quem pode; botão "Novo …" só para quem cria.
+- **Painel:** cada bloco só aparece se a pessoa abre a lista por trás do número (`blocosDoPainel`, função pura): Campo vê agenda, obras e clientes; nenhum bloco de dinheiro, vendas ou custo.
+- **Relatórios:** tabela única de acesso (`src/modules/relatorios/acesso.ts`) usada pelo índice e conferida por teste contra o `exigirModulo` de cada página; relatórios que mostram dinheiro (vendas, fechamento, funil, clientes, produtos e preços, obras, faturamento, financeiros) exigem valores na página e no CSV; o de estoque sem custo mostra só a posição (quantidades, mínimo, retalhos, sucata).
+- **Decisão 151:** o aviso com números de propostas só aparece em telas e blocos que exigem valores (painel, vendas, faturamento) ou custo (aba e relatório de margem); quem não os abre nem chega a ele.
+- **Testes novos:** `tests/unit/valores-nas-telas.test.ts` (acesso dos relatórios × página × CSV, blocos do painel, sanitizadores de obra, ações em lote por perfil), `tests/unit/texto-sem-valores.test.ts`; a matriz de ações passou a ler só `!can(` como guarda (um `can` que decide um detalhe não é guarda).
+
+**Pendência deste bloco (vai para PENDENCIAS):** as telas de produto, funcionário (salário) e tipologia (composição) mostram custo a quem tem o módulo mas não "ver custo e margem" POR AJUSTE; os perfis prontos não são afetados (Escritório tem custo, Campo não tem esses módulos). As ações, o CSV e o relatório de estoque já estão fechados; o painel monta todos os dados no servidor e esconde o bloco (só otimização pendente).

@@ -26,10 +26,12 @@ type Props = {
   obra: ObraDetalhe;
   nomes: Record<string, string>;
   pedidoDeAvaliacao: { link: string | null; faltando: string[] };
+  /** Sem "ver valores" (Campo): o valor fechado não aparece nem no HTML. */
+  mostrarValores: boolean;
 };
 
 /** Visão geral da obra: andamento, prazo, avisos, condomínio, garantia e (ao concluir) o pedido de avaliação. */
-export function ResumoDaObra({ obra, nomes, pedidoDeAvaliacao }: Props) {
+export function ResumoDaObra({ obra, nomes, pedidoDeAvaliacao, mostrarValores }: Props) {
   const concluida = obra.status === "CONCLUIDO";
   const ativas = obra.etapas.filter((e) => e.status !== "DISPENSADA");
   const feitas = ativas.filter((e) => e.status === "CONCLUIDA").length;
@@ -97,7 +99,7 @@ export function ResumoDaObra({ obra, nomes, pedidoDeAvaliacao }: Props) {
           </Item>
           <Item rotulo="Responsável">{obra.responsavel?.nome ?? null}</Item>
           <Item rotulo="Endereço da obra">{obra.enderecoTexto}</Item>
-          <Item rotulo="Valor fechado">{obra.valorFechadoCentavos !== null ? formatarMoeda(obra.valorFechadoCentavos) : null}</Item>
+          {mostrarValores ? <Item rotulo="Valor fechado">{obra.valorFechadoCentavos !== null ? formatarMoeda(obra.valorFechadoCentavos) : null}</Item> : null}
         </dl>
       </section>
 

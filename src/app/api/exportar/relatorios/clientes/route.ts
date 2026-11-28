@@ -32,7 +32,7 @@ const COLUNAS_CIDADE: ColunaDeCsv<LinhaDeCidade>[] = [
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
-  const negado = saidaNegada(usuario, { recursos: ["relatorio", "cliente"] });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "cliente"], valores: true });
   if (negado) return negado;
   const acesso = acessoDoCsv(usuario);
   const hoje = dataLocalDoInstante(new Date());

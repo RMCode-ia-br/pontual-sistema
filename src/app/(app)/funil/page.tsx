@@ -16,7 +16,7 @@ import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 export const metadata: Metadata = { title: "Funil" };
 
 export default async function PaginaFunil({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo("COMERCIAL");
+  await exigirModulo("COMERCIAL", { exige: ["valores"] });
   const brutos = await searchParams;
   const { parametros, filtros } = lerListaProjetos(brutos);
   const [colunas, motivos, usuarios] = await Promise.all([carregarFunil(filtros, parametros.busca), listarMotivosPerda(), listarUsuariosAtivos()]);

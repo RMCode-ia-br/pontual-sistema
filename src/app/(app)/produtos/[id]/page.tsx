@@ -6,6 +6,7 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { abaixoDoMinimo, formatarQuantidade } from "@/lib/dominio/estoque";
 import { prisma } from "@/lib/db";
 import { dataLocalDoInstante, formatarData, formatarMoeda } from "@/lib/formatadores";
@@ -32,7 +33,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaProduto({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirModulo("ESTOQUE");
+  const sessao = await exigirModulo("ESTOQUE");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
@@ -59,7 +60,7 @@ export default async function PaginaProduto({ params, searchParams }: { params: 
         titulo={produto.descricao}
         descricao={descricao}
         acoes={
-          <AcoesDoCadastro
+          <AcoesDoCadastro podeInativar={can(sessao, "inativar", "produto")} podeExcluir={can(sessao, "excluir", "produto")}
             id={produto.id}
             nome={produto.descricao}
             ativo={produto.ativo}

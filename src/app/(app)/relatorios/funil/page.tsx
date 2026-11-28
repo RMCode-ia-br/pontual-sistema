@@ -46,7 +46,7 @@ function Definicao({ titulo, children }: { titulo: string; children: React.React
 }
 
 export default async function PaginaRelatorioFunil({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo(["RELATORIOS", "COMERCIAL"]);
+  await exigirModulo(["RELATORIOS", "COMERCIAL"], { exige: ["valores"] });
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const filtros = lerFiltrosDoRelatorio(brutos, hoje);

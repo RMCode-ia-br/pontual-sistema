@@ -6,6 +6,8 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { semValoresNaLinhaDoTempo } from "@/lib/dominio/texto-sem-valores";
+import { can, permissoesDe, podeVerModulo } from "@/lib/permissoes";
 import { prisma } from "@/lib/db";
 import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { dataLocalDoInstante, formatarData, formatarTelefone } from "@/lib/formatadores";
@@ -17,6 +19,7 @@ import { listarAnexos } from "@/modules/anexos/queries";
 import { excluirClientes, inativarClientes, reativarClientes } from "@/modules/clientes/actions/clientes";
 import { excluirInteracaoDoCliente, registrarInteracaoDoCliente } from "@/modules/clientes/actions/interacoes";
 import { BotoesDeContato } from "@/modules/clientes/components/botoes-de-contato";
+import { ContatosSomenteLeitura, DadosSomenteLeitura, EnderecosSomenteLeitura } from "@/modules/clientes/components/ficha-somente-leitura";
 import { FormCliente } from "@/modules/clientes/components/form-cliente";
 import { LinhaDoTempo } from "@/modules/clientes/components/linha-do-tempo";
 import { SecaoContatos } from "@/modules/clientes/components/secao-contatos";
@@ -28,6 +31,7 @@ import { FinanceiroDoClienteSecao } from "@/modules/financeiro/components/financ
 import { financeiroDoCliente } from "@/modules/financeiro/queries-receber";
 import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
 import { listarChamados } from "@/modules/obras/queries-chamados";
+import { semValoresNosChamados } from "@/modules/obras/sem-valores";
 import { ProjetosDoCliente } from "@/modules/projetos/components/projetos-do-cliente";
 import { contarProjetosDoCliente, listarProjetosDoCliente } from "@/modules/projetos/queries";
 
@@ -45,13 +49,25 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaCliente({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirModulo("CLIENTES");
+  const sessao = await exigirModulo("CLIENTES");
+  // Fase 7C: quem só "pode ver" Clientes (Campo) recebe uma ficha de leitura (nome, telefone, endereço, contatos). Projetos,
+  // financeiro, arquivos e linha do tempo aparecem só para quem tem o módulo de origem; valores só com "ver valores".
+  const permissoes = permissoesDe(sessao);
+  const verValores = permissoes.verValores;
+  const podeEditar = can(sessao, "editar", "cliente");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
   const cliente = await obterCliente(id);
   if (!cliente) notFound();
-  const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "dados";
+  const abasVisiveis = ABAS.filter((a) => {
+    if (a.valor === "projetos") return podeVerModulo(permissoes, "COMERCIAL") && verValores;
+    if (a.valor === "assistencia") return podeVerModulo(permissoes, "OBRAS");
+    if (a.valor === "financeiro") return podeVerModulo(permissoes, "FINANCEIRO") && verValores;
+    if (a.valor === "anexos" || a.valor === "linha-do-tempo") return podeEditar;
+    return true;
+  });
+  const aba = abasVisiveis.find((a) => a.valor === abaBruta)?.valor ?? "dados";
 
   const empresa = await obterConfiguracao();
   const mensagens = await listarMensagensProntas({
@@ -69,9 +85,9 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
   const documento = cliente.cpfCnpj ? (cliente.tipoPessoa === "PF" ? formatarCpf(cliente.cpfCnpj) : formatarCnpj(cliente.cpfCnpj)) : null;
   const descricao = [
     cliente.tipoPessoa === "PF" ? "Pessoa física" : "Pessoa jurídica",
-    documento,
+    podeEditar ? documento : null,
     cliente.telefone || cliente.whatsapp ? formatarTelefone(cliente.whatsapp || cliente.telefone) : null,
-    cliente.origem ? `Origem: ${ROTULO_ORIGEM[cliente.origem]}` : null,
+    podeEditar && cliente.origem ? `Origem: ${ROTULO_ORIGEM[cliente.origem]}` : null,
     `Cadastrado em ${formatarData(cliente.criadoEm)}`,
   ]
     .filter(Boolean)
@@ -88,7 +104,10 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
         titulo={cliente.nome}
         descricao={descricao}
         acoes={
+          podeEditar ? (
           <AcoesDoCadastro
+            podeInativar={can(sessao, "inativar", "cliente")}
+            podeExcluir={can(sessao, "excluir", "cliente")}
             id={cliente.id}
             nome={cliente.nome}
             ativo={cliente.ativo}
@@ -98,6 +117,7 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
             excluir={excluirClientes}
             preservado="Endereços, contatos e histórico são preservados."
           />
+          ) : undefined
         }
       />
 
@@ -124,11 +144,11 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       </div>
 
       <div className="mb-6">
-        <BotoesDeContato telefone={cliente.telefone} whatsapp={cliente.whatsapp} email={cliente.email} mensagens={mensagens} />
+        <BotoesDeContato telefone={cliente.telefone} whatsapp={cliente.whatsapp} email={podeEditar ? cliente.email : null} mensagens={mensagens} />
       </div>
 
       <nav aria-label="Seções do cliente" className="mb-6 flex gap-1 overflow-x-auto border-b">
-        {ABAS.map((a) => (
+        {abasVisiveis.map((a) => (
           <Link
             key={a.valor}
             href={`/clientes/${cliente.id}?aba=${a.valor}`}
@@ -144,7 +164,12 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
         ))}
       </nav>
 
-      {aba === "dados" ? (
+      {aba === "dados" && !podeEditar ? (
+        <div className="max-w-3xl">
+          <DadosSomenteLeitura cliente={cliente} />
+        </div>
+      ) : null}
+      {aba === "dados" && podeEditar ? (
         <div className="max-w-3xl">
           <FormCliente
             cliente={{
@@ -170,12 +195,12 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       ) : null}
       {aba === "enderecos" ? (
         <div className="max-w-3xl">
-          <SecaoEnderecos clienteId={cliente.id} enderecos={await listarEnderecos(cliente.id)} />
+          {podeEditar ? <SecaoEnderecos clienteId={cliente.id} enderecos={await listarEnderecos(cliente.id)} /> : <EnderecosSomenteLeitura enderecos={await listarEnderecos(cliente.id)} />}
         </div>
       ) : null}
       {aba === "contatos" ? (
         <div className="max-w-3xl">
-          <SecaoContatos clienteId={cliente.id} contatos={await listarContatos(cliente.id)} />
+          {podeEditar ? <SecaoContatos clienteId={cliente.id} contatos={await listarContatos(cliente.id)} /> : <ContatosSomenteLeitura contatos={await listarContatos(cliente.id)} />}
         </div>
       ) : null}
       {aba === "projetos" ? (
@@ -185,7 +210,7 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       ) : null}
       {aba === "assistencia" ? (
         <div className="max-w-3xl">
-          <SecaoDeAssistencia chamados={(await listarChamados({ situacao: "todos", busca: "", clienteId: cliente.id })).linhas} novoHref={`/obras/assistencia/novo?cliente=${cliente.id}`} />
+          <SecaoDeAssistencia chamados={semValoresNosChamados((await listarChamados({ situacao: "todos", busca: "", clienteId: cliente.id })).linhas, verValores)} novoHref={`/obras/assistencia/novo?cliente=${cliente.id}`} />
         </div>
       ) : null}
       {aba === "financeiro" ? (
@@ -200,7 +225,7 @@ export default async function PaginaCliente({ params, searchParams }: { params: 
       ) : null}
       {aba === "linha-do-tempo" ? (
         <div className="max-w-3xl">
-          <LinhaDoTempo vinculo={{ campo: "clienteId", id: cliente.id }} itens={await listarInteracoes(cliente.id)} registrar={registrarInteracaoDoCliente} excluir={excluirInteracaoDoCliente} />
+          <LinhaDoTempo vinculo={{ campo: "clienteId", id: cliente.id }} itens={semValoresNaLinhaDoTempo(await listarInteracoes(cliente.id), verValores)} registrar={registrarInteracaoDoCliente} excluir={excluirInteracaoDoCliente} />
         </div>
       ) : null}
     </>

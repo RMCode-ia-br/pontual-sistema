@@ -21,10 +21,14 @@ type Props = {
   excluir: (ids: string[]) => Promise<ResultadoAcao>;
   /** Frase do que fica preservado ao ir para a lixeira. */
   preservado?: string;
+  /** Pode inativar (ação destrutiva do módulo). Sem isso o botão some. Padrão: sim. */
+  podeInativar?: boolean;
+  /** Pode enviar à lixeira (ação destrutiva do módulo). Sem isso o botão some. Padrão: sim. */
+  podeExcluir?: boolean;
 };
 
 /** Inativar/reativar e enviar à lixeira, direto da ficha de um cadastro. */
-export function AcoesDoCadastro({ id, nome, ativo, voltarPara, inativar, reativar, excluir, preservado = "O histórico é preservado." }: Props) {
+export function AcoesDoCadastro({ id, nome, ativo, voltarPara, inativar, reativar, excluir, preservado = "O histórico é preservado.", podeInativar = true, podeExcluir = true }: Props) {
   const router = useRouter();
   const [confirmando, setConfirmando] = useState<"inativar" | "lixeira" | null>(null);
   const [pendente, iniciar] = useTransition();
@@ -46,17 +50,21 @@ export function AcoesDoCadastro({ id, nome, ativo, voltarPara, inativar, reativa
   return (
     <>
       {ativo ? (
-        <Button type="button" variant="outline" onClick={() => setConfirmando("inativar")}>
-          <Archive aria-hidden /> Inativar
-        </Button>
+        podeInativar ? (
+          <Button type="button" variant="outline" onClick={() => setConfirmando("inativar")}>
+            <Archive aria-hidden /> Inativar
+          </Button>
+        ) : null
       ) : (
         <Button type="button" variant="outline" disabled={pendente} onClick={() => executar("reativar")}>
           <ArchiveRestore aria-hidden /> Reativar
         </Button>
       )}
-      <Button type="button" variant="destructive" onClick={() => setConfirmando("lixeira")}>
-        <Trash2 aria-hidden /> Enviar à lixeira
-      </Button>
+      {podeExcluir ? (
+        <Button type="button" variant="destructive" onClick={() => setConfirmando("lixeira")}>
+          <Trash2 aria-hidden /> Enviar à lixeira
+        </Button>
+      ) : null}
 
       <ConfirmarAcao
         aberto={confirmando === "inativar"}

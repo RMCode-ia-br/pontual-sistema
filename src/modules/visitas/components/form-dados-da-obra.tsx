@@ -23,6 +23,8 @@ export type DadosDaObraParaForm = {
   arquiteto: { id: string; nome: string } | null;
   prazoDesejado: string | null;
   investimentoPrevistoCentavos: number | null;
+  /** Só com "ver valores" (o Campo não vê nem preenche o investimento). */
+  mostrarInvestimento: boolean;
   /** Sem endereço da obra no projeto, o condomínio não tem onde ser guardado. */
   temEndereco: boolean;
   condominio: boolean;
@@ -72,9 +74,11 @@ export function FormDadosDaObra({ dados }: { dados: DadosDaObraParaForm }) {
       <Campo id="prazoDesejado" rotulo="Prazo desejado" erro={erros.prazoDesejado}>
         <Input id="prazoDesejado" name="prazoDesejado" maxLength={120} defaultValue={dados.prazoDesejado ?? ""} autoComplete="off" className="h-11 text-base" {...ariaDoCampo("prazoDesejado", erros.prazoDesejado)} />
       </Campo>
+      {dados.mostrarInvestimento ? (
       <Campo id="investimentoPrevistoCentavos" rotulo="Investimento previsto (R$)" erro={erros.investimentoPrevistoCentavos}>
         <CampoMascarado id="investimentoPrevistoCentavos" name="investimentoPrevistoCentavos" mascara={mascararMoeda} defaultValue={centavosParaCampo(dados.investimentoPrevistoCentavos)} inputMode="numeric" autoComplete="off" placeholder="0,00" className="h-11 text-base" {...ariaDoCampo("investimentoPrevistoCentavos", erros.investimentoPrevistoCentavos)} />
       </Campo>
+      ) : null}
 
       <fieldset className="grid gap-3 sm:col-span-2" disabled={!dados.temEndereco}>
         <legend className="text-sm font-medium">Condomínio</legend>

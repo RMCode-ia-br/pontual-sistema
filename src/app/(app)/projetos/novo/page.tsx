@@ -11,7 +11,7 @@ import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 export const metadata: Metadata = { title: "Novo projeto" };
 
 export default async function PaginaNovoProjeto({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
-  const usuario = await exigirModulo("COMERCIAL", { nivel: "alterar" });
+  const usuario = await exigirModulo("COMERCIAL", { nivel: "alterar", exige: ["valores"] });
   const { cliente: clienteId } = await searchParams;
 
   // Vindo da ficha do cliente (?cliente=ID): já chega com o cliente escolhido.

@@ -55,9 +55,9 @@ export const MENU: GrupoMenu[] = [
     titulo: "Comercial",
     icone: Briefcase,
     itens: [
-      { titulo: "Funil", href: "/funil", modulo: "COMERCIAL" },
-      { titulo: "Projetos", href: "/projetos", modulo: "COMERCIAL" },
-      { titulo: "Propostas", href: "/propostas", modulo: "COMERCIAL" },
+      { titulo: "Funil", href: "/funil", modulo: "COMERCIAL", exige: "valores" },
+      { titulo: "Projetos", href: "/projetos", modulo: "COMERCIAL", exige: "valores" },
+      { titulo: "Propostas", href: "/propostas", modulo: "COMERCIAL", exige: "valores" },
     ],
   },
   {
@@ -133,11 +133,11 @@ export const MENU: GrupoMenu[] = [
 /** Candidatos da barra inferior no celular, em ordem de prioridade; a barra mostra até `LIMITE_DA_BARRA_CELULAR` que a pessoa pode ver. */
 const CANDIDATOS_CELULAR = [
   { titulo: "Painel", href: "/", icone: LayoutDashboard, modulo: "PAINEL" },
-  { titulo: "Funil", href: "/funil", icone: FolderKanban, modulo: "COMERCIAL" },
+  { titulo: "Funil", href: "/funil", icone: FolderKanban, modulo: "COMERCIAL", exige: "valores" },
   { titulo: "Agenda", href: "/agenda", icone: CalendarDays, modulo: "AGENDA" },
   { titulo: "Tarefas", href: "/tarefas", icone: CheckSquare, modulo: "AGENDA" },
   { titulo: "Obras", href: "/obras", icone: HardHat, modulo: "OBRAS" },
-] as const satisfies readonly { titulo: string; href: string; icone: LucideIcon; modulo: Modulo }[];
+] as const satisfies readonly { titulo: string; href: string; icone: LucideIcon; modulo: Modulo; exige?: "valores" | "custo" }[];
 
 export const LIMITE_DA_BARRA_CELULAR = 4;
 
@@ -165,7 +165,7 @@ export function menuVisivel(p: PermissoesDoMenu): GrupoMenu[] {
 
 /** Atalhos da barra inferior no celular para estas permissões. */
 export function menuCelularVisivel(p: PermissoesDoMenu) {
-  return CANDIDATOS_CELULAR.filter((c) => liberado(p, c.modulo)).slice(0, LIMITE_DA_BARRA_CELULAR);
+  return CANDIDATOS_CELULAR.filter((c) => liberado(p, c.modulo, "exige" in c ? c.exige : undefined)).slice(0, LIMITE_DA_BARRA_CELULAR);
 }
 
 export function rotaAtiva(caminhoAtual: string, href: string): boolean {

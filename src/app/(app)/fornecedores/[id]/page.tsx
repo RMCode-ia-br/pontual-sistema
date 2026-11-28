@@ -6,6 +6,7 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { formatarData, formatarTelefone } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { formatarCnpj } from "@/lib/validadores";
@@ -23,7 +24,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaFornecedor({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirModulo("CADASTROS");
+  const sessao = await exigirModulo("CADASTROS");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
@@ -51,7 +52,7 @@ export default async function PaginaFornecedor({ params, searchParams }: { param
         titulo={fornecedor.razaoSocial}
         descricao={descricao}
         acoes={
-          <AcoesDoCadastro
+          <AcoesDoCadastro podeInativar={can(sessao, "inativar", "fornecedor")} podeExcluir={can(sessao, "excluir", "fornecedor")}
             id={fornecedor.id}
             nome={fornecedor.razaoSocial}
             ativo={fornecedor.ativo}

@@ -41,8 +41,8 @@ export async function buscaGlobal(termo: string): Promise<ResultadoBusca> {
   // Cada grupo só é consultado se a pessoa pode ver o módulo dele (Fase 7C): quem não pode recebe a lista vazia, sem tocar o banco.
   const pode = {
     cliente: can(sessao, "ver", "cliente"),
-    projeto: can(sessao, "ver", "projeto"),
-    proposta: can(sessao, "ver", "proposta"),
+    projeto: can(sessao, "ver", "projeto") && can(sessao, "ver", "valores"), // as telas de Comercial exigem valores
+    proposta: can(sessao, "ver", "proposta") && can(sessao, "ver", "valores"), // as telas de Comercial exigem valores
     fornecedor: can(sessao, "ver", "fornecedor"),
     produto: can(sessao, "ver", "produto"),
     funcionario: can(sessao, "ver", "funcionario"),

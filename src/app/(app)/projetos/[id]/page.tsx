@@ -45,7 +45,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaProjeto({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  const usuario = await exigirModulo("COMERCIAL");
+  const usuario = await exigirModulo("COMERCIAL", { exige: ["valores"] });
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 

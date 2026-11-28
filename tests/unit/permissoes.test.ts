@@ -94,6 +94,16 @@ describe("decidir: verbo × recurso × perfil", () => {
     expect(decidir(semCadastros, "editar", "tipologia-de-proposta")).toBe(false);
   });
 
+  it("'ou': a nota do diário da obra serve a Obras OU a Comercial (nota de campo)", () => {
+    expect(decidir(permissoesEfetivas("CAMPO"), "criar", "interacao-projeto")).toBe(true); // Campo altera Obras
+    expect(decidir(permissoesEfetivas("CAMPO"), "excluir", "interacao-projeto")).toBe(false); // e não apaga
+    const soComercial = permissoesEfetivas("CAMPO", { modulos: { OBRAS: { nivel: "SEM_ACESSO" }, COMERCIAL: { nivel: "ALTERAR" } } });
+    expect(decidir(soComercial, "criar", "interacao-projeto")).toBe(true);
+    const nenhum = permissoesEfetivas("CAMPO", { modulos: { OBRAS: { nivel: "VER" } } });
+    expect(decidir(nenhum, "criar", "interacao-projeto")).toBe(false);
+    expect(decidir(permissoesEfetivas("ESCRITORIO"), "excluir", "interacao-projeto")).toBe(true);
+  });
+
   it("recurso que exige custo some sem 'ver custo e margem' mesmo com o módulo", () => {
     const semCusto = permissoesEfetivas("ADMIN", { verCustoMargem: false });
     expect(decidir(semCusto, "editar", "precoKg")).toBe(false);

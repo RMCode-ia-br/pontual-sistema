@@ -116,7 +116,8 @@ export async function salvarDadosDaObra(_anterior: ResultadoAcao | null, formDat
           faseDaObra: d.faseDaObra ?? null,
           arquitetoId: d.arquitetoId ?? null,
           prazoDesejado: d.prazoDesejado ?? null,
-          investimentoPrevistoCentavos: d.investimentoPrevistoCentavos ?? null,
+          // Sem "ver valores" o campo nem aparece na tela: o valor guardado é PRESERVADO (campo ausente não é "apagar").
+          ...(can(sessao, "ver", "valores") ? { investimentoPrevistoCentavos: d.investimentoPrevistoCentavos ?? null } : {}),
           atualizadoPorId: sessao.id,
         },
         select: { faseDaObra: true, arquitetoId: true, prazoDesejado: true, investimentoPrevistoCentavos: true },

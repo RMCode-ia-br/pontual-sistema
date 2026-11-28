@@ -9,6 +9,8 @@ import { exigirModulo } from "@/lib/auth/modulo";
 import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
 import { prisma } from "@/lib/db";
+import { semValoresNaLinhaDoTempo } from "@/lib/dominio/texto-sem-valores";
+import { permissoesDe, podeVerModulo } from "@/lib/permissoes";
 import { cn } from "@/lib/utils";
 import { LinhaDoTempo } from "@/modules/clientes/components/linha-do-tempo";
 import { listarInteracoesDoVinculo } from "@/modules/clientes/queries";
@@ -25,6 +27,7 @@ import { SemaforoTag } from "@/modules/obras/components/semaforo-tag";
 import { listarEquipesAtivas, listarMotivosDeBloqueio, obterObra, obterPedidoDeAvaliacao } from "@/modules/obras/queries";
 import { SecaoDeAssistencia } from "@/modules/obras/components/secao-de-assistencia";
 import { listarChamados } from "@/modules/obras/queries-chamados";
+import { semValoresNosChamados, semValoresNosMateriais } from "@/modules/obras/sem-valores";
 import { listarFotosDaObra } from "@/modules/obras/queries-fotos";
 import { AvisoDeDadosIncompletos } from "@/components/relatorios/aviso-de-dados-incompletos";
 import { ouAviso } from "@/modules/indicadores/dados-do-aceite";
@@ -47,18 +50,25 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaObra({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirModulo("OBRAS");
+  const sessao = await exigirModulo("OBRAS");
+  // Valores e custo dentro de uma tela que o Campo vê: removidos NO SERVIDOR (nada vai no HTML), não só escondidos (Fase 7C).
+  const permissoes = permissoesDe(sessao);
+  const { verValores, verCustoMargem } = permissoes;
+  const verComercial = podeVerModulo(permissoes, "COMERCIAL") && verValores;
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
-  const obra = await obterObra(id);
+  const obraCompleta = await obterObra(id);
+  const obra = obraCompleta && !verValores ? { ...obraCompleta, valorFechadoCentavos: null, parcelas: [] } : obraCompleta;
   if (!obra) {
     // Projeto que ainda não foi aprovado não é obra: leva à ficha comercial.
     const projeto = await prisma.projeto.findFirst({ where: { id, deletadoEm: null }, select: { id: true } });
-    if (projeto) redirect(`/projetos/${id}`);
+    if (projeto) redirect(verComercial ? `/projetos/${id}` : "/obras");
     notFound();
   }
-  const aba = ABAS.find((a) => a.valor === abaBruta)?.valor ?? "resumo";
+  // Parcelas exigem "ver valores"; Custo e margem exige "ver custo e margem" (a aba some e o endereço direto cai no resumo).
+  const abasVisiveis = ABAS.filter((a) => (a.valor !== "financeiro" || verValores) && (a.valor !== "custo" || verCustoMargem));
+  const aba = abasVisiveis.find((a) => a.valor === abaBruta)?.valor ?? "resumo";
   // Aba de custo: valor do aceite faltando em proposta aprovada vira aviso (o número fica bloqueado), não erro da página.
   const custoDaObra = aba === "custo" ? await ouAviso(() => carregarCustoDaObra(obra.id)) : null;
   const concluida = obra.status === "CONCLUIDO";
@@ -71,17 +81,19 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
   return (
     <>
       <p className="mb-2 text-sm">
-        <Link href="/projetos" className="text-muted-foreground hover:underline">
-          ← Voltar para os projetos
+        <Link href={verComercial ? "/projetos" : "/obras"} className="text-muted-foreground hover:underline">
+          {verComercial ? "← Voltar para os projetos" : "← Voltar para as obras"}
         </Link>
       </p>
       <CabecalhoPagina
         titulo={obra.titulo}
         descricao={`${obra.codigo} · ${obra.cliente.nome}`}
         acoes={
-          <Link href={`/projetos/${obra.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
-            Ver projeto
-          </Link>
+          verComercial ? (
+            <Link href={`/projetos/${obra.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
+              Ver projeto
+            </Link>
+          ) : undefined
         }
       />
 
@@ -96,7 +108,7 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
       </div>
 
       <nav aria-label="Seções da obra" className="mb-6 flex gap-1 overflow-x-auto border-b">
-        {ABAS.map((a) => (
+        {abasVisiveis.map((a) => (
           <Link
             key={a.valor}
             href={`/obras/${obra.id}?aba=${a.valor}`}
@@ -112,7 +124,7 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
         ))}
       </nav>
 
-      {aba === "resumo" ? <ResumoDaObra obra={obra} nomes={nomes} pedidoDeAvaliacao={await obterPedidoDeAvaliacao(obra)} /> : null}
+      {aba === "resumo" ? <ResumoDaObra obra={obra} nomes={nomes} pedidoDeAvaliacao={await obterPedidoDeAvaliacao(obra)} mostrarValores={verValores} /> : null}
 
       {aba === "etapas" ? (
         <div className="grid gap-6">
@@ -158,19 +170,19 @@ export default async function PaginaObra({ params, searchParams }: { params: Pro
         </div>
       ) : null}
 
-      {aba === "materiais" ? <MateriaisDaObra projetoId={obra.id} m={await carregarMateriaisDaObra(obra.id)} /> : null}
+      {aba === "materiais" ? <MateriaisDaObra projetoId={obra.id} m={semValoresNosMateriais(await carregarMateriaisDaObra(obra.id), { valores: verValores, custo: verCustoMargem })} /> : null}
 
       {aba === "custo" ? (custoDaObra?.ok ? <CustoDaObraAba c={custoDaObra.dado} /> : custoDaObra ? <AvisoDeDadosIncompletos mensagem={custoDaObra.mensagem} /> : null) : null}
 
       {aba === "assistencia" ? (
         <div className="max-w-3xl">
-          <SecaoDeAssistencia chamados={(await listarChamados({ situacao: "todos", busca: "", projetoId: obra.id })).linhas} novoHref={`/obras/assistencia/novo?projeto=${obra.id}`} />
+          <SecaoDeAssistencia chamados={semValoresNosChamados((await listarChamados({ situacao: "todos", busca: "", projetoId: obra.id })).linhas, verValores)} novoHref={`/obras/assistencia/novo?projeto=${obra.id}`} />
         </div>
       ) : null}
 
       {aba === "historico" ? (
         <div className="max-w-3xl">
-          <LinhaDoTempo vinculo={{ campo: "projetoId", id: obra.id }} itens={await listarInteracoesDoVinculo({ projetoId: obra.id })} registrar={registrarInteracaoDoProjeto} excluir={excluirInteracaoDoProjeto} />
+          <LinhaDoTempo vinculo={{ campo: "projetoId", id: obra.id }} itens={semValoresNaLinhaDoTempo(await listarInteracoesDoVinculo({ projetoId: obra.id }), verValores)} registrar={registrarInteracaoDoProjeto} excluir={excluirInteracaoDoProjeto} />
         </div>
       ) : null}
     </>

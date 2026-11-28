@@ -1,6 +1,7 @@
 import { Download, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 
+import { acoesPermitidas, type PermissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { FiltrosSalvos } from "@/components/lista/filtros-salvos";
@@ -41,7 +42,7 @@ function paraLinha(f: FornecedorDaLista): LinhaLista {
   };
 }
 
-export async function PainelListaFornecedores({ brutos, usuarioId }: { brutos: ParametrosBrutos; usuarioId: string }) {
+export async function PainelListaFornecedores({ brutos, usuarioId, permitidas }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista }) {
   const { parametros, filtros } = lerListaFornecedores(brutos);
   const [{ linhas, paginacao }, categorias, salvos] = await Promise.all([
     listarFornecedores(parametros, filtros),
@@ -115,11 +116,11 @@ export async function PainelListaFornecedores({ brutos, usuarioId }: { brutos: P
             direcao={parametros.direcao}
             colunas={COLUNAS}
             linhas={linhas.map(paraLinha)}
-            acoes={[
+            acoes={acoesPermitidas([
               { rotulo: "Inativar", executar: inativarFornecedores, confirmar: { titulo: "Inativar os fornecedores marcados?", descricao: "Eles saem das listas padrão e das escolhas, mas nada é apagado. Dá para reativar depois.", botao: "Inativar" } },
               { rotulo: "Reativar", executar: reativarFornecedores },
               { rotulo: "Enviar à lixeira", executar: excluirFornecedores, confirmar: { titulo: "Enviar os fornecedores marcados para a lixeira?", descricao: "Eles saem das listas e da busca, e podem ser restaurados depois na Lixeira. Os produtos deles continuam cadastrados.", botao: "Enviar à lixeira" } },
-            ]}
+            ], permitidas)}
           />
           <PaginacaoLista base="/fornecedores" atuais={atuais} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>

@@ -361,3 +361,7 @@ Corrigidos na própria revisão: número negativo saindo do CSV como texto com a
 - [ ] Campo concluir uma etapa que dispara o vencimento da parcela: hoje já é assim. Padrão: manter.
 - [ ] Escritório com "excluir e desfazer" só em Comercial, Obras e Financeiro (Estoque e compras, Cadastros e Agenda e tarefas só alterar): confirmar com o Marcelo.
 - [ ] Cancelar obra aprovada (Bloco 8): devolver dinheiro já recebido segue como estorno manual separado; compras e saídas de estoque da obra não são desfeitas, só avisadas.
+
+## Fase 7C: custo nas telas de cadastro (Bloco 6)
+- [ ] Telas de produto (`/produtos/**`), funcionário (salário) e tipologia (composição) ainda mostram custo a quem tem o módulo mas não "ver custo e margem" por AJUSTE de usuário. Perfis prontos não são afetados. Ações, CSV e relatório de estoque já respeitam. Decidir na revisão sênior ou na Fase 8 se fecha agora.
+- [ ] Painel: os carregadores rodam para todos e o bloco é escondido na tela; carregar só o que a pessoa vê (otimização, sem risco de vazamento porque só o renderizado sai do servidor).

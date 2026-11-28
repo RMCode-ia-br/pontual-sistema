@@ -1,6 +1,7 @@
 import { Download, Package, Plus, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
+import { acoesPermitidas, type PermissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { FiltrosSalvos } from "@/components/lista/filtros-salvos";
@@ -55,7 +56,7 @@ function paraLinha(p: ProdutoDaLista): LinhaLista {
   };
 }
 
-export async function PainelListaProdutos({ brutos, usuarioId }: { brutos: ParametrosBrutos; usuarioId: string }) {
+export async function PainelListaProdutos({ brutos, usuarioId, permitidas }: { brutos: ParametrosBrutos; usuarioId: string; permitidas: PermissoesDaLista }) {
   const { parametros, filtros } = lerListaProdutos(brutos);
   const [{ linhas, paginacao }, opcoes, salvos] = await Promise.all([
     listarProdutos(parametros, filtros),
@@ -140,11 +141,11 @@ export async function PainelListaProdutos({ brutos, usuarioId }: { brutos: Param
             direcao={parametros.direcao}
             colunas={COLUNAS}
             linhas={linhas.map(paraLinha)}
-            acoes={[
+            acoes={acoesPermitidas([
               { rotulo: "Inativar", executar: inativarProdutos, confirmar: { titulo: "Inativar os produtos marcados?", descricao: "Eles saem das listas padrão e das escolhas, mas nada é apagado. Dá para reativar depois.", botao: "Inativar" } },
               { rotulo: "Reativar", executar: reativarProdutos },
               { rotulo: "Enviar à lixeira", executar: excluirProdutos, confirmar: { titulo: "Enviar os produtos marcados para a lixeira?", descricao: "Eles saem das listas e da busca, e podem ser restaurados depois na Lixeira. O histórico de preços é preservado.", botao: "Enviar à lixeira" } },
-            ]}
+            ], permitidas)}
           />
           <PaginacaoLista base="/produtos" atuais={atuais} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>

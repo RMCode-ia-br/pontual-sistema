@@ -6,6 +6,7 @@ import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { lerTamanhoDoDesenho } from "@/lib/dominio/desenho-item";
 import { criarUrlDeDownload } from "@/lib/storage";
 import { combinacoesSemPreco } from "@/lib/dominio/composicao";
@@ -29,7 +30,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaTipologia({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirModulo("CADASTROS");
+  const sessao = await exigirModulo("CADASTROS");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 
@@ -47,7 +48,7 @@ export default async function PaginaTipologia({ params, searchParams }: { params
       <CabecalhoPagina
         titulo={tipologia.nome}
         acoes={
-          <AcoesDoCadastro
+          <AcoesDoCadastro podeInativar={can(sessao, "inativar", "tipologia")} podeExcluir={can(sessao, "excluir", "tipologia")}
             id={tipologia.id}
             nome={tipologia.nome}
             ativo={tipologia.ativo}

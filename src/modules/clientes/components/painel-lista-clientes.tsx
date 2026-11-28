@@ -1,6 +1,7 @@
 import { Download, Plus, Users } from "lucide-react";
 import Link from "next/link";
 
+import { acoesPermitidas, type PermissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { FiltrosSalvos } from "@/components/lista/filtros-salvos";
@@ -18,6 +19,8 @@ import { lerListaClientes, listarClientes, MARCACOES, ROTULO_MARCACAO, type Clie
 import { ORIGENS, ROTULO_ORIGEM } from "../schemas";
 
 type Props = {
+  /** Ações em lote que a pessoa pode usar (Fase 7C). */
+  permitidas: PermissoesDaLista;
   brutos: ParametrosBrutos;
   usuarioId: string;
   /** Visão de parceiros: só arquitetos e construtoras, com a coluna de indicados. */
@@ -65,7 +68,7 @@ function paraLinha(c: ClienteDaLista, parceiros: boolean): LinhaLista {
 }
 
 /** Lista de clientes (ou de parceiros): busca, filtros, ordenação, paginação, colunas, filtros salvos e CSV. */
-export async function PainelListaClientes({ brutos, usuarioId, parceiros = false }: Props) {
+export async function PainelListaClientes({ brutos, usuarioId, permitidas, parceiros = false }: Props) {
   const base = parceiros ? "/parceiros" : "/clientes";
   const tela = parceiros ? "parceiros" : "clientes";
   const { parametros, filtros } = lerListaClientes(brutos);
@@ -162,11 +165,11 @@ export async function PainelListaClientes({ brutos, usuarioId, parceiros = false
             direcao={parametros.direcao}
             colunas={parceiros ? COLUNAS_PARCEIROS : COLUNAS_CLIENTES}
             linhas={linhas.map((c) => paraLinha(c, parceiros))}
-            acoes={[
+            acoes={acoesPermitidas([
               { rotulo: "Inativar", executar: inativarClientes, confirmar: { titulo: "Inativar os clientes marcados?", descricao: "Eles saem das listas padrão, mas nada é apagado. Dá para reativar depois.", botao: "Inativar" } },
               { rotulo: "Reativar", executar: reativarClientes },
               { rotulo: "Enviar à lixeira", executar: excluirClientes, confirmar: { titulo: "Enviar os clientes marcados para a lixeira?", descricao: "Eles saem das listas e da busca, e podem ser restaurados depois na Lixeira.", botao: "Enviar à lixeira" } },
-            ]}
+            ], permitidas)}
           />
           <PaginacaoLista base={base} atuais={atuais} paginacao={paginacao} tamanho={parametros.tamanho} />
         </>

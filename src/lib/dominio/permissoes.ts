@@ -251,6 +251,8 @@ export type RegraDoRecurso = {
   modulo: Modulo | "QUALQUER" | null;
   /** Outros módulos que também são exigidos (todos). */
   tambem?: readonly Modulo[];
+  /** Alternativa: basta o nível em UM destes módulos (ex.: a nota do diário da obra serve a Obras e a Comercial). */
+  ou?: readonly Modulo[];
   /** Acessos transversais exigidos, em qualquer nível. */
   exige?: readonly Transversal[];
 };
@@ -277,7 +279,8 @@ export const RECURSO: Readonly<Record<string, RegraDoRecurso>> = {
   aprovacao: m("COMERCIAL"),
   /** Custo de material informado e markup da proposta: só interno, exige "ver custo e margem". */
   "custo-material": m("COMERCIAL", { exige: ["custo"] }),
-  "interacao-projeto": m("COMERCIAL"),
+  /** Diário da obra e linha do tempo do projeto: o Campo escreve a "nota de campo" (Obras); o Comercial também escreve. */
+  "interacao-projeto": m("OBRAS", { ou: ["COMERCIAL"] }),
   // Clientes
   cliente: m("CLIENTES"),
   contato: m("CLIENTES"),
@@ -348,5 +351,6 @@ export function decidir(p: PermissoesEfetivas, acao: string, recurso: string | u
   }
   if (regra.modulo === null) return nivel === "VER";
   if (regra.modulo === "QUALQUER") return MODULOS.some((x) => x !== "PAINEL" && atende(p, x, nivel));
-  return [regra.modulo, ...(regra.tambem ?? [])].every((x) => atende(p, x, nivel));
+  const principal = [regra.modulo, ...(regra.tambem ?? [])].every((x) => atende(p, x, nivel));
+  return principal || (regra.ou ?? []).some((x) => atende(p, x, nivel));
 }

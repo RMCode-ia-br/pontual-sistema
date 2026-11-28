@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
+import { permissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { exigirModulo } from "@/lib/auth/modulo";
 import { PainelListaClientes } from "@/modules/clientes/components/painel-lista-clientes";
 
@@ -12,7 +13,7 @@ export default async function PaginaParceiros({ searchParams }: { searchParams: 
   return (
     <>
       <CabecalhoPagina titulo="Parceiros" descricao="Arquitetos, designers e construtoras que indicam e trazem obras. É uma visão dos clientes marcados assim." />
-      <PainelListaClientes brutos={brutos} usuarioId={usuario.id} parceiros />
+      <PainelListaClientes brutos={brutos} usuarioId={usuario.id} permitidas={permissoesDaLista(usuario, "cliente")} parceiros />
     </>
   );
 }

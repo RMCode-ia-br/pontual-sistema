@@ -88,7 +88,15 @@ function argumentos(texto: string): string[] {
 type ChamadaCan = { verbos: string[]; recursos: string[] | "dinamico" };
 
 function chamadasDeCan(corpo: string): ChamadaCan[] {
-  const saida: ChamadaCan[] = [];
+  const todas = lerChamadas(corpo);
+  // Guarda = `!can(...)`. Um `can(` que só decide um detalhe (ex.: gravar ou não o investimento) não é guarda; sem nenhuma guarda
+  // (ex.: a busca global, que filtra), vale o conjunto todo.
+  const guardas = todas.filter((c) => c.guarda);
+  return (guardas.length > 0 ? guardas : todas).map(({ verbos, recursos }) => ({ verbos, recursos }));
+}
+
+function lerChamadas(corpo: string): (ChamadaCan & { guarda: boolean })[] {
+  const saida: (ChamadaCan & { guarda: boolean })[] = [];
   for (const m of corpo.matchAll(/(?<![\w.])can\(/g)) {
     let i = (m.index ?? 0) + m[0].length;
     const inicio = i;
@@ -104,7 +112,7 @@ function chamadasDeCan(corpo: string): ChamadaCan[] {
     const args = argumentos(corpo.slice(inicio, i - 1));
     const literais = (s: string | undefined) => [...(s ?? "").matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
     const recursos = literais(args[2]);
-    saida.push({ verbos: literais(args[1]), recursos: recursos.length > 0 ? recursos : "dinamico" });
+    saida.push({ verbos: literais(args[1]), recursos: recursos.length > 0 ? recursos : "dinamico", guarda: corpo[(m.index ?? 0) - 1] === "!" });
   }
   return saida;
 }

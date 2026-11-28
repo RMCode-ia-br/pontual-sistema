@@ -4,12 +4,18 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
+import { permissoesDaLista } from "@/components/lista/acoes-permitidas";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { can } from "@/lib/permissoes";
 import { PainelListaProdutos } from "@/modules/produtos/components/painel-lista-produtos";
 
 export const metadata: Metadata = { title: "Produtos" };
 
-export default async function PaginaProdutos({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function PaginaProdutos({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const usuario = await exigirModulo("ESTOQUE");
   const brutos = await searchParams;
   return (
@@ -18,12 +24,18 @@ export default async function PaginaProdutos({ searchParams }: { searchParams: P
         titulo="Produtos e insumos"
         descricao="Perfis, vidros, ferragens e acessórios, com o custo de cada um e o histórico de preço."
         acoes={
-          <Link href="/produtos/novo" className={buttonVariants()}>
-            <Plus aria-hidden /> Novo produto
-          </Link>
+          can(usuario, "criar", "produto") ? (
+            <Link href="/produtos/novo" className={buttonVariants()}>
+              <Plus aria-hidden /> Novo produto
+            </Link>
+          ) : null
         }
       />
-      <PainelListaProdutos brutos={brutos} usuarioId={usuario.id} />
+      <PainelListaProdutos
+        brutos={brutos}
+        usuarioId={usuario.id}
+        permitidas={permissoesDaLista(usuario, "produto")}
+      />
     </>
   );
 }

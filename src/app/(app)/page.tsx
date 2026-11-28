@@ -7,6 +7,7 @@ import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { NumeroDoPainel, type Comparativo } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { exigirModulo } from "@/lib/auth/modulo";
+import { permissoesDe } from "@/lib/permissoes";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { detalheDoTempoVisitaProposta, percentualDaMeta } from "@/lib/dominio/indicadores";
@@ -19,6 +20,7 @@ import { MESES_SEM_CONTATO } from "@/modules/clientes/queries";
 import { ROTULO_ORIGEM } from "@/modules/clientes/schemas";
 import { DIAS_DA_JANELA_DE_FECHAMENTO, janelaDeFechamento } from "@/modules/indicadores/fechamento";
 import { DEFINICAO_DOS_MOTIVOS_DE_PERDA } from "@/modules/indicadores/perdas";
+import { blocosDoPainel } from "@/modules/painel/acesso";
 import { carregarDadosDoPainel } from "@/modules/painel/dados";
 import { DIAS_CUSTO_DESATUALIZADO } from "@/modules/produtos/queries";
 
@@ -46,6 +48,10 @@ function Secao({ id, titulo, href, rotuloDoLink, children }: { id: string; titul
 
 export default async function PaginaPainel({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const usuario = await exigirModulo("PAINEL");
+  // Fase 7C: cada bloco só aparece se a pessoa abre a lista que está por trás do número (módulo de origem + valores). Os dados
+  // são montados no servidor e só o que é renderizado vai ao navegador; bloco escondido nunca chega a quem não pode.
+  const pode = blocosDoPainel(permissoesDe(usuario));
+  const verCusto = pode.custo;
   const agora = new Date();
   const hoje = dataLocalDoInstante(agora);
   const { periodo, tipo, aviso } = lerPeriodo(await searchParams, hoje);
@@ -87,18 +93,20 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
   return (
     <>
       <CabecalhoPagina titulo={`Olá, ${usuario.nome}`} descricao="Um resumo do seu negócio. Toque em qualquer número para ver a lista que está por trás dele." />
-      <SeletorDePeriodo periodo={periodo} tipo={tipo} hoje={hoje} />
+      {pode.vendas || pode.financeiro || pode.obras ? <SeletorDePeriodo periodo={periodo} tipo={tipo} hoje={hoje} /> : null}
       {aviso ? (
         <p role="status" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           {aviso}
         </p>
       ) : null}
 
+{(pode.vendas || pode.financeiro || pode.obras) ? (
       <section aria-labelledby="titulo-numeros">
         <h2 id="titulo-numeros" className="mb-3 text-lg font-medium">
           O período em números <span className="text-muted-foreground text-sm font-normal">({rotuloDoPeriodo(periodo)})</span>
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+{pode.vendas ? (
           <NumeroDoPainel
             titulo="Vendido"
             valor={vend ? formatarMoeda(vend.totalCentavos) : "Bloqueado"}
@@ -119,6 +127,8 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
             }
             comparativos={vend && vendAnt && vendAno ? comparar(vend.totalCentavos, vendAnt.totalCentavos, vendAno.totalCentavos) : undefined}
           />
+) : null}
+{pode.financeiro ? (
           <NumeroDoPainel
             titulo="Recebido"
             valor={formatarMoeda(recebido.totalCentavos)}
@@ -133,6 +143,8 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
             }
             comparativos={comparar(recebido.totalCentavos, recebidoAnterior.totalCentavos, recebidoAnoPassado.totalCentavos)}
           />
+) : null}
+{pode.financeiro ? (
           <NumeroDoPainel
             titulo="Saldo daqui a 30 dias"
             valor={fin.temContas ? formatarMoeda(fin.projetado.em30Centavos) : "—"}
@@ -141,6 +153,8 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
             definicao="Saldo das contas hoje, mais o que se espera receber, menos o que se tem a pagar nos próximos 30 dias. O que já venceu e ainda não foi recebido entra como esperado para hoje (ou na data que o cliente prometeu); o que já venceu a pagar sai já no primeiro período."
             detalhe={fin.temContas ? (fin.contasSemSaldo > 0 ? <span className="text-amber-700 dark:text-amber-400">Parcial: {fin.contasSemSaldo} conta(s) com saldo não informado; o valor mostra só o movimento registrado</span> : `60 dias: ${formatarMoeda(fin.projetado.em60Centavos)} · 90 dias: ${formatarMoeda(fin.projetado.em90Centavos)}`) : "Cadastre as contas para ver o saldo"}
           />
+) : null}
+{pode.obras ? (
           <NumeroDoPainel
             titulo="Obras entregues no prazo"
             valor={pct(pontualidade.pontualidadePct)}
@@ -148,13 +162,21 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
             definicao={`Das obras concluídas no período que tinham prazo, quantas terminaram até o prazo prometido (já com as pausas justificadas). Sem considerar as pausas: ${pct(pontualidade.pontualidadeSemPausasPct)}.`}
             detalhe={pontualidade.concluidas === 0 ? "Nenhuma obra concluída com prazo neste período" : `${pontualidade.pontuais} de ${pontualidade.concluidas} no prazo`}
           />
+) : null}
         </div>
       </section>
+) : null}
 
+{(pode.agenda || pode.comercial || pode.financeiro || pode.obras) ? (
       <Secao id="titulo-atencao" titulo="Atenção hoje">
         <div className="grid gap-3 lg:grid-cols-2">
+{pode.agenda ? (
           <NumeroDoPainel titulo="Tarefas vencidas" valor={resumo.vencidas} href="/tarefas?status=abertas" alerta={resumo.vencidas > 0} definicao="Tarefas que ainda não foram concluídas e cujo vencimento é anterior a hoje." detalhe={`${resumo.abertas} aberta(s) no total · ${resumo.minhasAbertas} suas`} />
+) : null}
+{pode.comercial ? (
           <NumeroDoPainel titulo="Propostas sem retorno" valor={comercial.semRetorno} href="/projetos?semRetorno=1" alerta={comercial.semRetorno > 0} definicao="Projetos em Proposta enviada ou Negociação parados além do prazo de “sem retorno” definido em Configurações." detalhe="Hora de cobrar o cliente" />
+) : null}
+{pode.financeiro ? (
           <div className={cn("rounded-xl border p-4", fin.receberEmAtencao.length > 0 && "border-destructive/40 bg-destructive/5")}>
             <h3 className="mb-2 text-sm font-medium" title="Como é calculado: parcelas em aberto que venceram ou vencem hoje, as mais antigas primeiro.">
               Parcelas atrasadas ou vencendo hoje
@@ -177,6 +199,8 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
               </ul>
             )}
           </div>
+) : null}
+{pode.financeiro ? (
           <div className={cn("rounded-xl border p-4", fin.pagarEmAtencao.length > 0 && "border-destructive/40 bg-destructive/5")}>
             <h3 className="mb-2 text-sm font-medium" title="Como é calculado: contas a pagar em aberto que venceram ou vencem hoje, as mais antigas primeiro.">
               Contas a pagar atrasadas ou vencendo hoje
@@ -199,6 +223,8 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
               </ul>
             )}
           </div>
+) : null}
+{pode.agenda ? (
           <div className="rounded-xl border p-4">
             <h3 className="mb-2 text-sm font-medium">Visitas de hoje e de amanhã</h3>
             {comercial.visitas.length === 0 ? (
@@ -228,6 +254,8 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
               </ul>
             )}
           </div>
+) : null}
+{pode.obras ? (
           <div className={cn("rounded-xl border p-4", obras.atrasadas.length > 0 && "border-destructive/40 bg-destructive/5")}>
             <h3 className="mb-2 text-sm font-medium" title="Como é calculado: obras em andamento com etapa aberta depois da data prevista, as mais urgentes primeiro.">
               Obras com etapa atrasada
@@ -253,9 +281,12 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
               </ul>
             )}
           </div>
+) : null}
         </div>
       </Secao>
+) : null}
 
+{pode.vendas ? (
       <Secao id="titulo-comercial" titulo="Vendas e propostas" href={`/relatorios/fechamento${consultaDoPeriodo}`} rotuloDoLink="Ver relatório">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <NumeroDoPainel
@@ -346,11 +377,14 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
           </div>
         </div>
       </Secao>
+) : null}
 
+{pode.obras ? (
       <Secao id="titulo-obras" titulo="Obras e fábrica" href="/obras" rotuloDoLink="Ver obras">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <NumeroDoPainel titulo="Obras em andamento" valor={obras.emAndamento} href="/obras" definicao="Obras aprovadas ou em execução (ainda não entregues)." detalhe={`${obras.verdes} no prazo${obras.semPrazo > 0 ? ` · ${obras.semPrazo} sem prazo definido` : ""}`} />
           <NumeroDoPainel titulo="Obras atrasadas" valor={obras.vermelhas} href="/obras?semaforo=VERMELHO" alerta={obras.vermelhas > 0} definicao="Obras em andamento com alguma etapa depois da data prevista, ou com o prazo prometido (já com as pausas justificadas) vencido." detalhe={`${obras.amarelas} vencem em breve`} />
+{pode.relObras ? (
           <NumeroDoPainel
             titulo="Ocupação da fábrica"
             valor={pct(fabrica.ocupacaoPercentual)}
@@ -358,6 +392,7 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
             definicao="m² das obras cuja fabricação está em andamento ou começa nos próximos 30 dias, dividido pela capacidade de produção por mês de Configurações. É a situação de hoje."
             detalhe={fabrica.capacidadeM2 === null ? "Informe a capacidade em Configurações" : `${fabrica.m2EmProducao.toLocaleString("pt-BR")} m² de ${fabrica.capacidadeM2.toLocaleString("pt-BR")} m² por mês`}
           />
+) : null}
           <NumeroDoPainel titulo="Assistências em aberto" valor={obras.chamadosEmAberto} href="/obras/assistencia" definicao="Chamados de assistência ainda não resolvidos nem cancelados." detalhe={obras.chamadosEmAberto > 0 ? `${obras.chamadosEmAbertoEmGarantia} em garantia` : "Assistência e garantia"} />
         </div>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -403,7 +438,9 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
           </div>
         </div>
       </Secao>
+) : null}
 
+{pode.financeiro ? (
       <Secao id="titulo-financeiro" titulo="Dinheiro" href="/financeiro" rotuloDoLink="Ver fluxo de caixa">
         {!fin.temContas ? (
           <Link href="/financeiro/contas" className="hover:bg-accent mb-3 block rounded-xl border border-dashed p-4 text-sm transition-colors">
@@ -465,14 +502,18 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
           </Link>
         </p>
       </Secao>
+) : null}
 
-      <Secao id="titulo-estoque" titulo="Estoque e compras" href="/relatorios/estoque" rotuloDoLink="Ver relatório de estoque">
+{pode.estoque ? (
+      <Secao id="titulo-estoque" titulo="Estoque e compras" href={pode.relEstoque ? "/relatorios/estoque" : undefined} rotuloDoLink="Ver relatório de estoque">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <NumeroDoPainel titulo="Compras em aberto" valor={estoque.comprasEmAberto} href="/compras?aba=abertas" definicao="Pedidos feitos ao fornecedor e recebidos em parte, ainda não recebidos por inteiro. Atrasada = previsão de entrega já passada." detalhe={estoque.comprasAtrasadas > 0 ? `${estoque.comprasAtrasadas} com entrega atrasada` : "Nenhuma com entrega atrasada"} />
           <NumeroDoPainel titulo="Retalhos disponíveis" valor={estoque.retalhosDisponiveis} href="/estoque/retalhos" definicao="Sobras de perfil guardadas para outra obra (sobra maior ou igual ao retalho mínimo das Configurações)." detalhe="Para usar em obras" />
           <NumeroDoPainel titulo="Sucata para vender" valor={`${(estoque.sucataMilesimosKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`} href="/estoque/retalhos" definicao="Kg de sucata registrados nos cortes e ajustes, menos o que já foi vendido." detalhe="Saldo registrado" />
           <NumeroDoPainel titulo="Abaixo do mínimo" valor={estoque.abaixoDoMinimo} href="/produtos?estoque=abaixo" alerta={estoque.abaixoDoMinimo > 0} definicao="Só produtos que têm estoque mínimo definido e saldo abaixo dele. Produto sem mínimo não gera alerta." detalhe="Só produtos com mínimo definido" />
+{verCusto ? (
           <NumeroDoPainel titulo="Perfis sem custo" valor={estoque.perfisSemCusto} href="/estoque/preco-do-kg" definicao="Perfis comprados por kg que ainda estão sem custo (falta preço do kg, peso por metro ou comprimento da barra)." detalhe={estoque.perfisSemCusto > 0 ? "Informe o preço do kg" : "Todos com custo"} />
+) : null}
         </div>
         {estoque.produtos === 0 ? (
           <p className="text-muted-foreground mt-3 text-sm">
@@ -480,18 +521,34 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
           </p>
         ) : null}
       </Secao>
+) : null}
 
+{(pode.clientes || (pode.estoque && verCusto)) ? (
       <Secao id="titulo-cadastros" titulo="Cadastros">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+{pode.clientes ? (
           <NumeroDoPainel titulo="Clientes ativos" valor={cadastros.clientesAtivos} href="/clientes" definicao="Clientes cadastrados e ativos (fora da lixeira)." detalhe={<span className="flex items-center gap-1"><Users className="size-3.5" aria-hidden /> {cadastros.clientesNovosNoMes} novo(s) no mês</span>} />
+) : null}
+{pode.clientes ? (
           <NumeroDoPainel titulo="Parceiros" valor={cadastros.parceiros} href="/parceiros" definicao="Clientes ativos marcados como arquiteto/designer ou construtora." detalhe={<span className="flex items-center gap-1"><Handshake className="size-3.5" aria-hidden /> Quem indica serviço</span>} />
+) : null}
+{pode.clientes ? (
           <NumeroDoPainel titulo="Sem contato há 12 meses" valor={cadastros.clientesSemContato} href="/clientes?parado=1" definicao={`Clientes ativos cadastrados há mais de ${MESES_SEM_CONTATO} meses, sem nenhum registro de ligação, WhatsApp, visita, e-mail ou anotação no período. Boa lista para reativar.`} detalhe={<span className="flex items-center gap-1"><History className="size-3.5" aria-hidden /> Boa lista para reativar</span>} />
+) : null}
+{pode.estoque && verCusto ? (
           <NumeroDoPainel titulo="Produtos sem custo" valor={cadastros.produtosSemCusto} href="/produtos?custo=sem" alerta={cadastros.produtosSemCusto > 0} definicao="Produtos ativos com o custo ainda não informado (o sistema nunca inventa preço)." detalhe={<span className="flex items-center gap-1"><PackageX className="size-3.5" aria-hidden /> A margem das obras fica incompleta</span>} />
+) : null}
+{pode.estoque && verCusto ? (
           <NumeroDoPainel titulo="Custos desatualizados" valor={cadastros.produtosComCustoAntigo} href="/produtos?custo=antigo" alerta={cadastros.produtosComCustoAntigo > 0} definicao={`Produtos ativos cujo custo não é atualizado há mais de ${DIAS_CUSTO_DESATUALIZADO} dias.`} detalhe={<span className="flex items-center gap-1"><TriangleAlert className="size-3.5" aria-hidden /> Confira com o fornecedor</span>} />
+) : null}
+{pode.clientes ? (
           <NumeroDoPainel titulo="Novos clientes no mês" valor={cadastros.clientesNovosNoMes} href="/clientes?ordem=criadoEm&direcao=desc" definicao="Clientes ativos cadastrados desde o dia 1º do mês atual." detalhe={<span className="flex items-center gap-1"><UserPlus className="size-3.5" aria-hidden /> Desde o dia 1º</span>} />
+) : null}
         </div>
       </Secao>
+) : null}
 
+{pode.agenda ? (
       <Secao id="titulo-proximas" titulo="Próximas tarefas" href="/tarefas" rotuloDoLink="Ver todas">
         {proximas.length === 0 ? (
           <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
@@ -514,6 +571,7 @@ export default async function PaginaPainel({ searchParams }: { searchParams: Pro
           </ul>
         )}
       </Secao>
+) : null}
 
       <p className="mt-8 text-sm">
         <Link href="/primeiros-passos" className="text-primary hover:underline">

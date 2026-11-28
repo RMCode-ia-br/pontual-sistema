@@ -24,7 +24,7 @@ function secao<L>(acesso: ReturnType<typeof acessoDoCsv>, colunas: ColunaDeCsv<L
 export async function GET(requisicao: NextRequest) {
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
-  const negado = saidaNegada(usuario, { recursos: ["relatorio", "obra"] });
+  const negado = saidaNegada(usuario, { recursos: ["relatorio", "obra"], valores: true });
   if (negado) return negado;
   const acesso = acessoDoCsv(usuario);
 

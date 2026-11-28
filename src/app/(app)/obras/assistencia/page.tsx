@@ -8,10 +8,12 @@ import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-list
 import { buttonVariants } from "@/components/ui/button";
 import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_CLASSIFICACAO } from "@/lib/dominio/garantia";
+import { can } from "@/lib/permissoes";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { cn } from "@/lib/utils";
 import { ListaDeChamados } from "@/modules/obras/components/lista-de-chamados";
 import { LIMITE_DE_CHAMADOS, lerFiltrosDeChamados, listarChamados } from "@/modules/obras/queries-chamados";
+import { semValoresNosChamados } from "@/modules/obras/sem-valores";
 
 export const metadata: Metadata = { title: "Assistência e garantia" };
 
@@ -22,9 +24,11 @@ const SITUACOES = [
 ] as const;
 
 export default async function PaginaAssistencia({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo("OBRAS");
+  const sessao = await exigirModulo("OBRAS");
   const filtros = lerFiltrosDeChamados(await searchParams);
-  const { linhas, truncado } = await listarChamados(filtros);
+  const { linhas: linhasCompletas, truncado } = await listarChamados(filtros);
+  // Sem "ver valores" o valor da visita cobrada nem sai do servidor.
+  const linhas = semValoresNosChamados(linhasCompletas, can(sessao, "ver", "valores"));
   const filtrado = !!(filtros.busca || filtros.classificacao || filtros.clienteId || filtros.projetoId);
   const consulta = (extra: Record<string, string | undefined>) => montarConsulta({ situacao: filtros.situacao === "abertos" ? undefined : filtros.situacao, busca: filtros.busca, classificacao: filtros.classificacao, cliente: filtros.clienteId, projeto: filtros.projetoId, ...extra });
   const emGarantia = linhas.filter((c) => c.classificacao === "EM_GARANTIA").length;

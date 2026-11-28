@@ -29,7 +29,7 @@ function Definicao({ titulo, children }: { titulo: string; children: React.React
 }
 
 export default async function PaginaRelatorioDeObras({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirModulo(["RELATORIOS", "OBRAS"]);
+  await exigirModulo(["RELATORIOS", "OBRAS"], { exige: ["valores"] });
   const periodo = lerPeriodoDoRelatorioDeObras(await searchParams);
   const r = await carregarRelatorioDeObras(periodo);
   const estiloData = "border-input bg-background h-9 rounded-lg border px-2.5 text-sm";
