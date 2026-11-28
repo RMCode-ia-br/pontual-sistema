@@ -109,9 +109,11 @@ export async function PainelListaClientes({ brutos, usuarioId, permitidas, parce
         </FiltrosDaLista>
         <div className="flex flex-wrap items-center gap-2">
           <FiltrosSalvos tela={tela} base={base} consultaAtual={consultaDoFiltro} salvos={salvos} />
-          <a href={linkExportar} className={buttonVariants({ variant: "outline", className: "h-9" })}>
-            <Download aria-hidden /> Exportar CSV
-          </a>
+          {permitidas.exportar ? (
+            <a href={linkExportar} className={buttonVariants({ variant: "outline", className: "h-9" })}>
+              <Download aria-hidden /> Exportar CSV
+            </a>
+          ) : null}
         </div>
       </div>
 

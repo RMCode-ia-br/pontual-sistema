@@ -50,7 +50,7 @@ const ROTAS_FORA_DA_MATRIZ: Record<string, string> = {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-type Exigencia = { recursos: string[]; algum: string[]; valores: boolean; custo: boolean };
+type Exigencia = { recursos: string[]; editar: string[]; algum: string[]; valores: boolean; custo: boolean };
 
 function exigenciaDe(texto: string): Exigencia[] {
   const saida: Exigencia[] = [];
@@ -60,7 +60,7 @@ function exigenciaDe(texto: string): Exigencia[] {
       const a = corpo.match(new RegExp(`${nome}:\\s*\\[([^\\]]*)\\]`));
       return a ? [...a[1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!) : [];
     };
-    saida.push({ recursos: lista("recursos"), algum: lista("algum"), valores: /valores:\s*true/.test(corpo), custo: /custo:\s*true/.test(corpo) });
+    saida.push({ recursos: lista("recursos"), editar: lista("editar"), algum: lista("algum"), valores: /valores:\s*true/.test(corpo), custo: /custo:\s*true/.test(corpo) });
   }
   return saida;
 }
@@ -68,6 +68,7 @@ function exigenciaDe(texto: string): Exigencia[] {
 function liberada(e: Exigencia, p: PermissoesEfetivas): boolean {
   return (
     e.recursos.every((r) => decidir(p, "ver", r)) &&
+    e.editar.every((r) => decidir(p, "editar", r)) &&
     (e.algum.length === 0 || e.algum.some((r) => decidir(p, "ver", r))) &&
     (!e.valores || decidir(p, "ver", "valores")) &&
     (!e.custo || decidir(p, "ver", "custo"))
@@ -103,7 +104,7 @@ describe("matriz gerada das rotas de saída: cada rota × cada perfil", () => {
   });
 
   it("todo recurso declarado nas rotas existe no mapeamento de permissões", () => {
-    const desconhecidos = itens.flatMap((i) => i.exigencias.flatMap((e) => [...e.recursos, ...e.algum]).filter((r) => !(r in RECURSO)).map((r) => `${i.caminho}: ${r}`));
+    const desconhecidos = itens.flatMap((i) => i.exigencias.flatMap((e) => [...e.recursos, ...e.editar, ...e.algum]).filter((r) => !(r in RECURSO)).map((r) => `${i.caminho}: ${r}`));
     expect(desconhecidos).toEqual([]);
   });
 

@@ -108,4 +108,11 @@ describe("ações em lote por permissão", () => {
   it("Campo não usa nenhuma", () => {
     expect(rotulos(de("CAMPO", "cliente"))).toEqual([]);
   });
+  it("o CSV de clientes (CPF, e-mail) só sai para quem edita Clientes; os demais CSV, para quem vê o módulo", () => {
+    expect(de("CAMPO", "cliente").exportar).toBe(false);
+    expect(de("ESCRITORIO", "cliente").exportar).toBe(true);
+    expect(de("ADMIN", "cliente").exportar).toBe(true);
+    expect(de("CAMPO", "fornecedor").exportar).toBe(false); // Campo não tem Cadastros
+    expect(de("ESCRITORIO", "fornecedor").exportar).toBe(true);
+  });
 });

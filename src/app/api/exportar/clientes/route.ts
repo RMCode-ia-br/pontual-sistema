@@ -17,7 +17,7 @@ export async function GET(requisicao: NextRequest) {
   // Route Handlers checam a sessão por conta própria (não só o proxy).
   const usuario = await sessaoParaApi();
   if (!usuario) return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
-  const negado = saidaNegada(usuario, { recursos: ["cliente"] });
+  const negado = saidaNegada(usuario, { recursos: ["cliente"], editar: ["cliente"] });
   if (negado) return negado;
 
   const brutos = Object.fromEntries(requisicao.nextUrl.searchParams);

@@ -425,6 +425,36 @@ export async function restaurarModeloDeEtapas(snapshot: { modeloId: string; item
   });
 }
 
+/**
+ * Cria um usuário de teste com PERFIL (Fase 7C), já com senha definitiva e sem troca pendente. O login precisa estar em
+ * `LOGINS_E2E`: a limpeza geral (`limpar`) o remove, junto com os anexos e logs dele. Chame depois de `prepararUsuarioE2E`.
+ */
+export async function criarUsuarioDePerfil(u: { login: string; nome: string; senha: string }, papel: "ADMIN" | "ESCRITORIO" | "CAMPO", ajustes: unknown = null): Promise<string> {
+  const senhaHash = await gerarHashSenha(u.senha);
+  const id = randomUUID();
+  await comConexao((c) =>
+    c.query(
+      `INSERT INTO "Usuario" (id, nome, login, "senhaHash", papel, "ajustesPermissao", "precisaTrocarSenha", "atualizadoEm")
+       VALUES ($1, $2, $3, $4, $5::"PapelUsuario", $6::jsonb, false, now())`,
+      [id, u.nome, u.login, senhaHash, papel, ajustes === null ? null : JSON.stringify(ajustes)],
+    ),
+  );
+  return id;
+}
+
+/** Perfil e ajuste guardados de um usuário (para conferir o que a tela de permissões gravou). */
+export async function perfilDoUsuario(login: string): Promise<{ papel: string; ajustesPermissao: unknown; versaoSessao: number } | null> {
+  return comConexao(async (c) => {
+    const r = await c.query<{ papel: string; ajustesPermissao: unknown; versaoSessao: number }>(`SELECT papel::text AS papel, "ajustesPermissao", "versaoSessao" FROM "Usuario" WHERE login = $1`, [login]);
+    return r.rows[0] ?? null;
+  });
+}
+
+/** Valor fechado da obra (a obra de teste nasce sem ele; o teste de valores precisa de um número para esconder). */
+export async function definirValorFechadoDaObra(projetoId: string, centavos: number): Promise<void> {
+  await comConexao((c) => c.query(`UPDATE "Projeto" SET "valorFechadoCentavos" = $2 WHERE id = $1`, [projetoId, centavos]));
+}
+
 export async function removerUsuarioE2E(): Promise<void> {
   await comConexao(limpar);
 }

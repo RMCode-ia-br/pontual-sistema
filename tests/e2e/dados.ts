@@ -13,8 +13,12 @@ export const USUARIO_E2E_NOVO = {
   senhaDefinitiva: "Definitiva-E2E-3",
 };
 
+/** Usuários de PERFIL (Fase 7C), inseridos direto no banco pelo teste de perfis e removidos pela limpeza geral. */
+export const USUARIO_E2E_ESCRITORIO = { login: "e2e-escritorio", nome: "E2E Escritório", senha: "Escritorio-E2E-4" };
+export const USUARIO_E2E_CAMPO = { login: "e2e-campo", nome: "E2E Campo", senha: "Campo-E2E-5" };
+
 /** Todos os logins que os testes podem criar (a limpeza só apaga estes). */
-export const LOGINS_E2E = [USUARIO_E2E.login, USUARIO_E2E_NOVO.login];
+export const LOGINS_E2E = [USUARIO_E2E.login, USUARIO_E2E_NOVO.login, USUARIO_E2E_ESCRITORIO.login, USUARIO_E2E_CAMPO.login];
 
 /** Cada teste usa um IP próprio (via x-forwarded-for) para o bloqueio por IP não vazar entre testes. */
 export function ipFalso(sufixo: number): string {

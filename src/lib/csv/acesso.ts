@@ -9,6 +9,8 @@ import { can, type UsuarioParaPermissao } from "@/lib/permissoes";
 export type ExigenciaDeSaida = {
   /** Recursos que a pessoa precisa poder VER (todos). Nomes do mapeamento em `src/lib/dominio/permissoes.ts`. */
   recursos?: readonly string[];
+  /** Precisa poder ALTERAR todos estes (ex.: o CSV de clientes traz CPF/CNPJ e e-mail, dados de quem edita Clientes, não de quem só consulta). */
+  editar?: readonly string[];
   /** Basta ver UM destes (ex.: a folha de produção serve a Obras e a Comercial). */
   algum?: readonly string[];
   /** A saída traz valores (dinheiro): exige "ver valores". */
@@ -21,6 +23,7 @@ export type ExigenciaDeSaida = {
 export function saidaNegada(usuario: UsuarioParaPermissao, e: ExigenciaDeSaida): NextResponse | null {
   const ok =
     (e.recursos ?? []).every((r) => can(usuario, "ver", r)) &&
+    (e.editar ?? []).every((r) => can(usuario, "editar", r)) &&
     (!e.algum || e.algum.some((r) => can(usuario, "ver", r))) &&
     (!e.valores || can(usuario, "ver", "valores")) &&
     (!e.custo || can(usuario, "ver", "custo"));
