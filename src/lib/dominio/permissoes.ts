@@ -286,6 +286,8 @@ export const RECURSO: Readonly<Record<string, RegraDoRecurso>> = {
   // Obras
   obra: m("OBRAS"),
   chamado: m("OBRAS"),
+  /** Autorização de uso de imagem do cliente e publicação no portfólio: marketing, então exige também Comercial (o Campo só tira a foto). */
+  "portfolio-obra": m("OBRAS", { tambem: ["COMERCIAL"] }),
   /** Gerar a cobrança da visita de assistência: cria dinheiro a receber, então exige "ver valores". */
   "cobranca-chamado": m("OBRAS", { exige: ["valores"] }),
   // Financeiro

@@ -46,7 +46,7 @@ export async function atualizarFoto(entrada: unknown): Promise<ResultadoAcao> {
 
 export async function definirAutorizacaoDoCliente(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "obra")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "portfolio-obra")) return falha("Sem permissão.");
   const lido = autorizacaoSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   return executar("obras.autorizacao_portfolio", async () => {
@@ -59,7 +59,7 @@ export async function definirAutorizacaoDoCliente(entrada: unknown): Promise<Res
 
 export async function marcarPublicacao(entrada: unknown): Promise<ResultadoAcao> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "editar", "obra")) return falha("Sem permissão.");
+  if (!can(sessao, "editar", "portfolio-obra")) return falha("Sem permissão.");
   const lido = publicacaoSchema.safeParse(entrada);
   if (!lido.success) return falhaDeValidacao(lido.error);
   return executar("obras.publicacao_instagram", async () => {

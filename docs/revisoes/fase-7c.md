@@ -95,3 +95,44 @@ ALTER TABLE "Usuario" DROP COLUMN "ajustesPermissao", ALTER COLUMN "papel" SET D
 - Ações de ponta a ponta com banco real continuam cobertas pelas suítes de integração existentes (rodam como administrador); elas não foram reexecutadas neste bloco (suíte completa só depois do aviso do Régis).
 - `mudarEtapa` (Obras) pode liberar parcelas por gatilho: o Campo, que altera Obras, concluiria uma etapa que dispara o vencimento (pergunta ao Marcelo em PENDENCIAS; padrão: manter).
 - Leitura de VALORES dentro das telas e consultas (obra, cliente, visita, linha do tempo, CSV, PDF, anexos, painel) é dos Blocos 5 e 6; hoje só o módulo e os transversais das PÁGINAS e das AÇÕES estão fechados.
+
+### Matriz por perfil (gerada da própria matriz de testes)
+
+Para regerar: `GERAR_RELATORIO_MATRIZ=<arquivo.md> npx vitest run tests/unit/acoes-matriz.test.ts` (no PowerShell: `$env:GERAR_RELATORIO_MATRIZ = "..."`). As três invariantes abaixo viraram asserções permanentes do mesmo teste: o Campo só age em Agenda e tarefas e Obras (em Clientes só lê), não executa destrutiva nem lê valores ou custo; o Escritório só tem destrutiva em Comercial, Obras e Financeiro.
+
+Gerado da matriz (209 ações; a `buscaGlobal` filtra por módulo em vez de negar e fica fora das listas).
+
+#### Campo
+
+##### Ações permitidas (32)
+
+- **Agenda e tarefas** (12): buscarProjetosParaAgenda, sugerirHorarios, criarEvento, editarEvento, mudarSituacaoDoEvento, criarFeedAgenda, criarTarefa, editarTarefa, concluirTarefa, reabrirTarefa, salvarMedida, salvarDadosDaObra
+- **Clientes** (2): buscarClientesParaIndicacao, listarEnderecosDoCliente
+- **Obras** (13): criarChamado, listarObrasDoClienteParaChamado, preverClassificacao, mudarSituacaoDoChamado, mudarEtapa, editarEtapaDaObra, sugerirDatas, aplicarDatas, definirPrazo, pausarObra, encerrarPausaDaObra, aprovarFachadaDoCondominio, gerarEtapas
+- **Transversal (anexos e filtros salvos)** (5): iniciarUploadAnexo, concluirUploadAnexo, urlDeDownloadAnexo, salvarFiltro, atualizarFoto
+
+#### Escritório
+
+##### Ações negadas (40)
+
+- **Agenda e tarefas** (4): excluirEvento, revogarFeedAgenda, excluirTarefa, excluirMedida
+- **Cadastros** (6): excluirCondicoes, excluirFornecedores, excluirEquipe, excluirFuncionarios, excluirPreco, excluirTipologias
+- **Clientes** (4): excluirClientes, excluirContato, excluirEndereco, excluirInteracaoDoCliente
+- **Configurações** (16): salvarEmpresa, definirLogoEmpresa, criarFeriado, alternarAtivoFeriado, excluirFeriado, analisarPlanilha, confirmarImportacao, desfazerImportacao, salvarModeloTexto, verSugestaoDeMaoDeObra, aplicarSugestaoDeMaoDeObra, salvarModeloDeEtapas, criarUsuario, editarUsuario, alternarAtivoUsuario, redefinirSenhaUsuario
+- **Estoque e compras** (10): cancelarCompraAcao, estornarRecebimentoAcao, estornarMovimento, descartarRetalhoAcao, ajustarSucataAcao, preverReajusteKg, aplicarReajusteDoKg, excluirProdutos, preverReajuste, aplicarReajuste
+
+##### Ações destrutivas permitidas (24)
+
+- **Comercial** (10): excluirInteracaoDoProjeto, excluirProjetos, desfazerAprovacaoAcao, trocarAprovacaoAcao, reabrirRevisaoAcao, previaDesfazerAcao, previaTrocaAcao, cancelarProposta, encerrarValidadePorReajuste, excluirProposta
+- **Financeiro** (9): alternarAtivaDaConta, estornar, ajustarContaPagar, cancelarContaPagar, reabrirContaPagar, encerrarRecorrenciaAcao, ajustarContaReceber, cancelarContaReceber, reabrirContaReceber
+- **Obras** (3): ajustarChamadoAcao, ajustarPausaDaObra, excluirPausaDaObra
+- **Transversal (anexos e filtros salvos)** (2): excluirAnexo, excluirFiltroSalvo
+
+
+**Conferência (pedido do Régis no início do Bloco 5):** a primeira geração mostrou, no Campo, itens fora de "agenda, visita, etapa, foto, nota de campo e a própria conta". Corrigidos:
+- `verificarDuplicidadeDeCliente`, `consultarCepDoEndereco` e `consultarCnpjDoCliente` só servem ao cadastro de cliente: passaram de `ver cliente` para `criar cliente` (o Campo só lê Clientes).
+- `definirAutorizacaoDoCliente` e `marcarPublicacao` (autorização de uso de imagem e publicação no portfólio) saíram de `editar obra` para o recurso novo `portfolio-obra` (Obras e Comercial): o Campo tira a foto, o escritório publica.
+
+**Mantidos no Campo por decisão (para o Régis confirmar):** `buscarClientesParaIndicacao` e `listarEnderecosDoCliente` (o seletor de cliente e o endereço que a agenda e a assistência usam), `criarFeedAgenda` (o próprio feed de agenda), tarefas (decisão 177: Campo altera "Agenda e tarefas"), e dentro de Obras: datas, prazo, pausa, fachada de condomínio, gerar etapas e assistência (chamados), por serem trabalho sobre as etapas da obra.
+
+**Escritório:** nenhuma destrutiva fora de Comercial, Obras e Financeiro. Única observação: `excluirAnexo` aparece como destrutiva liberada porque o anexo ainda é "de qualquer módulo"; no Bloco 5 o módulo passa a vir da entidade dona do anexo (aí o Escritório só apaga anexo de Comercial, Obras e Financeiro) e a invariante será apertada para valer também para o transversal. As negações do Escritório batem com a decisão 177 (excluir em Clientes, Cadastros, Agenda e tarefas, Estoque e compras; Configurações inteira).

@@ -20,7 +20,7 @@ const entradaDuplicidade = z.object({
 /** Avisa, antes de salvar, se já existe cliente com o mesmo CPF/CNPJ ou telefone. */
 export async function verificarDuplicidadeDeCliente(entrada: unknown): Promise<ResultadoAcao<Duplicado[]>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "ver", "cliente")) return falha("Sem permissão.");
+  if (!can(sessao, "criar", "cliente")) return falha("Sem permissão.");
   const dados = entradaDuplicidade.safeParse(entrada);
   if (!dados.success) return sucesso([]);
   const { exceto, ...contato } = dados.data;
@@ -30,7 +30,7 @@ export async function verificarDuplicidadeDeCliente(entrada: unknown): Promise<R
 /** Preenche o endereço pelo CEP (ViaCEP). Falha silenciosa: sem resultado, a pessoa digita à mão. */
 export async function consultarCepDoEndereco(cep: string): Promise<ResultadoAcao<EnderecoPorCep>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "ver", "cliente")) return falha("Sem permissão.");
+  if (!can(sessao, "criar", "cliente")) return falha("Sem permissão.");
   const digitos = somenteDigitos(String(cep ?? ""));
   if (digitos.length !== 8) return falha("CEP incompleto.");
   const achado = await consultarCep(digitos);
@@ -40,7 +40,7 @@ export async function consultarCepDoEndereco(cep: string): Promise<ResultadoAcao
 /** Preenche razão social, fantasia, telefone e e-mail pelo CNPJ (BrasilAPI). Falha silenciosa. */
 export async function consultarCnpjDoCliente(cnpj: string): Promise<ResultadoAcao<DadosDeCnpj>> {
   const sessao = await exigirSessao();
-  if (!can(sessao, "ver", "cliente")) return falha("Sem permissão.");
+  if (!can(sessao, "criar", "cliente")) return falha("Sem permissão.");
   const digitos = somenteDigitos(String(cnpj ?? ""));
   if (digitos.length !== 14 || !validarCnpj(digitos)) return falha("CNPJ inválido.");
   const achado = await consultarCnpj(digitos);

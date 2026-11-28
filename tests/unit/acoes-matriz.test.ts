@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { decidir, permissoesEfetivas, type PermissoesEfetivas } from "@/lib/dominio/permissoes";
+import { NIVEL_DO_VERBO, RECURSO, ROTULO_DO_MODULO, decidir, permissoesEfetivas, type PermissoesEfetivas } from "@/lib/dominio/permissoes";
 import { RECURSO_DA_LIXEIRA, TIPOS_DA_LIXEIRA } from "@/modules/lixeira/tipos";
 
 /**
@@ -148,14 +148,17 @@ function ehNegacao(resultado: unknown, erro: unknown): boolean {
 
 type Esperado = "negado" | "liberado" | "misto";
 
+/** Recursos de uma chamada; o dinâmico da lixeira vem do tipo no nome da ação (restaurarClientes → clientes). */
+function recursosDe(c: ChamadaCan, nomeDaAcao: string): string[] {
+  if (c.recursos !== "dinamico") return c.recursos;
+  const sufixo = nomeDaAcao.replace(/^restaurar/, "").toLowerCase();
+  const tipo = TIPOS_DA_LIXEIRA.find((x) => x === sufixo);
+  return tipo ? [RECURSO_DA_LIXEIRA[tipo]] : [];
+}
+
 function esperadoPara(chamadas: ChamadaCan[], nomeDaAcao: string, p: PermissoesEfetivas): Esperado {
   const vereditos: Esperado[] = chamadas.map((c) => {
-    let recursos = c.recursos;
-    if (recursos === "dinamico") {
-      const sufixo = nomeDaAcao.replace(/^restaurar/, "").toLowerCase();
-      const tipo = TIPOS_DA_LIXEIRA.find((t) => t === sufixo);
-      recursos = tipo ? [RECURSO_DA_LIXEIRA[tipo]] : [];
-    }
+    const recursos = recursosDe(c, nomeDaAcao);
     const respostas = c.verbos.flatMap((v) => recursos.map((r) => decidir(p, v, r)));
     if (respostas.length === 0) return "misto";
     if (respostas.every(Boolean)) return "liberado";
@@ -191,6 +194,59 @@ for (const caminho of Object.keys(MODULOS_DE_ACOES).sort()) {
     itens.push({ arquivo: caminho, nome: f.nome, chamadas: chamadasDaAcao(texto, f.corpo) });
   }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Classificação por módulo e relatório (gerado da própria matriz)
+// ---------------------------------------------------------------------------------------------------------------------
+
+const TRANSVERSAL = "Transversal (anexos e filtros salvos)";
+
+/** Rótulos dos módulos que a ação toca (o do recurso e os de `tambem`). */
+function modulosDaAcao(item: Item): string[] {
+  const rotulos = new Set<string>();
+  for (const c of item.chamadas) {
+    for (const r of recursosDe(c, item.nome)) {
+      const regra = RECURSO[r];
+      if (!regra) continue;
+      if (regra.modulo === "QUALQUER") rotulos.add(TRANSVERSAL);
+      else if (regra.modulo === null) rotulos.add("Transversal (valores e custo)");
+      else for (const m of [regra.modulo, ...(regra.tambem ?? [])]) rotulos.add(ROTULO_DO_MODULO[m]);
+    }
+  }
+  return [...rotulos].sort();
+}
+
+function ehDestrutiva(item: Item): boolean {
+  return item.chamadas.some((c) => c.verbos.some((v) => NIVEL_DO_VERBO[v] === "DESTRUTIVO"));
+}
+
+function agrupar(lista: Item[]): Map<string, string[]> {
+  const mapa = new Map<string, string[]>();
+  for (const i of lista) {
+    const chave = modulosDaAcao(i).join(" + ") || "(sem módulo)";
+    mapa.set(chave, [...(mapa.get(chave) ?? []), i.nome]);
+  }
+  return new Map([...mapa.entries()].sort(([a], [b]) => a.localeCompare(b, "pt")));
+}
+
+function emMarkdown(titulo: string, lista: Item[]): string {
+  if (lista.length === 0) return `#### ${titulo} (0)\n\n_nenhuma_\n`;
+  const linhas = [...agrupar(lista)].map(([modulo, nomes]) => `- **${modulo}** (${nomes.length}): ${nomes.join(", ")}`);
+  return `#### ${titulo} (${lista.length})\n\n${linhas.join("\n")}\n`;
+}
+
+const ESCRITORIO = PERFIS.find((p) => p.papel === "ESCRITORIO")!.permissoes;
+const CAMPO = PERFIS.find((p) => p.nome === "Campo")!.permissoes;
+const pesquisaveis = itens.filter((i) => !ACOES_QUE_FILTRAM.has(i.nome));
+const veredito = (i: Item, p: PermissoesEfetivas) => esperadoPara(i.chamadas, i.nome, p);
+
+const campoPermitidas = pesquisaveis.filter((i) => veredito(i, CAMPO) === "liberado");
+const escritorioNegadas = pesquisaveis.filter((i) => veredito(i, ESCRITORIO) === "negado");
+const escritorioDestrutivasPermitidas = pesquisaveis.filter((i) => ehDestrutiva(i) && veredito(i, ESCRITORIO) === "liberado");
+
+/** O que o Campo pode fazer (decisão 177): agenda e tarefas, visita, etapa, foto, nota de campo; o resto de Clientes é só leitura. */
+const MODULOS_DO_CAMPO = new Set(["Agenda e tarefas", "Obras", "Clientes", TRANSVERSAL]);
+const MODULOS_COM_DESTRUTIVA_DO_ESCRITORIO = new Set(["Comercial", "Obras", "Financeiro"]);
 
 describe("matriz gerada: cada Server Action × cada perfil", () => {
   beforeEach(() => {
@@ -233,6 +289,45 @@ describe("matriz gerada: cada Server Action × cada perfil", () => {
       expect(falhas).toEqual([]);
     });
   }
+
+  describe("invariantes dos perfis, lidas da própria matriz", () => {
+    it("o Campo só consegue agir em Agenda e tarefas, Obras (e anexos); em Clientes só LÊ", () => {
+      const fora = campoPermitidas.filter((i) => modulosDaAcao(i).some((m) => !MODULOS_DO_CAMPO.has(m))).map((i) => `${i.nome} (${modulosDaAcao(i).join(" + ")})`);
+      expect(fora).toEqual([]);
+      const alteraCliente = campoPermitidas.filter((i) => modulosDaAcao(i).includes("Clientes") && i.chamadas.some((c) => c.verbos.some((v) => NIVEL_DO_VERBO[v] !== "VER"))).map((i) => i.nome);
+      expect(alteraCliente).toEqual([]);
+    });
+
+    it("o Campo não executa nenhuma ação destrutiva, nem lê valores ou custo", () => {
+      expect(campoPermitidas.filter(ehDestrutiva).map((i) => i.nome)).toEqual([]);
+      const comTransversal = campoPermitidas.filter((i) => modulosDaAcao(i).includes("Transversal (valores e custo)")).map((i) => i.nome);
+      expect(comTransversal).toEqual([]);
+    });
+
+    it("o Escritório só tem ação destrutiva em Comercial, Obras e Financeiro", () => {
+      const fora = escritorioDestrutivasPermitidas
+        .filter((i) => modulosDaAcao(i).some((m) => !MODULOS_COM_DESTRUTIVA_DO_ESCRITORIO.has(m) && m !== TRANSVERSAL))
+        .map((i) => `${i.nome} (${modulosDaAcao(i).join(" + ")})`);
+      expect(fora).toEqual([]);
+    });
+
+    it("gera o relatório em Markdown quando GERAR_RELATORIO_MATRIZ aponta para um arquivo", () => {
+      const destino = process.env.GERAR_RELATORIO_MATRIZ;
+      if (!destino) return;
+      const texto = [
+        `Gerado da matriz (${itens.length} ações; a \`buscaGlobal\` filtra por módulo em vez de negar e fica fora das listas).`,
+        "",
+        "### Campo",
+        "",
+        emMarkdown("Ações permitidas", campoPermitidas),
+        "### Escritório",
+        "",
+        emMarkdown("Ações negadas", escritorioNegadas),
+        emMarkdown("Ações destrutivas permitidas", escritorioDestrutivasPermitidas),
+      ].join("\n");
+      fs.writeFileSync(destino, texto, "utf8");
+    });
+  });
 
   describe("buscaGlobal filtra por módulo (não nega)", () => {
     const VAZIO = { clientes: [], projetos: [], propostas: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
