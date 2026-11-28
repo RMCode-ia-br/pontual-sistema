@@ -7,7 +7,7 @@ import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { PaginacaoLista } from "@/components/lista/paginacao-lista";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { Selecao } from "@/components/formulario";
 import { listarPropostas, marcasDeRevisao } from "@/modules/propostas/queries";
 import { ROTULO_STATUS_PROPOSTA, STATUS_PROPOSTA } from "@/modules/propostas/schemas";
@@ -16,7 +16,7 @@ import { TabelaPropostas } from "@/modules/propostas/components/tabela-propostas
 export const metadata: Metadata = { title: "Propostas" };
 
 export default async function PaginaPropostas({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("COMERCIAL", { exige: ["valores"] });
   const brutos = await searchParams;
   const { linhas, paginacao, parametros, filtros } = await listarPropostas(brutos);
   const filtrando = !!(parametros.busca || filtros.status || filtros.projeto || filtros.revisoes === "todas");

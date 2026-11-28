@@ -7,7 +7,7 @@ import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios/navegacao-de-visoes";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { CORTES_ABC_PADRAO, lerCortesAbc, type CortesAbc } from "@/lib/dominio/relatorio-estoque";
 import { formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
@@ -39,7 +39,7 @@ const th = "px-3 py-2";
 const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function PaginaRelatorioDeEstoque({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "ESTOQUE"]);
   const brutos = await searchParams;
   const periodo = lerPeriodoDoRelatorioDeEstoque(brutos);
   const visao = lerVisao(brutos.visao, VISOES);

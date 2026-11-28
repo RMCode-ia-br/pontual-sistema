@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_FORMA, type FormaPagamento } from "@/lib/dominio/parcelas";
 import { dataLocalDoInstante, formatarData, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { AcoesDePagar } from "@/modules/financeiro/components/acoes-de-pagar";
@@ -24,7 +24,7 @@ function Item({ rotulo, children }: { rotulo: string; children: React.ReactNode 
 }
 
 export default async function PaginaDaContaAPagar({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const { id } = await params;
   const hoje = dataLocalDoInstante(new Date());
   const c = await obterContaAPagar(id, hoje);

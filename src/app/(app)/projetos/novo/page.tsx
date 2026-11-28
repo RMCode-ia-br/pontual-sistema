@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
 import { FormProjeto } from "@/modules/projetos/components/form-projeto";
@@ -11,7 +11,7 @@ import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 export const metadata: Metadata = { title: "Novo projeto" };
 
 export default async function PaginaNovoProjeto({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("COMERCIAL", { nivel: "alterar" });
   const { cliente: clienteId } = await searchParams;
 
   // Vindo da ficha do cliente (?cliente=ID): já chega com o cliente escolhido.

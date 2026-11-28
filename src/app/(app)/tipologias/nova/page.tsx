@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormTipologia } from "@/modules/tipologias/components/form-tipologia";
 
 export const metadata: Metadata = { title: "Nova tipologia" };
 
 export default async function PaginaNovaTipologia() {
-  await exigirSessao();
+  await exigirModulo("CADASTROS", { nivel: "alterar" });
   return (
     <>
       <p className="mb-2 text-sm">

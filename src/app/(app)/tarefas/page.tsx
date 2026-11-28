@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { cn } from "@/lib/utils";
 import { FormTarefa } from "@/modules/tarefas/components/form-tarefa";
 import { ListaTarefas } from "@/modules/tarefas/components/lista-tarefas";
@@ -18,7 +18,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaTarefas({ searchParams }: { searchParams: Promise<{ status?: string; quem?: string }> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("AGENDA");
   const { status: statusBruto, quem } = await searchParams;
   const status = lerFiltroStatus(statusBruto);
   const soMinhas = quem === "minhas";

@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { NumeroDoPainel, type Comparativo } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { detalheDoTempoVisitaProposta, percentualDaMeta } from "@/lib/dominio/indicadores";
@@ -45,7 +45,7 @@ function Secao({ id, titulo, href, rotuloDoLink, children }: { id: string; titul
 }
 
 export default async function PaginaPainel({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("PAINEL");
   const agora = new Date();
   const hoje = dataLocalDoInstante(agora);
   const { periodo, tipo, aviso } = lerPeriodo(await searchParams, hoje);

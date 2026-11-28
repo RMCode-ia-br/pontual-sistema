@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
 import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
 import { Input } from "@/components/ui/input";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { detalharPorCategoria, linhasDaDemonstracao, montarDre, ROTULO_GRUPO_DRE, TODOS_OS_GRUPOS_DRE } from "@/lib/dominio/dre";
 import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ const NOMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 const rotuloDoMes = (m: string) => `${NOMES[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
 
 export default async function PaginaDoDre({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const hoje = dataLocalDoInstante(new Date());
   const periodo = lerPeriodoDoDre(await searchParams, hoje);
   const [movimentos, contas] = await Promise.all([carregarMovimentosDoDre(periodo), listarContasFinanceiras(hoje)]);

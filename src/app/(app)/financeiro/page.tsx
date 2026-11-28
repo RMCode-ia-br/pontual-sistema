@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { somarDias } from "@/lib/dominio/calendario";
 import { fluxoRealizado, janelasDeDias, periodosMensais, projetarFluxo } from "@/lib/dominio/fluxo-caixa";
 import { somarMeses } from "@/lib/dominio/parcelamento";
@@ -40,7 +40,7 @@ function Cartao({ titulo, valor, sub, href, alerta }: { titulo: string; valor: R
 }
 
 export default async function PaginaDoFluxo({ searchParams }: { searchParams: Promise<{ visao?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const { visao: visaoBruta } = await searchParams;
   const visao = visaoBruta === "dias" ? "dias" : "meses";
   const hoje = dataLocalDoInstante(new Date());

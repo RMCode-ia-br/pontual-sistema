@@ -21,7 +21,7 @@ import { sair } from "@/modules/usuarios/actions/sessao";
 
 import { AlternarTema } from "./alternar-tema";
 import { BuscaGlobal } from "./busca-global";
-import { MENU_CELULAR, rotaAtiva } from "./menu";
+import { menuCelularVisivel, rotaAtiva, type PermissoesDoMenu } from "./menu";
 import { Navegacao } from "./navegacao";
 import { Sino } from "./sino";
 
@@ -29,6 +29,7 @@ type Props = {
   usuario: { nome: string; login: string };
   marca: { nome: string; logoUrl: string | null };
   naoLidas: number;
+  permissoes: PermissoesDoMenu;
   children: React.ReactNode;
 };
 
@@ -51,7 +52,8 @@ function Marca({ nome, logoUrl, compacta = false }: { nome: string; logoUrl: str
   );
 }
 
-export function AppShell({ usuario, marca, naoLidas, children }: Props) {
+export function AppShell({ usuario, marca, naoLidas, permissoes, children }: Props) {
+  const atalhos = menuCelularVisivel(permissoes);
   const caminho = usePathname();
   const router = useRouter();
   const [recolhida, setRecolhida] = useState(false);
@@ -70,7 +72,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
           <Marca nome={marca.nome} logoUrl={marca.logoUrl} compacta={recolhida} />
         </div>
         <div className="flex-1 overflow-y-auto">
-          <Navegacao recolhida={recolhida} />
+          <Navegacao recolhida={recolhida} permissoes={permissoes} />
         </div>
         <div className="border-t p-2">
           <Button
@@ -95,7 +97,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
           </div>
           <div className="flex-1" />
 
-          <BuscaGlobal />
+          <BuscaGlobal permissoes={permissoes} />
 
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button type="button" className="h-9" aria-label="Criar novo" />}>
@@ -151,9 +153,10 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
       {/* Barra inferior (celular) */}
       <nav
         aria-label="Atalhos"
-        className="bg-background fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="bg-background fixed inset-x-0 bottom-0 z-30 grid border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+        style={{ gridTemplateColumns: `repeat(${atalhos.length + 1}, minmax(0, 1fr))` }}
       >
-        {MENU_CELULAR.map((item) => {
+        {atalhos.map((item) => {
           const Icone = item.icone;
           const ativo = rotaAtiva(caminho, item.href);
           return (
@@ -192,7 +195,7 @@ export function AppShell({ usuario, marca, naoLidas, children }: Props) {
               <span className="truncate">{marca.nome}</span>
             </SheetTitle>
           </SheetHeader>
-          <Navegacao aoNavegar={() => setMenuAberto(false)} />
+          <Navegacao aoNavegar={() => setMenuAberto(false)} permissoes={permissoes} />
         </SheetContent>
       </Sheet>
     </div>

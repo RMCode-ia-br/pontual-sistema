@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { CartaoDePrecoKg } from "@/modules/produtos/components/cartao-preco-kg";
 import { ReajusteDoKg } from "@/modules/produtos/components/reajuste-do-kg";
 import { carregarTelaDoPrecoKg } from "@/modules/produtos/queries-preco-kg";
@@ -13,7 +13,7 @@ import { carregarTelaDoPrecoKg } from "@/modules/produtos/queries-preco-kg";
 export const metadata: Metadata = { title: "Preço do kg do alumínio" };
 
 export default async function PaginaPrecoDoKg() {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { exige: ["custo"] });
   const tela = await carregarTelaDoPrecoKg();
   const comPreco = tela.acabamentos.filter((a) => a.geralCentavos !== null || a.porLinha.some((p) => p.custoKgCentavos !== null)).length;
 

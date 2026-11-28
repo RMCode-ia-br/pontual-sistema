@@ -2,7 +2,7 @@ import { CheckCircle2, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import {
@@ -52,7 +52,7 @@ function Medidor({ titulo, usado, limite, nota }: { titulo: string; usado: numbe
 }
 
 export default async function PaginaBackup() {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
 
   const [banco, arquivos] = await Promise.all([
     prisma.$queryRaw<{ bytes: bigint }[]>`SELECT pg_database_size(current_database()) AS bytes`,

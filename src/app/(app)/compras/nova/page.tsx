@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { FormCompra, type ItemInicial } from "@/modules/compras/components/form-compra";
 import { opcoesDeCompra } from "@/modules/compras/queries";
@@ -57,7 +57,7 @@ async function itensDeVidro(texto: string | undefined, projetoId: string | null)
 }
 
 export default async function PaginaNovaCompra({ searchParams }: { searchParams: Promise<{ obra?: string; tipo?: string; itens?: string; vidros?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { nivel: "alterar", exige: ["valores"] });
   const { obra, tipo, itens: itensTexto, vidros: vidrosTexto } = await searchParams;
   const opcoes = await opcoesDeCompra();
   const projeto = obra ? await prisma.projeto.findFirst({ where: { id: obra.slice(0, 64), deletadoEm: null }, select: { id: true, codigo: true, titulo: true } }) : null;

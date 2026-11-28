@@ -6,7 +6,7 @@ import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { FORMAS_PAGAMENTO, ROTULO_FORMA } from "@/lib/dominio/parcelas";
 import { montarConsulta } from "@/lib/listas/parametros";
@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Recebimentos" };
 type Parametros = Record<string, string | string[] | undefined>;
 
 export default async function PaginaDeRecebimentos({ searchParams }: { searchParams: Promise<Parametros> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const sp = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const { periodo, tipo, aviso } = lerPeriodo(sp, hoje);

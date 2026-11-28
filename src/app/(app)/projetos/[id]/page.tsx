@@ -7,7 +7,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { formatarTelefone } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
@@ -45,7 +45,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaProjeto({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("COMERCIAL");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 

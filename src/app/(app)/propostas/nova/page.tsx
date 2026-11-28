@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { EscolherProjeto } from "@/modules/propostas/components/escolher-projeto";
 import { listarProjetosParaProposta } from "@/modules/propostas/queries";
 
 export const metadata: Metadata = { title: "Nova proposta" };
 
 export default async function PaginaNovaProposta({ searchParams }: { searchParams: Promise<{ projeto?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("COMERCIAL", { nivel: "alterar", exige: ["valores"] });
   const { projeto } = await searchParams;
   const projetos = await listarProjetosParaProposta();
   return (

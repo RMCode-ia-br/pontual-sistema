@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect } from "@/components/lista/filtros-da-lista";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { limitesDoDia } from "@/lib/dominio/agenda";
 import { diasDaSemana } from "@/lib/dominio/calendario";
 import { dataLocalDoInstante, inputParaData } from "@/lib/formatadores";
@@ -27,7 +27,7 @@ type Busca = Record<string, string | string[] | undefined>;
 const primeiro = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function PaginaAgenda({ searchParams }: { searchParams: Promise<Busca> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("AGENDA");
   const brutos = await searchParams;
 
   const hoje = dataLocalDoInstante(new Date());

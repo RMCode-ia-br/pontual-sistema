@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { hojeCalendario } from "@/lib/formatadores";
 import { PainelFeriados } from "@/modules/feriados/components/painel-feriados";
 import { anosComFeriados, listarFeriados } from "@/modules/feriados/queries";
@@ -9,7 +9,7 @@ import { anosComFeriados, listarFeriados } from "@/modules/feriados/queries";
 export const metadata: Metadata = { title: "Feriados e férias" };
 
 export default async function PaginaFeriados({ searchParams }: { searchParams: Promise<{ ano?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
   const { ano: anoBruto } = await searchParams;
   const anoAtual = hojeCalendario().getUTCFullYear();
   const pedido = Number(anoBruto);

@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_STATUS_DA_COMPRA } from "@/lib/dominio/compras";
 import { formatarQuantidade } from "@/lib/dominio/estoque";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Compra" };
 const ROTULO_CONTA = { ABERTA: "Em aberto", PARCIAL: "Paga em parte", PAGA: "Paga", CANCELADA: "Cancelada" } as const;
 
 export default async function PaginaDaCompra({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { exige: ["valores"] });
   const { id } = await params;
   const hoje = dataLocalDoInstante(new Date());
   const compra = await obterCompra(id, hoje);

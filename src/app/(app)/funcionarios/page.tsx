@@ -4,14 +4,14 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { PainelListaFuncionarios } from "@/modules/funcionarios/components/painel-lista-funcionarios";
 import { SubnavFuncionarios } from "@/modules/funcionarios/components/subnav-funcionarios";
 
 export const metadata: Metadata = { title: "Funcionários" };
 
 export default async function PaginaFuncionarios({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("CADASTROS");
   const brutos = await searchParams;
   return (
     <>

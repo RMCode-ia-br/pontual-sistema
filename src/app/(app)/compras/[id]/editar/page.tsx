@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { FormCompra } from "@/modules/compras/components/form-compra";
 import { obterCompra, opcoesDeCompra } from "@/modules/compras/queries";
@@ -11,7 +11,7 @@ import { obterCompra, opcoesDeCompra } from "@/modules/compras/queries";
 export const metadata: Metadata = { title: "Editar compra" };
 
 export default async function PaginaEditarCompra({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { nivel: "alterar", exige: ["valores"] });
   const { id } = await params;
   const compra = await obterCompra(id, dataLocalDoInstante(new Date()));
   if (!compra) notFound();

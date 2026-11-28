@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormEquipe } from "@/modules/funcionarios/components/form-equipe";
 import { SubnavFuncionarios } from "@/modules/funcionarios/components/subnav-funcionarios";
 import { listarEquipes } from "@/modules/funcionarios/queries";
@@ -13,7 +13,7 @@ import { listarEquipes } from "@/modules/funcionarios/queries";
 export const metadata: Metadata = { title: "Equipes" };
 
 export default async function PaginaEquipes() {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const equipes = await listarEquipes();
   return (
     <>

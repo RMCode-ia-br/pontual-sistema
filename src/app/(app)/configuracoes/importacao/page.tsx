@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { listarLotes } from "@/modules/importacao/aplicar";
 import { AssistenteDeImportacao } from "@/modules/importacao/components/assistente-de-importacao";
 import { ImportacoesAnteriores } from "@/modules/importacao/components/importacoes-anteriores";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Importação" };
 export const maxDuration = 60;
 
 export default async function PaginaImportacao() {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
   const lotes = await listarLotes();
   return (
     <>

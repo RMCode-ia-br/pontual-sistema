@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { dataLocalDoInstante, formatarData, formatarTelefone } from "@/lib/formatadores";
@@ -45,7 +45,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaCliente({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CLIENTES");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 

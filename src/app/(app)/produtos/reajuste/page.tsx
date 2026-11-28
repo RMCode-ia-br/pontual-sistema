@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { TelaDeReajuste } from "@/modules/produtos/components/tela-de-reajuste";
 import { listarOpcoesDeProduto } from "@/modules/produtos/queries";
 
 export const metadata: Metadata = { title: "Reajuste em lote" };
 
 export default async function PaginaReajuste() {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { nivel: "alterar", exige: ["custo"] });
   const { fornecedores, categorias } = await listarOpcoesDeProduto();
   return (
     <>

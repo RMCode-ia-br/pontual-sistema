@@ -7,7 +7,7 @@ import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_TIPO_ETAPA, TIPOS_DE_ETAPA } from "@/lib/dominio/etapas";
 import { ROTULO_SEMAFORO } from "@/lib/dominio/semaforo";
 import { montarConsulta } from "@/lib/listas/parametros";
@@ -25,7 +25,7 @@ type Busca = Record<string, string | string[] | undefined>;
 const numero = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 export default async function PaginaObras({ searchParams }: { searchParams: Promise<Busca> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS");
   const brutos = await searchParams;
   const filtros = lerFiltrosDeObras(brutos);
   const andamento = filtros.situacao === "andamento";

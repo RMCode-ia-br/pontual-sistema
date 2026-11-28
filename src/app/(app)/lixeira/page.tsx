@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { cn } from "@/lib/utils";
 import { restaurarClientes, restaurarEquipes, restaurarFornecedores, restaurarFuncionarios, restaurarProdutos, restaurarProjetos } from "@/modules/lixeira/actions";
 import { ListaDaLixeira } from "@/modules/lixeira/components/lista-da-lixeira";
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Lixeira" };
 const RESTAURAR = { clientes: restaurarClientes, fornecedores: restaurarFornecedores, funcionarios: restaurarFuncionarios, produtos: restaurarProdutos, equipes: restaurarEquipes, projetos: restaurarProjetos };
 
 export default async function PaginaLixeira({ searchParams }: { searchParams: Promise<{ tipo?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const { tipo: bruto } = await searchParams;
   const tipo = lerTipoDaLixeira(bruto);
   const [itens, contagem] = await Promise.all([listarLixeira(tipo), contarLixeira()]);

@@ -7,7 +7,7 @@ import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { formatarQuantidade } from "@/lib/dominio/estoque";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
@@ -21,7 +21,7 @@ const ROTULO_STATUS = { DISPONIVEL: "Disponível", CONSUMIDO: "Usado em obra", D
 const ROTULO_SUCATA = { GERACAO: "Entrada de sucata", VENDA: "Venda", AJUSTE: "Ajuste" } as const;
 
 export default async function PaginaRetalhos({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE");
   const filtro = lerFiltroDeRetalhos(await searchParams);
   const hoje = dataLocalDoInstante(new Date());
   const [{ linhas, temMais }, contagem, sucata, contas, cfg] = await Promise.all([

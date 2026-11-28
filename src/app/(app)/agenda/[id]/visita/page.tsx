@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { formatarDataHora } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Visita" };
 
 /** Tela de visita para o celular: medidas-rascunho com foto por vão, dados da obra e condomínio (R9). */
 export default async function PaginaVisita({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("AGENDA");
   const { id } = await params;
   const evento = await obterEvento(id);
   if (!evento || !evento.projetoId) notFound();

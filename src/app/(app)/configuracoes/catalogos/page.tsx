@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { cn } from "@/lib/utils";
 import { CATALOGOS, definicaoPorSlug } from "@/modules/catalogos/definicoes";
 import { listarCatalogo } from "@/modules/catalogos/repositorio";
@@ -11,7 +11,7 @@ import { PainelCatalogo } from "@/modules/catalogos/components/painel-catalogo";
 export const metadata: Metadata = { title: "Catálogos" };
 
 export default async function PaginaCatalogos({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const { c } = await searchParams;
   const def = definicaoPorSlug(c) ?? CATALOGOS[0];
   const itens = await listarCatalogo(def.slug);

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { formatarDataCalendario } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
 import { listarAnexos } from "@/modules/anexos/queries";
@@ -15,7 +15,7 @@ import { listarUsuariosAtivos, obterTarefa } from "@/modules/tarefas/queries";
 export const metadata: Metadata = { title: "Tarefa" };
 
 export default async function PaginaTarefa({ params }: { params: Promise<{ id: string }> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("AGENDA");
   const { id } = await params;
 
   const tarefa = await obterTarefa(id);

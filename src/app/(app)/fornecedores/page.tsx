@@ -4,13 +4,13 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { PainelListaFornecedores } from "@/modules/fornecedores/components/painel-lista-fornecedores";
 
 export const metadata: Metadata = { title: "Fornecedores" };
 
 export default async function PaginaFornecedores({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("CADASTROS");
   const brutos = await searchParams;
   return (
     <>

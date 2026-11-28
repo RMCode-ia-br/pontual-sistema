@@ -8,8 +8,8 @@ Plano aprovado pelo Régis em 2026-11-27 (arquivo de plano da sessão; decisões
 |---|---|---|
 | 0 Inventário, decisões, CLAUDE.md | concluído, `verificar` e Vercel verdes | `979d772` |
 | 1 Migração `20261128000000_permissoes_perfis` | concluído: aplicada no banco de São Paulo com OK do Régis; `papel: ADMIN` explícito em `criarUsuario`, seed e nos dois helpers de teste que inserem em SQL cru; `verificar` e Vercel verdes | `8d42985` |
-| 2 Regra pura, sessão com permissões, seed | concluído (aguardando commit): `src/lib/dominio/permissoes.ts`, `can` real, `UsuarioSessao.permissoes`, 93 testes novos | — |
-| 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | pendente | — |
+| 2 Regra pura, sessão com permissões, seed | concluído, `verificar` e Vercel verdes | `22e3484` |
+| 3 Menu, `/sem-acesso`, `exigirModulo` nas páginas | concluído (aguardando commit): typecheck, lint, build, 246 unitários da área e E2E `area-logada` verdes | — |
 | 4 Server Actions | pendente (parada obrigatória ao fim, relatório parcial) | — |
 | 5 Rotas, anexos, busca, CSV | pendente | — |
 | 6 Valores para o Campo, custo, painel, relatórios | pendente | — |
@@ -58,3 +58,10 @@ ALTER TABLE "Usuario" DROP COLUMN "ajustesPermissao", ALTER COLUMN "papel" SET D
 - `obterUsuarioAtual` lê `ajustesPermissao` na mesma consulta e devolve `permissoes`; ajuste inválido vai para o log com o id do usuário (nunca o conteúdo).
 - Recursos de nome ambíguo (`projeto`, `configuracao`, `interacao`) ficam mapeados de forma provisória e conservadora; o Bloco 4 os troca por `visita`, `mao-de-obra`, `interacao-cliente`/`interacao-projeto` e a varredura passa a proibir os antigos.
 - Testes: `tests/unit/permissoes.test.ts` (tabela esperada escrita à mão, perfil × módulo × nível, transversais, ajustes acima e abaixo do perfil, falha fechada com 8 tipos de ajuste inválido) e `tests/unit/permissoes-varredura.test.ts` (todo `can(` do código tem verbo e recurso mapeados; recurso dinâmico só na lixeira).
+
+## Bloco 3 — Menu, páginas e `/sem-acesso`
+
+- **Menu:** cada item tem `modulo` (e `exige` para "Preço do kg" = custo). `menuVisivel`, `menuCelularVisivel` e `paginasDisponiveis(permissoes)` são funções puras; as permissões chegam aos componentes de cliente como dado simples (`modulos`, `verValores`, `verCustoMargem`), nunca como função. Agenda e Tarefas viraram o grupo "Agenda e tarefas" (decisão 176); "Condições de pagamento" passou para Cadastros; "Ajuda" (primeiros passos, que lê contagens de usuários e produtos) exige Configurações. Barra do celular: até 4 atalhos entre Painel, Funil, Agenda, Tarefas e Obras (o Campo vê Painel, Agenda, Tarefas e Obras). Abas de Configurações filtradas pelo módulo de cada aba.
+- **Páginas:** `exigirModulo(modulos, { nivel, exige })` (`src/lib/auth/modulo.ts`) nas 90 páginas, aplicado por script com tabela explícita rota → módulo; telas de cadastro novo, edição, reajuste e inventário inicial exigem "alterar"; telas de dinheiro (propostas, financeiro, compras e relatórios financeiros e de vendas) exigem também "ver valores"; preço do kg, reajuste de produtos e margem por obra exigem "ver custo e margem"; cada relatório exige Relatórios mais o módulo de origem. Sem acesso: `/sem-acesso` ("Você não tem acesso a esta área. Fale com o administrador."), que só pede sessão para não haver laço.
+- **Testes:** `tests/unit/paginas-e-menu-permissao.test.ts` (toda página chama `exigirModulo`, exceções com motivo; cada item do menu aponta para uma página que exige o mesmo módulo; menu de cada perfil e do ajuste inválido). Único ajuste num E2E existente: `area-logada.spec.ts` abre "Agenda e tarefas" para achar "Tarefas".
+- **Fica para o Bloco 6:** valores DENTRO de telas que o Campo vê (obra, cliente, visita, linha do tempo, lista de obras), o índice `/relatorios` filtrado por link, e custo nas telas de produto, funcionário e tipologia.

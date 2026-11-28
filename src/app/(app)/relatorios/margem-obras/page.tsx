@@ -10,7 +10,7 @@ import { GraficoDeBarras } from "@/components/relatorios/grafico-de-barras";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
 import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
@@ -26,7 +26,7 @@ export const metadata: Metadata = { title: "Margem por obra" };
 const pct = (pb: number) => `${(pb / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
 export default async function PaginaMargemPorObra({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo(["RELATORIOS", "OBRAS"], { exige: ["custo"] });
   // Custo e margem são dados internos: sem a permissão, a página nem consulta (decisão: quem não vê custo não vê margem).
   if (!can(usuario, "ver", "custo")) {
     return <EstadoVazio icone={Printer} titulo="Sem permissão para ver custo e margem" descricao="Este relatório mostra o custo e a margem de cada obra. Peça acesso a quem administra o sistema." />;

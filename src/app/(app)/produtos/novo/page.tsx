@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormProduto } from "@/modules/produtos/components/form-produto";
 import { listarOpcoesDeProduto } from "@/modules/produtos/queries";
 
 export const metadata: Metadata = { title: "Novo produto" };
 
 export default async function PaginaNovoProduto() {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { nivel: "alterar" });
   const opcoes = await listarOpcoesDeProduto();
   return (
     <>

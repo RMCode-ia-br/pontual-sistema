@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect } from "@/components/lista/filtros-da-lista";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { limitesDoDia } from "@/lib/dominio/agenda";
 import { diasDaSemana } from "@/lib/dominio/calendario";
 import { dataLocalDoInstante, inputParaData } from "@/lib/formatadores";
@@ -31,7 +31,7 @@ const primeiro = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] 
 const TIPOS_DO_CALENDARIO: readonly TipoEvento[] = ["INSTALACAO", "MEDICAO_VIDROS", "ENTREGA"];
 
 export default async function PaginaCalendarioDeInstalacao({ searchParams }: { searchParams: Promise<Busca> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS");
   const brutos = await searchParams;
 
   const hoje = dataLocalDoInstante(new Date());

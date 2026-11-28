@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormCliente } from "@/modules/clientes/components/form-cliente";
 
 export const metadata: Metadata = { title: "Novo cliente" };
 
 export default async function PaginaNovoCliente() {
-  await exigirSessao();
+  await exigirModulo("CLIENTES", { nivel: "alterar" });
   return (
     <>
       <p className="mb-2 text-sm">

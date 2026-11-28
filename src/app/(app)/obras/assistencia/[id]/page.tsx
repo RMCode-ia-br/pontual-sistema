@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { formatarNumeroDoChamado, ROTULO_STATUS_CHAMADO, ROTULO_TIPO_PROBLEMA } from "@/lib/dominio/chamados";
 import { dataLocalDoInstante, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
@@ -17,7 +17,7 @@ import { obterChamado } from "@/modules/obras/queries-chamados";
 export const metadata: Metadata = { title: "Chamado" };
 
 export default async function PaginaChamado({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS");
   const { id } = await params;
   const c = await obterChamado(id);
   if (!c) notFound();

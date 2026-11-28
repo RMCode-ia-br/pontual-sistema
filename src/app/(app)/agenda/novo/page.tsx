@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { formatarNumeroDoChamado } from "@/lib/dominio/chamados";
 import { obterExpediente } from "@/modules/agenda/queries";
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Novo compromisso" };
 const ID = /^[\w-]{1,64}$/;
 
 export default async function PaginaNovoEvento({ searchParams }: { searchParams: Promise<{ inicio?: string; projeto?: string; tipo?: string; etapa?: string; equipe?: string; chamado?: string }> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("AGENDA", { nivel: "alterar" });
   const { inicio, projeto: projetoIdDaUrl, tipo, etapa: etapaId, equipe: equipeId, chamado: chamadoId } = await searchParams;
 
   // Vindo de um chamado de assistência (?chamado=ID): chega com o cliente e a obra do chamado, e o tipo "Assistência".

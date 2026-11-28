@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { cn } from "@/lib/utils";
 import { listarTipologias } from "@/modules/tipologias/queries";
 import { ROTULO_CATEGORIA_MARKUP, ROTULO_CATEGORIA_TIPOLOGIA, ROTULO_COBRANCA } from "@/modules/tipologias/schemas";
@@ -14,7 +14,7 @@ import { ROTULO_CATEGORIA_MARKUP, ROTULO_CATEGORIA_TIPOLOGIA, ROTULO_COBRANCA } 
 export const metadata: Metadata = { title: "Tipologias e preços" };
 
 export default async function PaginaTipologias({ searchParams }: { searchParams: Promise<{ situacao?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const { situacao: bruta } = await searchParams;
   const situacao = bruta === "inativas" || bruta === "todas" ? bruta : "ativas";
   const tipologias = await listarTipologias(situacao);

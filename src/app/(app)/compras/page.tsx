@@ -7,7 +7,7 @@ import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_STATUS_DA_COMPRA } from "@/lib/dominio/compras";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ import { ABAS_DE_COMPRAS, lerFiltroDeCompras, listarCompras } from "@/modules/co
 export const metadata: Metadata = { title: "Compras" };
 
 export default async function PaginaCompras({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { exige: ["valores"] });
   const filtro = lerFiltroDeCompras(await searchParams);
   const hoje = dataLocalDoInstante(new Date());
   const { linhas, temMais, contagens } = await listarCompras(filtro, hoje);

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaginacaoLista } from "@/components/lista/paginacao-lista";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { lerParametrosLista } from "@/lib/listas/parametros";
 import { AcoesDaConta, ExtratoDaContaLista } from "@/modules/financeiro/components/extrato-da-conta";
@@ -20,7 +20,7 @@ import { ROTULO_TIPO_DE_CONTA } from "@/modules/financeiro/schemas";
 export const metadata: Metadata = { title: "Conta" };
 
 export default async function PaginaDaConta({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const { id } = await params;
   const hoje = dataLocalDoInstante(new Date());
   const conta = await obterContaFinanceira(id, hoje);

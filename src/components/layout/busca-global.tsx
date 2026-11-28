@@ -9,13 +9,13 @@ import { Command as Comando, CommandEmpty, CommandGroup, CommandInput, CommandIt
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buscaGlobal, type ResultadoBusca } from "@/modules/busca/actions";
 
-import { paginasDisponiveis } from "./menu";
+import { paginasDisponiveis, type PermissoesDoMenu } from "./menu";
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
 const VAZIO: ResultadoBusca = { clientes: [], projetos: [], propostas: [], fornecedores: [], produtos: [], funcionarios: [], tarefas: [], usuarios: [] };
 
-export function BuscaGlobal() {
+export function BuscaGlobal({ permissoes }: { permissoes: PermissoesDoMenu }) {
   const router = useRouter();
   const [aberta, setAberta] = useState(false);
   const [termo, setTermo] = useState("");
@@ -51,8 +51,8 @@ export function BuscaGlobal() {
 
   const paginas = useMemo(() => {
     const q = semAcento(termo.trim());
-    return paginasDisponiveis().filter((p) => !q || semAcento(`${p.titulo} ${p.grupo}`).includes(q));
-  }, [termo]);
+    return paginasDisponiveis(permissoes).filter((p) => !q || semAcento(`${p.titulo} ${p.grupo}`).includes(q));
+  }, [termo, permissoes]);
 
   const visivel = termo.trim().length >= 2 ? resultado : VAZIO;
 

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { abaixoDoMinimo, formatarQuantidade } from "@/lib/dominio/estoque";
 import { prisma } from "@/lib/db";
 import { dataLocalDoInstante, formatarData, formatarMoeda } from "@/lib/formatadores";
@@ -32,7 +32,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaProduto({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 

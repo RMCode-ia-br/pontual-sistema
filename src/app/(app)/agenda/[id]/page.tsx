@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarDataHora, instanteParaInputDataHora } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { AcoesDoEvento } from "@/modules/agenda/components/acoes-do-evento";
@@ -35,7 +35,7 @@ function Item({ rotulo, children }: { rotulo: string; children: React.ReactNode 
 }
 
 export default async function PaginaEvento({ params }: { params: Promise<{ id: string }> }) {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("AGENDA");
   const { id } = await params;
   const evento = await obterEvento(id);
   if (!evento) notFound();

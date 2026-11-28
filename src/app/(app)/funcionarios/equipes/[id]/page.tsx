@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { AcoesDaEquipe } from "@/modules/funcionarios/components/acoes-da-equipe";
 import { FormEquipe } from "@/modules/funcionarios/components/form-equipe";
 import { SecaoMembros } from "@/modules/funcionarios/components/secao-membros";
@@ -12,7 +12,7 @@ import { listarFuncionariosForaDaEquipe, obterEquipe } from "@/modules/funcionar
 export const metadata: Metadata = { title: "Equipe" };
 
 export default async function PaginaEquipe({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const { id } = await params;
   const equipe = await obterEquipe(id);
   if (!equipe) notFound();

@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { QuadroDeAging } from "@/modules/financeiro/components/quadro-de-aging";
 import { agingDoPagar } from "@/modules/financeiro/queries-aging";
@@ -13,7 +13,7 @@ import { BotaoImprimir } from "@/modules/relatorios/components/botao-imprimir";
 export const metadata: Metadata = { title: "A pagar por vencimento" };
 
 export default async function RelatorioDoPagar() {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "FINANCEIRO"], { exige: ["valores"] });
   const hoje = dataLocalDoInstante(new Date());
   const r = await agingDoPagar(hoje);
 

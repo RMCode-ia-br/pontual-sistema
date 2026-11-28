@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { can } from "@/lib/permissoes";
 
 export const metadata: Metadata = { title: "Relatórios" };
 
 export default async function PaginaRelatorios() {
-  const usuario = await exigirSessao();
+  const usuario = await exigirModulo("RELATORIOS");
   // Quem não pode ver custo e margem não vê o relatório de margem nem o link dele.
   const verCusto = can(usuario, "ver", "custo");
   return (

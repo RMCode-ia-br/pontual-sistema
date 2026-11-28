@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormFornecedor } from "@/modules/fornecedores/components/form-fornecedor";
 import { listarCategoriasAtivas } from "@/modules/fornecedores/queries";
 
 export const metadata: Metadata = { title: "Novo fornecedor" };
 
 export default async function PaginaNovoFornecedor() {
-  await exigirSessao();
+  await exigirModulo("CADASTROS", { nivel: "alterar" });
   const categorias = await listarCategoriasAtivas();
   return (
     <>

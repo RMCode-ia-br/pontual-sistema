@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { obterConfiguracao } from "@/modules/configuracoes/queries";
@@ -20,7 +20,7 @@ type Passo = {
 };
 
 export default async function PaginaPrimeirosPassos() {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
 
   const [cfg, admin, outrosAtivos, fornecedoresCompletos, produtosComCusto, funcionarios, clientes, projetos, contasFinanceiras] = await Promise.all([
     obterConfiguracao(),

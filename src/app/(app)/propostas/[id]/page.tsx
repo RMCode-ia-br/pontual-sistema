@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { formatarRevisao } from "@/lib/dominio/numeracao-proposta";
 import { linkWhatsApp, preencherModelo, primeiroNome } from "@/lib/dominio/modelos-texto";
@@ -29,7 +29,7 @@ import type { StatusProposta } from "@/lib/dominio/ciclo-proposta";
 export const metadata: Metadata = { title: "Proposta" };
 
 export default async function PaginaProposta({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("COMERCIAL", { exige: ["valores"] });
   const { id } = await params;
   const proposta = await obterPropostaParaEditor(id);
   if (!proposta) notFound();

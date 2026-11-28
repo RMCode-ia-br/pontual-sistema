@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormCondicao } from "@/modules/condicoes-pagamento/components/form-condicao";
 
 export const metadata: Metadata = { title: "Nova condição de pagamento" };
 
 export default async function PaginaNovaCondicao() {
-  await exigirSessao();
+  await exigirModulo("CADASTROS", { nivel: "alterar" });
   return (
     <>
       <p className="mb-2 text-sm">

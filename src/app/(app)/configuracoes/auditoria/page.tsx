@@ -8,7 +8,7 @@ import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { formatarDataHora } from "@/lib/formatadores";
 import { buscarAuditoria, lerFiltrosAuditoria, opcoesDeFiltro, POR_PAGINA, type FiltrosAuditoria } from "@/modules/auditoria/queries";
 
@@ -42,7 +42,7 @@ function consulta(f: FiltrosAuditoria, pagina?: number): string {
 }
 
 export default async function PaginaAuditoria({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
   const filtros = lerFiltrosAuditoria(await searchParams);
   const [{ linhas, total }, opcoes] = await Promise.all([buscarAuditoria(filtros), opcoesDeFiltro()]);
   const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));

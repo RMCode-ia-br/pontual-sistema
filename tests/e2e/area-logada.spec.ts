@@ -92,8 +92,9 @@ test.describe("área logada", () => {
     const menu = page.getByRole("navigation", { name: "Menu principal" });
     await expect(menu).toBeVisible();
 
-    await menu.getByRole("button", { name: "Comercial" }).click();
+    await menu.getByRole("button", { name: "Agenda e tarefas" }).click();
     await expect(menu.getByRole("link", { name: "Tarefas" })).toBeVisible();
+    await menu.getByRole("button", { name: "Comercial" }).click();
     // Funil, Projetos, Propostas e Obras já existem (links); as telas de fases futuras (ex.: Financeiro) ficam desabilitadas.
     await expect(menu.getByRole("link", { name: "Funil" })).toBeVisible();
     await expect(menu.getByRole("link", { name: "Propostas" })).toBeVisible();

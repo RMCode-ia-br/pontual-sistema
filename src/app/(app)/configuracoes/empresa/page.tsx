@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { FormEmpresa, LogoEmpresa } from "@/modules/configuracoes/components/form-empresa";
 import { obterConfiguracao, obterMarca } from "@/modules/configuracoes/queries";
@@ -10,7 +10,7 @@ import { empresaParaFormulario } from "@/modules/configuracoes/schemas/empresa";
 export const metadata: Metadata = { title: "Empresa" };
 
 export default async function PaginaEmpresa() {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
   const [cfg, marca, categoriasDeReceita] = await Promise.all([
     obterConfiguracao(),
     obterMarca(),

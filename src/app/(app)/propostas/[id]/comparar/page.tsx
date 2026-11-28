@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { compararRevisoes, type ConteudoComparavel, type DiferencaItem } from "@/lib/dominio/ciclo-proposta";
 import { marcaDoDesenho, marcaDoTamanho } from "@/lib/dominio/desenho-item";
@@ -51,7 +51,7 @@ function rotuloDoItem(i: DiferencaItem): string {
 }
 
 export default async function PaginaComparar({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ com?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("COMERCIAL", { exige: ["valores"] });
   const { id } = await params;
   const { com } = await searchParams;
   if (!com) notFound();

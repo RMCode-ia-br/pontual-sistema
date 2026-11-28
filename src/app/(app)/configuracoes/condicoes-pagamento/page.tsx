@@ -6,14 +6,14 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_FORMA, ROTULO_GATILHO } from "@/lib/dominio/parcelas";
 import { listarCondicoes } from "@/modules/condicoes-pagamento/queries";
 
 export const metadata: Metadata = { title: "Condições de pagamento" };
 
 export default async function PaginaCondicoes() {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const condicoes = await listarCondicoes(true);
   return (
     <>

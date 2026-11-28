@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AcoesDoCadastro } from "@/components/acoes-do-cadastro";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { excluirCondicoes, inativarCondicoes, reativarCondicoes } from "@/modules/condicoes-pagamento/actions";
 import { FormCondicao } from "@/modules/condicoes-pagamento/components/form-condicao";
 import { obterCondicao } from "@/modules/condicoes-pagamento/queries";
@@ -13,7 +13,7 @@ import { obterCondicao } from "@/modules/condicoes-pagamento/queries";
 export const metadata: Metadata = { title: "Condição de pagamento" };
 
 export default async function PaginaCondicao({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("CADASTROS");
   const { id } = await params;
   const condicao = await obterCondicao(id);
   if (!condicao) notFound();

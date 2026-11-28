@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_TIPO_PROBLEMA, type TipoDoProblema } from "@/lib/dominio/chamados";
 import { ROTULO_TIPO_ETAPA } from "@/lib/dominio/etapas";
 import { formatarMoeda } from "@/lib/formatadores";
@@ -29,7 +29,7 @@ function Definicao({ titulo, children }: { titulo: string; children: React.React
 }
 
 export default async function PaginaRelatorioDeObras({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "OBRAS"]);
   const periodo = lerPeriodoDoRelatorioDeObras(await searchParams);
   const r = await carregarRelatorioDeObras(periodo);
   const estiloData = "border-input bg-background h-9 rounded-lg border px-2.5 text-sm";

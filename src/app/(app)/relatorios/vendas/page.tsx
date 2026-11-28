@@ -6,7 +6,7 @@ import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios
 import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios/navegacao-de-visoes";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { formatarData, formatarMoeda, dataLocalDoInstante } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
@@ -36,7 +36,7 @@ const DESCRICAO: Record<string, string> = {
 };
 
 export default async function PaginaDeVendas({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "COMERCIAL"], { exige: ["valores"] });
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const { periodo, tipo, aviso } = lerPeriodo(brutos, hoje);

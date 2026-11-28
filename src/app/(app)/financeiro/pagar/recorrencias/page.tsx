@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { BotaoNovaContaAPagar } from "@/modules/financeiro/components/dialogo-conta-pagar";
 import { PainelDeRecorrencias } from "@/modules/financeiro/components/painel-recorrencias";
@@ -12,7 +12,7 @@ import { lerParametrosFinanceiros } from "@/modules/financeiro/queries-receber";
 export const metadata: Metadata = { title: "Contas recorrentes" };
 
 export default async function PaginaDeRecorrencias() {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const hoje = dataLocalDoInstante(new Date());
   const [recorrencias, opcoes, config] = await Promise.all([listarRecorrencias(hoje), opcoesDeContaAPagar(), lerParametrosFinanceiros()]);
 

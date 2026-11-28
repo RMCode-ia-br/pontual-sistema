@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ListaUsuarios } from "@/modules/usuarios/components/lista-usuarios";
 import { listarUsuarios } from "@/modules/usuarios/queries";
 
 export const metadata: Metadata = { title: "Usuários" };
 
 export default async function PaginaUsuarios() {
-  const sessao = await exigirSessao();
+  const sessao = await exigirModulo("CONFIGURACOES");
   const usuarios = await listarUsuarios();
 
   return (

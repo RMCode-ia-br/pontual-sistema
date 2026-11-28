@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios/cabecalho-de-relatorio";
 import { GraficoDeBarras } from "@/components/relatorios/grafico-de-barras";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { rotuloDoPeriodo } from "@/lib/periodo";
@@ -18,7 +18,7 @@ const rotuloDoMes = (mes: string) => `${NOMES_CURTOS[Number(mes.slice(5, 7)) - 1
 const emReais = (centavos: number) => centavos / 100;
 
 export default async function PaginaDoFaturamentoMensal() {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "FINANCEIRO"], { exige: ["valores"] });
   const hoje = dataLocalDoInstante(new Date());
   const lido = await ouAviso(() => faturamentoMensal(hoje, 12));
   if (!lido.ok) return <AvisoDeDadosIncompletos mensagem={lido.mensagem} />; // valor do aceite faltando: bloqueado, nunca soma zero

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { FormChamado } from "@/modules/obras/components/form-chamado";
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Novo chamado" };
 const ID = /^[\w-]{1,64}$/;
 
 export default async function PaginaNovoChamado({ searchParams }: { searchParams: Promise<{ cliente?: string; projeto?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS", { nivel: "alterar" });
   const { cliente: clienteIdDaUrl, projeto: projetoId } = await searchParams;
 
   // Vindo da obra (?projeto=ID) ou do cliente (?cliente=ID): chega com eles escolhidos.

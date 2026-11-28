@@ -8,7 +8,7 @@ import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-list
 import { ListaDeRegistros, type ColunaLista, type LinhaLista } from "@/components/lista/lista-de-registros";
 import { PaginacaoLista } from "@/components/lista/paginacao-lista";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
 import { hrefDaLista, montarConsulta, type ParametrosBrutos } from "@/lib/listas/parametros";
 import { textoDaSituacao } from "@/modules/financeiro/components/selo-da-situacao";
@@ -49,7 +49,7 @@ function paraLinha(c: ContaAReceberDaLista): LinhaLista {
 }
 
 export default async function PaginaAReceber({ searchParams }: { searchParams: Promise<ParametrosBrutos> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const { parametros, filtros } = lerListaAReceber(brutos);

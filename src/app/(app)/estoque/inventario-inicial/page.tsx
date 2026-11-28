@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { GradeDeContagem } from "@/modules/estoque/components/grade-de-contagem";
 import { produtosSemMovimento } from "@/modules/estoque/queries";
@@ -14,7 +14,7 @@ import { produtosSemMovimento } from "@/modules/estoque/queries";
 export const metadata: Metadata = { title: "Contagem inicial do estoque" };
 
 export default async function PaginaContagemInicial({ searchParams }: { searchParams: Promise<{ busca?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE", { nivel: "alterar" });
   const { busca: brutoDaBusca } = await searchParams;
   const busca = (brutoDaBusca ?? "").trim().slice(0, 80) || undefined;
   const { produtos, temMais } = await produtosSemMovimento(busca, 100);

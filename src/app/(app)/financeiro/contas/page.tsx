@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante } from "@/lib/formatadores";
 import { PainelDeContas } from "@/modules/financeiro/components/painel-de-contas";
 import { listarContasFinanceiras, opcoesDeLancamento } from "@/modules/financeiro/queries";
@@ -9,7 +9,7 @@ import { listarContasFinanceiras, opcoesDeLancamento } from "@/modules/financeir
 export const metadata: Metadata = { title: "Contas e lançamentos" };
 
 export default async function PaginaDeContas() {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const hoje = dataLocalDoInstante(new Date());
   const [todas, opcoes] = await Promise.all([listarContasFinanceiras(hoje, { incluirInativas: true }), opcoesDeLancamento()]);
 

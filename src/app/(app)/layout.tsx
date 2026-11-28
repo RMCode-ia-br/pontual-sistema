@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { exigirSessao } from "@/lib/auth/sessao";
+import { permissoesDe } from "@/lib/permissoes";
 import { obterMarca } from "@/modules/configuracoes/queries";
 import { contarNaoLidas } from "@/modules/notificacoes/queries";
 
@@ -16,8 +17,15 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
   const usuario = await exigirSessao();
   const [marca, naoLidas] = await Promise.all([obterMarca(), contarNaoLidas(usuario.id)]);
 
+  const { modulos, verValores, verCustoMargem } = permissoesDe(usuario);
+
   return (
-    <AppShell usuario={{ nome: usuario.nome, login: usuario.login }} marca={marca} naoLidas={naoLidas}>
+    <AppShell
+      usuario={{ nome: usuario.nome, login: usuario.login }}
+      marca={marca}
+      naoLidas={naoLidas}
+      permissoes={{ modulos, verValores, verCustoMargem }}
+    >
       {children}
     </AppShell>
   );

@@ -8,7 +8,7 @@ import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect } from "@/components/lista/filtros-da-lista";
 import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios/navegacao-de-visoes";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { valorParaCentavos } from "@/lib/dominio/numeros";
 import { ROTULO_STATUS_PROJETO } from "@/lib/dominio/funil";
 import { lerCortesDeFaixa } from "@/lib/dominio/relatorios-comerciais";
@@ -46,7 +46,7 @@ function Definicao({ titulo, children }: { titulo: string; children: React.React
 }
 
 export default async function PaginaRelatorioFunil({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "COMERCIAL"]);
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const filtros = lerFiltrosDoRelatorio(brutos, hoje);

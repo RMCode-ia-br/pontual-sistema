@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { EditorModeloEtapas } from "@/modules/obras/components/editor-modelo-etapas";
 import { obterModeloPadrao } from "@/modules/obras/queries";
 
 export const metadata: Metadata = { title: "Modelo de etapas" };
 
 export default async function PaginaModeloDeEtapas() {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
   const modelo = await obterModeloPadrao();
   return (
     <>

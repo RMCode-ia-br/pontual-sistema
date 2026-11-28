@@ -5,7 +5,7 @@ import { LinkDeCsvDaTabela } from "@/components/relatorios/link-de-csv-da-tabela
 import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios/cabecalho-de-relatorio";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { detalheDoTempoVisitaProposta } from "@/lib/dominio/indicadores";
 import { dataLocalDoInstante, formatarData, formatarMoeda } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
@@ -15,7 +15,7 @@ import { DIAS_DA_JANELA_DE_FECHAMENTO, fechamentoNaJanela, janelaDeFechamento, L
 export const metadata: Metadata = { title: "Fechamento e tempo de resposta" };
 
 export default async function PaginaDeFechamento({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "COMERCIAL"]);
   const hoje = dataLocalDoInstante(new Date());
   const { periodo, tipo, aviso } = lerPeriodo(await searchParams, hoje);
   const janela = janelaDeFechamento(periodo, hoje);

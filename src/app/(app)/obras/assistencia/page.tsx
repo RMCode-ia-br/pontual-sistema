@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_CLASSIFICACAO } from "@/lib/dominio/garantia";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const SITUACOES = [
 ] as const;
 
 export default async function PaginaAssistencia({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS");
   const filtros = lerFiltrosDeChamados(await searchParams);
   const { linhas, truncado } = await listarChamados(filtros);
   const filtrado = !!(filtros.busca || filtros.classificacao || filtros.clienteId || filtros.projetoId);

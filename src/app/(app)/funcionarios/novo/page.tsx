@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { FormFuncionario } from "@/modules/funcionarios/components/form-funcionario";
 import { listarUsuariosParaVinculo } from "@/modules/funcionarios/queries";
 
 export const metadata: Metadata = { title: "Novo funcionário" };
 
 export default async function PaginaNovoFuncionario() {
-  await exigirSessao();
+  await exigirModulo("CADASTROS", { nivel: "alterar" });
   const usuarios = await listarUsuariosParaVinculo();
   return (
     <>

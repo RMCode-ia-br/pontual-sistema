@@ -5,7 +5,7 @@ import { CabecalhoDeRelatorio, TabelaDeRelatorio } from "@/components/relatorios
 import { ComoECalculado } from "@/components/relatorios/como-e-calculado";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarData, formatarDataCalendario } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo } from "@/lib/periodo";
@@ -17,7 +17,7 @@ const TEXTO: Record<SituacaoDoPedido, string> = { FEITO: "Pedido feito", ABERTO:
 const th = "px-3 py-2";
 
 export default async function PaginaDeAvaliacoes({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "OBRAS"]);
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const { periodo, tipo, aviso } = lerPeriodo(brutos, hoje);

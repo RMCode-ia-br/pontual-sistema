@@ -8,7 +8,7 @@ import { FiltroSelect, FiltrosDaLista } from "@/components/lista/filtros-da-list
 import { PaginacaoLista } from "@/components/lista/paginacao-lista";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_TIPO_DE_MOVIMENTO, type TipoDeMovimento } from "@/lib/dominio/estoque";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { ListaDeMovimentos } from "@/modules/estoque/components/lista-de-movimentos";
@@ -17,7 +17,7 @@ import { lerListaMovimentos, listarMovimentos } from "@/modules/estoque/queries"
 export const metadata: Metadata = { title: "Movimentações de estoque" };
 
 export default async function PaginaMovimentacoes({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("ESTOQUE");
   const brutos = await searchParams;
   const { parametros, filtros } = lerListaMovimentos(brutos);
   const { linhas, paginacao } = await listarMovimentos(parametros, filtros);

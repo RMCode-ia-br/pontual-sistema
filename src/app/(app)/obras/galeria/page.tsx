@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltroSelect } from "@/components/lista/filtros-da-lista";
 import { Button } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_TIPO_SERVICO, TIPOS_SERVICO } from "@/modules/projetos/schemas";
 import { KitDePostagem } from "@/modules/obras/components/kit-de-postagem";
 import { PaginacaoLista } from "@/components/lista/paginacao-lista";
@@ -15,7 +15,7 @@ import { lerFiltrosDaGaleria, listarGaleria } from "@/modules/obras/queries-foto
 export const metadata: Metadata = { title: "Galeria de obras" };
 
 export default async function PaginaGaleria({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS");
   const filtros = lerFiltrosDaGaleria(await searchParams);
   const { obras, opcoes, paginacao, tamanho } = await listarGaleria(filtros);
   const filtrado = !!(filtros.tipo || filtros.cidade || filtros.ano || filtros.publicada);

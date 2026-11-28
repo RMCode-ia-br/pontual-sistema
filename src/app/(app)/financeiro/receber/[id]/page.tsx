@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { ROTULO_FORMA, ROTULO_GATILHO, type FormaPagamento, type Gatilho } from "@/lib/dominio/parcelas";
 import { dataLocalDoInstante, formatarData, formatarDataCalendario, formatarMoeda } from "@/lib/formatadores";
@@ -25,7 +25,7 @@ function Item({ rotulo, children }: { rotulo: string; children: React.ReactNode 
 }
 
 export default async function PaginaDaContaAReceber({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const { id } = await params;
   const hoje = dataLocalDoInstante(new Date());
   const c = await obterContaAReceber(id, hoje);

@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { STATUS_EM_ABERTO } from "@/lib/dominio/chamados";
 import { ROTULO_STATUS_PROJETO, type StatusProjeto } from "@/lib/dominio/funil";
 import { prisma } from "@/lib/db";
@@ -47,7 +47,7 @@ const ABAS = [
 ] as const;
 
 export default async function PaginaObra({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
-  await exigirSessao();
+  await exigirModulo("OBRAS");
   const { id } = await params;
   const { aba: abaBruta } = await searchParams;
 

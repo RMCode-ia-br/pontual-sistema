@@ -7,7 +7,7 @@ import { GraficoDeBarras } from "@/components/relatorios/grafico-de-barras";
 import { lerVisao, NavegacaoDeVisoes, type Visao } from "@/components/relatorios/navegacao-de-visoes";
 import { NumeroDoPainel } from "@/components/relatorios/numero-do-painel";
 import { SeletorDePeriodo } from "@/components/relatorios/seletor-de-periodo";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { dataLocalDoInstante, formatarDataCalendario } from "@/lib/formatadores";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { lerPeriodo, parametrosDoPeriodo, rotuloDoPeriodo, type Periodo } from "@/lib/periodo";
@@ -33,7 +33,7 @@ const th = "px-3 py-2";
 const mesBr = (mes: string) => `${mes.slice(5)}/${mes.slice(0, 4)}`;
 
 export default async function PaginaDaProducao({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo(["RELATORIOS", "OBRAS"]);
   const brutos = await searchParams;
   const hoje = dataLocalDoInstante(new Date());
   const visao = lerVisao(brutos.visao, VISOES);

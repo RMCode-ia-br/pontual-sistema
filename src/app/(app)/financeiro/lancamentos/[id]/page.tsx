@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { Badge } from "@/components/ui/badge";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { ROTULO_FORMA, type FormaPagamento } from "@/lib/dominio/parcelas";
 import { formatarData, formatarDataCalendario, formatarDataHora, formatarMoeda } from "@/lib/formatadores";
 import { Anexos } from "@/modules/anexos/components/anexos";
@@ -24,7 +24,7 @@ function Item({ rotulo, children }: { rotulo: string; children: React.ReactNode 
 }
 
 export default async function PaginaDoLancamento({ params }: { params: Promise<{ id: string }> }) {
-  await exigirSessao();
+  await exigirModulo("FINANCEIRO", { exige: ["valores"] });
   const { id } = await params;
   const l = await obterLancamento(id);
   if (!l) notFound();

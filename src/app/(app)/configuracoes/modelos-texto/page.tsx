@@ -3,14 +3,14 @@ import type { Metadata } from "next";
 
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { prisma } from "@/lib/db";
 import { ListaModelos } from "@/modules/modelos-texto/components/lista-modelos";
 
 export const metadata: Metadata = { title: "Modelos de texto" };
 
 export default async function PaginaModelosTexto() {
-  await exigirSessao();
+  await exigirModulo("CONFIGURACOES");
   const modelos = await prisma.modeloTexto.findMany({
     where: { deletadoEm: null },
     orderBy: [{ ordem: "asc" }, { titulo: "asc" }],

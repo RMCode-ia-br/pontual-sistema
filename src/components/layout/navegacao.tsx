@@ -7,12 +7,13 @@ import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { itemAtivo, MENU, rotaAtiva, type GrupoMenu } from "./menu";
+import { itemAtivo, menuVisivel, rotaAtiva, type GrupoMenu, type PermissoesDoMenu } from "./menu";
 
 type Props = {
   /** Sidebar recolhida: só ícones. */
   recolhida?: boolean;
   aoNavegar?: () => void;
+  permissoes: PermissoesDoMenu;
 };
 
 function grupoTemRotaAtiva(grupo: GrupoMenu, caminho: string): boolean {
@@ -20,16 +21,17 @@ function grupoTemRotaAtiva(grupo: GrupoMenu, caminho: string): boolean {
   return (grupo.itens ?? []).some((i) => i.href && rotaAtiva(caminho, i.href));
 }
 
-export function Navegacao({ recolhida = false, aoNavegar }: Props) {
+export function Navegacao({ recolhida = false, aoNavegar, permissoes }: Props) {
   const caminho = usePathname();
+  const menu = menuVisivel(permissoes);
   // Por padrão, só o grupo da página atual começa aberto.
   const [abertos, setAbertos] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(MENU.filter((g) => grupoTemRotaAtiva(g, caminho)).map((g) => [g.titulo, true])),
+    Object.fromEntries(menu.filter((g) => grupoTemRotaAtiva(g, caminho)).map((g) => [g.titulo, true])),
   );
 
   return (
     <nav aria-label="Menu principal" className="flex flex-col gap-0.5 p-2">
-      {MENU.map((grupo) => {
+      {menu.map((grupo) => {
         const Icone = grupo.icone;
         const ativoGrupo = grupoTemRotaAtiva(grupo, caminho);
 

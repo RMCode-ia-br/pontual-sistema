@@ -6,7 +6,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { EstadoVazio } from "@/components/layout/estado-vazio";
 import { FiltrosDaLista } from "@/components/lista/filtros-da-lista";
 import { buttonVariants } from "@/components/ui/button";
-import { exigirSessao } from "@/lib/auth/sessao";
+import { exigirModulo } from "@/lib/auth/modulo";
 import { montarConsulta } from "@/lib/listas/parametros";
 import { FiltrosDeProjetos, haFiltroDeProjeto, parametrosDosFiltros } from "@/modules/projetos/components/filtros-de-projetos";
 import { Kanban } from "@/modules/projetos/components/kanban";
@@ -16,7 +16,7 @@ import { listarUsuariosAtivos } from "@/modules/tarefas/queries";
 export const metadata: Metadata = { title: "Funil" };
 
 export default async function PaginaFunil({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await exigirSessao();
+  await exigirModulo("COMERCIAL");
   const brutos = await searchParams;
   const { parametros, filtros } = lerListaProjetos(brutos);
   const [colunas, motivos, usuarios] = await Promise.all([carregarFunil(filtros, parametros.busca), listarMotivosPerda(), listarUsuariosAtivos()]);
